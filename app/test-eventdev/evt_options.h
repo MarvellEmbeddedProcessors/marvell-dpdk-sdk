@@ -32,6 +32,7 @@
 #define EVT_FWD_LATENCY          ("fwd_latency")
 #define EVT_QUEUE_PRIORITY       ("queue_priority")
 #define EVT_DEQ_TMO_NSEC         ("deq_tmo_nsec")
+#define EVT_TX_FIRST             ("tx_first")
 #define EVT_PROD_ETHDEV          ("prod_type_ethdev")
 #define EVT_PROD_CRYPTODEV	 ("prod_type_cryptodev")
 #define EVT_PROD_TIMERDEV        ("prod_type_timerdev")

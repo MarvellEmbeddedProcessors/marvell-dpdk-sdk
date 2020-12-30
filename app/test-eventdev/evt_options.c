@@ -107,6 +107,16 @@ evt_parse_eth_prod_type(struct evt_options *opt, const char *arg __rte_unused)
 }
 
 static int
+evt_parse_tx_first(struct evt_options *opt, const char *arg __rte_unused)
+{
+	int ret;
+
+	ret = parser_read_uint32(&(opt->tx_first), arg);
+
+	return ret;
+}
+
+static int
 evt_parse_timer_prod_type(struct evt_options *opt, const char *arg __rte_unused)
 {
 	opt->prod_type = EVT_PROD_TYPE_EVENT_TIMER_ADPTR;
@@ -439,6 +449,7 @@ static struct option lgopts[] = {
 	{ EVT_DEQ_TMO_NSEC,        1, 0, 0 },
 	{ EVT_PROD_ETHDEV,         0, 0, 0 },
 	{ EVT_PROD_CRYPTODEV,      0, 0, 0 },
+	{ EVT_TX_FIRST,            1, 0, 0 },
 	{ EVT_PROD_TIMERDEV,       0, 0, 0 },
 	{ EVT_PROD_TIMERDEV_BURST, 0, 0, 0 },
 	{ EVT_CRYPTO_ADPTR_MODE,   1, 0, 0 },
@@ -481,6 +492,7 @@ evt_opts_parse_long(int opt_idx, struct evt_options *opt)
 		{ EVT_DEQ_TMO_NSEC, evt_parse_deq_tmo_nsec},
 		{ EVT_PROD_ETHDEV, evt_parse_eth_prod_type},
 		{ EVT_PROD_CRYPTODEV, evt_parse_crypto_prod_type},
+		{ EVT_TX_FIRST, evt_parse_tx_first},
 		{ EVT_PROD_TIMERDEV, evt_parse_timer_prod_type},
 		{ EVT_PROD_TIMERDEV_BURST, evt_parse_timer_prod_type_burst},
 		{ EVT_CRYPTO_ADPTR_MODE, evt_parse_crypto_adptr_mode},
