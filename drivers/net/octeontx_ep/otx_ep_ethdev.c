@@ -26,6 +26,24 @@ static const struct rte_eth_desc_lim otx_ep_tx_desc_lim = {
 };
 
 static int
+otx_ep_link_update(struct rte_eth_dev *eth_dev, int wait_to_complete)
+{
+	struct rte_eth_link link;
+
+	RTE_SET_USED(wait_to_complete);
+
+	if (!eth_dev->data->dev_started)
+		return 0;
+
+	link.link_speed = ETH_SPEED_NUM_10G;
+	link.link_duplex = 1;
+	link.link_autoneg = 0;
+	link.link_status = 1;
+
+	return rte_eth_linkstatus_set(eth_dev, &link);
+}
+
+static int
 otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 		    struct rte_eth_dev_info *devinfo)
 {
@@ -355,6 +373,7 @@ static const struct eth_dev_ops otx_ep_eth_dev_ops = {
 	.tx_queue_setup	        = otx_ep_tx_queue_setup,
 	.tx_queue_release	= otx_ep_tx_queue_release,
 	.dev_infos_get		= otx_ep_dev_info_get,
+	.link_update		= otx_ep_link_update,
 };
 
 static int
