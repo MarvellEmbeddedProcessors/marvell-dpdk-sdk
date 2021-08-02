@@ -16,7 +16,8 @@
 #define OTX_EP_MAX_DELAYED_PKT_RETRIES 10000
 
 #define OTX_EP_FSZ 28
-#define OTX2_EP_FSZ 24
+#define OTX2_EP_FSZ_LOOP 0
+#define OTX2_EP_FSZ_NIC 24
 #define OTX_EP_MAX_INSTR 16
 
 static inline void

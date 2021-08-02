@@ -20,6 +20,12 @@
 #define INFO_SIZE 8
 #define DROQ_REFILL_THRESHOLD 16
 
+/* These arrays indexed by otx_ep_device->sdp_packet_mode */
+static uint8_t front_size[2] = {OTX2_EP_FSZ_NIC, OTX2_EP_FSZ_LOOP};
+static uint8_t rh_size[2] = {OTX_EP_RH_SIZE_NIC, OTX_EP_RH_SIZE_LOOP};
+static uint8_t droq_info_size[2] = {OTX_EP_DROQ_INFO_SIZE_NIC,
+				    OTX_EP_DROQ_INFO_SIZE_LOOP};
+
 static void
 otx_ep_dmazone_free(const struct rte_memzone *mz)
 {
@@ -678,9 +684,9 @@ otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 	iqcmd2.irh.u64 = 0;
 
 	/* ih invars */
-	iqcmd2.ih.s.fsz = OTX2_EP_FSZ;
+	iqcmd2.ih.s.fsz = front_size[otx_ep->sdp_packet_mode];
 	iqcmd2.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
-	/* irh invars */
+	/* irh invars, ignored in LOOP mode */
 	iqcmd2.irh.s.opcode = OTX_EP_NW_PKT_OP;
 
 	for (i = 0; i < nb_pkts; i++) {
@@ -838,7 +844,9 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	uint64_t total_pkt_len;
 	uint32_t pkt_len = 0;
 	int next_idx;
+	int info_size;
 
+	info_size = droq_info_size[otx_ep->sdp_packet_mode];
 	droq_pkt  = droq->recv_buf_list[droq->read_idx];
 	droq_pkt2  = droq->recv_buf_list[droq->read_idx];
 	info = rte_pktmbuf_mtod(droq_pkt, struct otx_ep_droq_info *);
@@ -877,10 +885,10 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	/* Deduce the actual data size */
 	total_pkt_len = info->length + INFO_SIZE;
 	if (total_pkt_len <= droq->buffer_size) {
-		info->length -=  OTX_EP_RH_SIZE;
+		info->length -=  rh_size[otx_ep->sdp_packet_mode];
 		droq_pkt  = droq->recv_buf_list[droq->read_idx];
 		if (likely(droq_pkt != NULL)) {
-			droq_pkt->data_off += OTX_EP_DROQ_INFO_SIZE;
+			droq_pkt->data_off += info_size;
 			/* otx_ep_dbg("OQ: pkt_len[%ld], buffer_size %d\n",
 			 * (long)info->length, droq->buffer_size);
 			 */
@@ -917,11 +925,11 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 				droq_pkt->port = otx_ep->port_id;
 				if (!pkt_len) {
 					droq_pkt->data_off +=
-						OTX_EP_DROQ_INFO_SIZE;
+						info_size;
 					droq_pkt->pkt_len =
-						cpy_len - OTX_EP_DROQ_INFO_SIZE;
+						cpy_len - info_size;
 					droq_pkt->data_len =
-						cpy_len - OTX_EP_DROQ_INFO_SIZE;
+						cpy_len - info_size;
 				} else {
 					droq_pkt->pkt_len = cpy_len;
 					droq_pkt->data_len = cpy_len;
