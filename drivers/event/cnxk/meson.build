@@ -478,4 +478,9 @@ foreach flag: extra_flags
     endif
 endforeach
 
+# TODO: revert after chipback
+if meson.get_cross_property('platform', '') == 'cn10k'
+    cflags += '-DASIM_HACKS'
+endif
+
 deps += ['bus_pci', 'common_cnxk', 'net_cnxk', 'crypto_cnxk']

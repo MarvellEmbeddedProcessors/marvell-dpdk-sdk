@@ -20,9 +20,18 @@
 
 #include "cnxk_eventdev.h"
 
+/* TODO: Below changes are to pass CI in ASIM, revert after chipback */
+#ifdef ASIM_HACKS
+#define NUM_PACKETS (16)
+#define MAX_EVENTS  (16)
+#define MAX_STAGES  (3)
+#define MAX_PORTS   (4)
+#define MAX_QUEUES  (8)
+#else
 #define NUM_PACKETS (1024)
 #define MAX_EVENTS  (1024)
 #define MAX_STAGES  (255)
+#endif
 
 #define CNXK_TEST_RUN(setup, teardown, test)                                   \
 	cnxk_test_run(setup, teardown, test, #test)
@@ -116,6 +125,11 @@ devconf_set_default_sane_values(struct rte_event_dev_config *dev_conf,
 	dev_conf->dequeue_timeout_ns = info->min_dequeue_timeout_ns;
 	dev_conf->nb_event_ports = info->max_event_ports;
 	dev_conf->nb_event_queues = info->max_event_queues;
+	/* TODO:  revert after chipback */
+#ifdef ASIM_HACKS
+	dev_conf->nb_event_ports = MAX_PORTS;
+	dev_conf->nb_event_queues = MAX_QUEUES;
+#endif
 	dev_conf->nb_event_queue_flows = info->max_event_queue_flows;
 	dev_conf->nb_event_port_dequeue_depth =
 		info->max_event_port_dequeue_depth;
@@ -609,8 +623,14 @@ launch_workers_and_wait(int (*main_thread)(void *),
 	if (!param)
 		return -1;
 
+		/* TODO:  revert after chipback */
+#ifdef ASIM_HACKS
+	ret = rte_event_dequeue_timeout_ticks(
+		evdev, rte_rand() % 10000 /* 10us */, &dequeue_tmo_ticks);
+#else
 	ret = rte_event_dequeue_timeout_ticks(
 		evdev, rte_rand() % 10000000 /* 10ms */, &dequeue_tmo_ticks);
+#endif
 	if (ret) {
 		free(param);
 		return -1;
