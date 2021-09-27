@@ -35,6 +35,7 @@ subdir('common')
 
 # Add cnxk test script subdirectories to the below list.
 test_subdirs = [
+        'fwd_perf',
         'crypto_perf',
         'event_perf',
         'ipsec_secgw',

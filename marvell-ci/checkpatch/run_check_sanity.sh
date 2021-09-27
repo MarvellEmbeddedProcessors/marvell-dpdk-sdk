@@ -25,6 +25,7 @@ SPDX_ERRORS=$(./devtools/check-spdx-tag.sh | head -n -3 |
 	grep -v marvell-ci/test/cnxk-tests/event_perf/ref_numbers |
 	grep -v marvell-ci/test/cnxk-tests/flow_perf/ref_numbers |
 	grep -v marvell-ci/test/cnxk-tests/mempool_perf/ref_numbers |
+	grep -v marvell-ci/test/cnxk-tests/fwd_perf/ref_numbers |
 	grep -v .clang-format |
 	grep -v marvell-ci/klocwork/kw_override.h || true
 )
