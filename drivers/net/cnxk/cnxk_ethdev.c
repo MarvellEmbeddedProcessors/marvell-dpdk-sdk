@@ -1263,6 +1263,8 @@ cnxk_nix_configure(struct rte_eth_dev *eth_dev)
 		goto cq_fini;
 	}
 
+	/* Initialize TC to SQ mapping as invalid */
+	memset(dev->pfc_tc_sq_map, 0xFF, sizeof(dev->pfc_tc_sq_map));
 	/*
 	 * Restore queue config when reconfigure followed by
 	 * reconfigure and no queue configure invoked from application case.
@@ -1559,6 +1561,7 @@ struct eth_dev_ops cnxk_eth_dev_ops = {
 	.tx_burst_mode_get = cnxk_nix_tx_burst_mode_get,
 	.flow_ctrl_get = cnxk_nix_flow_ctrl_get,
 	.flow_ctrl_set = cnxk_nix_flow_ctrl_set,
+	.priority_flow_ctrl_queue_set = cnxk_nix_priority_flow_ctrl_queue_set,
 	.dev_set_link_up = cnxk_nix_set_link_up,
 	.dev_set_link_down = cnxk_nix_set_link_down,
 	.get_module_info = cnxk_nix_get_module_info,
@@ -1738,6 +1741,8 @@ cnxk_eth_dev_uninit(struct rte_eth_dev *eth_dev, bool reset)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 	const struct eth_dev_ops *dev_ops = eth_dev->dev_ops;
+	struct rte_eth_pfc_queue_conf pfc_conf = {0};
+	struct rte_eth_fc_conf fc_conf = {0};
 	struct roc_nix *nix = &dev->nix;
 	int rc, i;
 
@@ -1755,6 +1760,28 @@ cnxk_eth_dev_uninit(struct rte_eth_dev *eth_dev, bool reset)
 	dev->configured = 0;
 
 	roc_nix_npc_rx_ena_dis(nix, false);
+
+	/* Restore 802.3 Flow control configuration */
+	fc_conf.mode = RTE_ETH_FC_NONE;
+	rc = cnxk_nix_flow_ctrl_set(eth_dev, &fc_conf);
+
+	pfc_conf.mode = RTE_ETH_FC_NONE;
+	for (i = 0; i < CNXK_NIX_PFC_CHAN_COUNT; i++) {
+		if (dev->pfc_tc_sq_map[i] != 0xFFFF) {
+			pfc_conf.rx_pause.tx_qid = dev->pfc_tc_sq_map[i];
+			pfc_conf.rx_pause.tc = i;
+			pfc_conf.tx_pause.rx_qid = i;
+			pfc_conf.tx_pause.tc = i;
+			rc = cnxk_nix_priority_flow_ctrl_queue_set(eth_dev,
+								   &pfc_conf);
+			if (rc)
+				plt_err("Failed to reset PFC. error code(%d)",
+					rc);
+		}
+	}
+
+	fc_conf.mode = RTE_ETH_FC_FULL;
+	rc = cnxk_nix_flow_ctrl_set(eth_dev, &fc_conf);
 
 	/* Disable and free rte_meter entries */
 	nix_meter_fini(dev);
