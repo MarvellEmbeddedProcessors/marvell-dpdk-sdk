@@ -424,7 +424,7 @@ nix_tm_bp_config_get(struct roc_nix *roc_nix, bool *is_enabled)
 
 	if (req) {
 		req->num_regs = k;
-		rc = mbox_process(mbox);
+		rc = mbox_process_msg(mbox, (void **)&rsp);
 		if (rc)
 			goto err;
 		/* Report it as enabled only if enabled or all */
@@ -766,6 +766,9 @@ nix_tm_sq_sched_conf(struct nix *nix, struct nix_tm_node *node,
 		struct nix_aq_enq_req *aq;
 
 		aq = mbox_alloc_msg_nix_aq_enq(mbox);
+		if (!aq)
+			return -ENOSPC;
+
 		aq->qidx = qid;
 		aq->ctype = NIX_AQ_CTYPE_SQ;
 		aq->op = NIX_AQ_INSTOP_WRITE;
@@ -781,6 +784,9 @@ nix_tm_sq_sched_conf(struct nix *nix, struct nix_tm_node *node,
 		struct nix_cn10k_aq_enq_req *aq;
 
 		aq = mbox_alloc_msg_nix_cn10k_aq_enq(mbox);
+		if (!aq)
+			return -ENOSPC;
+
 		aq->qidx = qid;
 		aq->ctype = NIX_AQ_CTYPE_SQ;
 		aq->op = NIX_AQ_INSTOP_WRITE;
