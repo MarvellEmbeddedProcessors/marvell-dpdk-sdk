@@ -374,53 +374,30 @@ print_stats_cb(__rte_unused void *param)
 static inline void
 prepare_one_packet(struct rte_mbuf *pkt, struct ipsec_traffic *t)
 {
+	uint32_t ptype = pkt->packet_type;
 	const struct rte_ether_hdr *eth;
 	const struct rte_ipv4_hdr *iph4;
 	const struct rte_ipv6_hdr *iph6;
-	const struct rte_udp_hdr *udp;
-	uint16_t ip4_hdr_len;
-	uint16_t nat_port;
+	uint32_t tun_type, l3_type;
+
+	tun_type = ptype & RTE_PTYPE_TUNNEL_MASK;
+	l3_type = ptype & RTE_PTYPE_L3_MASK;
 
 	eth = rte_pktmbuf_mtod(pkt, const struct rte_ether_hdr *);
-	if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4)) {
-
+	if (l3_type == RTE_PTYPE_L3_IPV4) {
 		iph4 = (const struct rte_ipv4_hdr *)rte_pktmbuf_adj(pkt,
 			RTE_ETHER_HDR_LEN);
 		adjust_ipv4_pktlen(pkt, iph4, 0);
 
-		switch (iph4->next_proto_id) {
-		case IPPROTO_ESP:
+		if (tun_type == RTE_PTYPE_TUNNEL_ESP) {
 			t->ipsec.pkts[(t->ipsec.num)++] = pkt;
-			break;
-		case IPPROTO_UDP:
-			if (app_sa_prm.udp_encap == 1) {
-				ip4_hdr_len = ((iph4->version_ihl &
-					RTE_IPV4_HDR_IHL_MASK) *
-					RTE_IPV4_IHL_MULTIPLIER);
-				udp = rte_pktmbuf_mtod_offset(pkt,
-					struct rte_udp_hdr *, ip4_hdr_len);
-				nat_port = rte_cpu_to_be_16(IPSEC_NAT_T_PORT);
-				if (udp->src_port == nat_port ||
-					udp->dst_port == nat_port){
-					t->ipsec.pkts[(t->ipsec.num)++] = pkt;
-					pkt->packet_type |=
-						MBUF_PTYPE_TUNNEL_ESP_IN_UDP;
-					break;
-				}
-			}
-		/* Fall through */
-		default:
+		} else {
 			t->ip4.data[t->ip4.num] = &iph4->next_proto_id;
 			t->ip4.pkts[(t->ip4.num)++] = pkt;
 		}
 		pkt->l2_len = 0;
 		pkt->l3_len = sizeof(*iph4);
-		pkt->packet_type |= RTE_PTYPE_L3_IPV4;
-		if  (pkt->packet_type & RTE_PTYPE_L4_TCP)
-			pkt->l4_len = sizeof(struct rte_tcp_hdr);
-		else if (pkt->packet_type & RTE_PTYPE_L4_UDP)
-			pkt->l4_len = sizeof(struct rte_udp_hdr);
-	} else if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV6)) {
+	} else if (l3_type & RTE_PTYPE_L3_IPV6) {
 		int next_proto;
 		size_t l3len, ext_len;
 		uint8_t *p;
@@ -430,47 +407,37 @@ prepare_one_packet(struct rte_mbuf *pkt, struct ipsec_traffic *t)
 			RTE_ETHER_HDR_LEN);
 		adjust_ipv6_pktlen(pkt, iph6, 0);
 
-		next_proto = iph6->proto;
-
-		/* determine l3 header size up to ESP extension */
 		l3len = sizeof(struct ip6_hdr);
-		p = rte_pktmbuf_mtod(pkt, uint8_t *);
-		while (next_proto != IPPROTO_ESP && l3len < pkt->data_len &&
-			(next_proto = rte_ipv6_get_next_ext(p + l3len,
-						next_proto, &ext_len)) >= 0)
-			l3len += ext_len;
 
-		/* drop packet when IPv6 header exceeds first segment length */
-		if (unlikely(l3len > pkt->data_len)) {
-			free_pkts(&pkt, 1);
-			return;
-		}
-
-		switch (next_proto) {
-		case IPPROTO_ESP:
+		if (tun_type == RTE_PTYPE_TUNNEL_ESP) {
 			t->ipsec.pkts[(t->ipsec.num)++] = pkt;
-			break;
-		case IPPROTO_UDP:
-			if (app_sa_prm.udp_encap == 1) {
-				udp = rte_pktmbuf_mtod_offset(pkt,
-					struct rte_udp_hdr *, l3len);
-				nat_port = rte_cpu_to_be_16(IPSEC_NAT_T_PORT);
-				if (udp->src_port == nat_port ||
-					udp->dst_port == nat_port){
-					t->ipsec.pkts[(t->ipsec.num)++] = pkt;
-					pkt->packet_type |=
-						MBUF_PTYPE_TUNNEL_ESP_IN_UDP;
-					break;
-				}
-			}
-		/* Fall through */
-		default:
+		} else {
 			t->ip6.data[t->ip6.num] = &iph6->proto;
 			t->ip6.pkts[(t->ip6.num)++] = pkt;
 		}
+
+		/* Determine l3 header size up to ESP extension by walking
+		 * through extension headers.
+		 */
+		if (l3_type == RTE_PTYPE_L3_IPV6_EXT ||
+		     l3_type == RTE_PTYPE_L3_IPV6_EXT_UNKNOWN) {
+			p = rte_pktmbuf_mtod(pkt, uint8_t *);
+			next_proto = iph6->proto;
+			while (next_proto != IPPROTO_ESP &&
+			       l3len < pkt->data_len &&
+			       (next_proto = rte_ipv6_get_next_ext(p + l3len,
+						next_proto, &ext_len)) >= 0)
+				l3len += ext_len;
+
+			/* Drop pkt when IPv6 header exceeds first seg size */
+			if (unlikely(l3len > pkt->data_len)) {
+				free_pkts(&pkt, 1);
+				return;
+			}
+		}
+
 		pkt->l2_len = 0;
 		pkt->l3_len = l3len;
-		pkt->packet_type |= RTE_PTYPE_L3_IPV6;
 	} else {
 		/* Unknown/Unsupported type, drop the packet */
 		RTE_LOG(ERR, IPSEC, "Unsupported packet type 0x%x\n",
@@ -478,6 +445,11 @@ prepare_one_packet(struct rte_mbuf *pkt, struct ipsec_traffic *t)
 		free_pkts(&pkt, 1);
 		return;
 	}
+
+	if  (ptype & RTE_PTYPE_L4_TCP)
+		pkt->l4_len = sizeof(struct rte_tcp_hdr);
+	else if (ptype & RTE_PTYPE_L4_UDP)
+		pkt->l4_len = sizeof(struct rte_udp_hdr);
 
 	/* Check if the packet has been processed inline. For inline protocol
 	 * processed packets, the metadata in the mbuf can be used to identify
@@ -2249,6 +2221,147 @@ cryptodevs_init(uint16_t req_queue_num)
 	return total_nb_qps;
 }
 
+static int
+check_ptype(int portid)
+{
+	int l3_ipv4 = 0, l3_ipv6 = 0, l4_udp = 0, tunnel_esp = 0;
+	int i, nb_ptypes;
+	uint32_t mask;
+
+	mask = (RTE_PTYPE_L3_MASK | RTE_PTYPE_L4_MASK |
+		      RTE_PTYPE_TUNNEL_MASK);
+
+	nb_ptypes = rte_eth_dev_get_supported_ptypes(portid, mask, NULL, 0);
+	if (nb_ptypes <= 0)
+		return 0;
+
+	uint32_t ptypes[nb_ptypes];
+
+	nb_ptypes = rte_eth_dev_get_supported_ptypes(portid, mask, ptypes, nb_ptypes);
+	for (i = 0; i < nb_ptypes; ++i) {
+		if (ptypes[i] & RTE_PTYPE_L3_IPV4)
+			l3_ipv4 = 1;
+		if (ptypes[i] & RTE_PTYPE_L3_IPV6)
+			l3_ipv6 = 1;
+		if (ptypes[i] & RTE_PTYPE_TUNNEL_ESP)
+			tunnel_esp = 1;
+		if (ptypes[i] & RTE_PTYPE_L4_UDP)
+			l4_udp = 1;
+	}
+
+	if (l3_ipv4 == 0)
+		printf("port %d cannot parse RTE_PTYPE_L3_IPV4\n", portid);
+
+	if (l3_ipv6 == 0)
+		printf("port %d cannot parse RTE_PTYPE_L3_IPV6\n", portid);
+
+	if (l4_udp == 0)
+		printf("port %d cannot parse RTE_PTYPE_L4_UDP\n", portid);
+
+	if (tunnel_esp == 0)
+		printf("port %d cannot parse RTE_PTYPE_TUNNEL_ESP\n", portid);
+
+	if (l3_ipv4 && l3_ipv6 && l4_udp && tunnel_esp)
+		return 1;
+
+	return 0;
+
+}
+
+static inline void
+parse_ptype(struct rte_mbuf *m)
+{
+	uint32_t packet_type = RTE_PTYPE_UNKNOWN;
+	const struct rte_ipv4_hdr *iph4;
+	const struct rte_ipv6_hdr *iph6;
+	const struct rte_ether_hdr *eth;
+	const struct rte_udp_hdr *udp;
+	uint16_t nat_port, ether_type;
+	int next_proto = 0;
+	size_t ext_len = 0;
+	const uint8_t *p;
+	uint32_t l3len;
+
+	eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
+	ether_type = eth->ether_type;
+
+	if (ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4)) {
+		iph4 = (const struct rte_ipv4_hdr *)(eth + 1);
+		l3len = ((iph4->version_ihl & RTE_IPV4_HDR_IHL_MASK) *
+			       RTE_IPV4_IHL_MULTIPLIER);
+
+		if (l3len == sizeof(struct rte_ipv4_hdr))
+			packet_type |= RTE_PTYPE_L3_IPV4;
+		else
+			packet_type |= RTE_PTYPE_L3_IPV4_EXT_UNKNOWN;
+
+		next_proto = iph4->next_proto_id;
+		p = (const uint8_t *)iph4;
+	} else if (ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV6)) {
+		iph6 = (const struct rte_ipv6_hdr *)(eth + 1);
+		l3len = sizeof(struct ip6_hdr);
+
+		/* determine l3 header size up to ESP extension */
+		next_proto = iph6->proto;
+		p = (const uint8_t *)iph6;
+		while (next_proto != IPPROTO_ESP && l3len < m->data_len &&
+			(next_proto = rte_ipv6_get_next_ext(p + l3len,
+						next_proto, &ext_len)) >= 0)
+			l3len += ext_len;
+
+		/* Skip IPv6 header exceeds first segment length */
+		if (unlikely(l3len + RTE_ETHER_HDR_LEN > m->data_len))
+			goto exit;
+
+		if (l3len == sizeof(struct ip6_hdr))
+			packet_type |= RTE_PTYPE_L3_IPV6;
+		else
+			packet_type |= RTE_PTYPE_L3_IPV6_EXT;
+	}
+
+	switch (next_proto) {
+	case IPPROTO_ESP:
+		packet_type |= RTE_PTYPE_TUNNEL_ESP;
+		break;
+	case IPPROTO_UDP:
+		if (app_sa_prm.udp_encap == 1) {
+			udp = (const struct rte_udp_hdr *)(p + l3len);
+			nat_port = rte_cpu_to_be_16(IPSEC_NAT_T_PORT);
+			if (udp->src_port == nat_port ||
+			    udp->dst_port == nat_port)
+				packet_type |=
+					MBUF_PTYPE_TUNNEL_ESP_IN_UDP;
+		}
+		break;
+	default:
+		break;
+	}
+exit:
+	m->packet_type = packet_type;
+}
+
+static uint16_t
+parse_ptype_cb(uint16_t port __rte_unused, uint16_t queue __rte_unused,
+	       struct rte_mbuf *pkts[], uint16_t nb_pkts,
+	       uint16_t max_pkts __rte_unused,
+	       void *user_param __rte_unused)
+{
+	uint32_t i;
+
+	if (unlikely(nb_pkts == 0))
+		return nb_pkts;
+
+	rte_prefetch0(rte_pktmbuf_mtod(pkts[0], struct ether_hdr *));
+	for (i = 0; i < (unsigned int) (nb_pkts - 1); ++i) {
+		rte_prefetch0(rte_pktmbuf_mtod(pkts[i+1],
+			struct ether_hdr *));
+		parse_ptype(pkts[i]);
+	}
+	parse_ptype(pkts[i]);
+
+	return nb_pkts;
+}
+
 static void
 port_init(uint16_t portid, uint64_t req_rx_offloads, uint64_t req_tx_offloads)
 {
@@ -2260,6 +2373,7 @@ port_init(uint16_t portid, uint64_t req_rx_offloads, uint64_t req_tx_offloads)
 	struct lcore_conf *qconf;
 	struct rte_ether_addr ethaddr;
 	struct rte_eth_conf local_port_conf = port_conf;
+	int ptype_supported;
 
 	ret = rte_eth_dev_info_get(portid, &dev_info);
 	if (ret != 0)
@@ -2357,6 +2471,11 @@ port_init(uint16_t portid, uint64_t req_rx_offloads, uint64_t req_tx_offloads)
 		rte_exit(EXIT_FAILURE, "Cannot adjust number of descriptors: "
 				"err=%d, port=%d\n", ret, portid);
 
+	/* Check if required ptypes are supported */
+	ptype_supported = check_ptype(portid);
+	if (!ptype_supported)
+		printf("Port %d: softly parse packet type info\n", portid);
+
 	/* init one TX queue per lcore */
 	tx_queueid = 0;
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
@@ -2418,6 +2537,16 @@ port_init(uint16_t portid, uint64_t req_rx_offloads, uint64_t req_tx_offloads)
 				rte_exit(EXIT_FAILURE,
 					"rte_eth_rx_queue_setup: err=%d, "
 					"port=%d\n", ret, portid);
+
+			/* Register Rx callback if ptypes are not supported */
+			if (!ptype_supported &&
+			    !rte_eth_add_rx_callback(portid, queue,
+						     parse_ptype_cb, NULL)) {
+				printf("Failed to add rx callback: port=%d, "
+				       "queue=%d\n", portid, queue);
+			}
+
+
 		}
 	}
 	printf("\n");
