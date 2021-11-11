@@ -25,6 +25,7 @@ sources = files(
         'roc_idev.c',
         'roc_irq.c',
         'roc_mbox.c',
+        'roc_ml.c',
         'roc_model.c',
         'roc_nix.c',
         'roc_nix_bpf.c',

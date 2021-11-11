@@ -89,6 +89,7 @@ struct dev {
 	struct dev_ops *ops;
 	void *roc_nix;
 	void *roc_cpt;
+	void *roc_ml;
 	bool disable_shared_lmt; /* false(default): shared lmt mode enabled */
 	const struct plt_memzone *lmt_mz;
 } __plt_cache_aligned;
