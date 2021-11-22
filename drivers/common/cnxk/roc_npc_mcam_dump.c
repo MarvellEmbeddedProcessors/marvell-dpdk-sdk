@@ -161,6 +161,12 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
+	if (rx_parse->laflags) {
+		data = npc_get_nibbles(flow, 2, offset);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LA_FLAGS:%#02X\n", data);
+		offset += 8;
+	}
+
 	if (rx_parse->latype) {
 		data = npc_get_nibbles(flow, 1, offset);
 		fprintf(file, "\tNPC_PARSE_NIBBLE_LA_LTYPE:%s\n",
@@ -168,9 +174,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->laflags) {
+	if (rx_parse->lbflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LA_FLAGS:%#02X\n", data);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LB_FLAGS:%#02X\n", data);
 		offset += 8;
 	}
 
@@ -181,9 +187,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->lbflags) {
+	if (rx_parse->lcflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LB_FLAGS:%#02X\n", data);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LC_FLAGS:%#02X\n", data);
 		offset += 8;
 	}
 
@@ -194,9 +200,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->lcflags) {
+	if (rx_parse->ldflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LC_FLAGS:%#02X\n", data);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LD_FLAGS:%#02X\n", data);
 		offset += 8;
 	}
 
@@ -207,9 +213,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->ldflags) {
+	if (rx_parse->leflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LD_FLAGS:%#02X\n", data);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LE_FLAGS:%#02X\n", data);
 		offset += 8;
 	}
 
@@ -220,9 +226,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->leflags) {
+	if (rx_parse->lfflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LE_FLAGS:%#02X\n", data);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LF_FLAGS:%#02X\n", data);
 		offset += 8;
 	}
 
@@ -233,9 +239,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->lfflags) {
+	if (rx_parse->lgflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LF_FLAGS:%#02X\n", data);
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LG_FLAGS:%#02X\n", data);
 		offset += 8;
 	}
 
@@ -246,10 +252,9 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		offset += 4;
 	}
 
-	if (rx_parse->lgflags) {
+	if (rx_parse->lhflags) {
 		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LG_FLAGS:%#02X\n", data);
-		offset += 8;
+		fprintf(file, "\tNPC_PARSE_NIBBLE_LH_FLAGS:%#02X\n", data);
 	}
 
 	if (rx_parse->lhtype) {
@@ -257,11 +262,6 @@ npc_flow_print_parse_nibbles(FILE *file, struct roc_npc_flow *flow,
 		fprintf(file, "\tNPC_PARSE_NIBBLE_LH_LTYPE:%s\n",
 			ltype_str[NPC_LID_LH][data]);
 		offset += 4;
-	}
-
-	if (rx_parse->lhflags) {
-		data = npc_get_nibbles(flow, 2, offset);
-		fprintf(file, "\tNPC_PARSE_NIBBLE_LH_FLAGS:%#02X\n", data);
 	}
 }
 
