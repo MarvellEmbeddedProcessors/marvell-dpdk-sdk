@@ -9440,6 +9440,11 @@ test_ipsec_proto_all(const struct ipsec_test_flags *flags)
 				td_outb[j].ipsec_xform.options.iv_gen_disable = 1;
 		}
 
+		if (flags->icv_corrupt && (td_outb->aead == false) &&
+		    (td_outb->xform.chain.auth.auth.algo ==
+		     RTE_CRYPTO_AUTH_NULL))
+			continue;
+
 		ret = test_ipsec_proto_process(td_outb, td_inb, nb_pkts, true,
 					       flags);
 		if (ret == TEST_SKIPPED)
