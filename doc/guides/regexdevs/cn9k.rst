@@ -22,7 +22,7 @@ Features of the CN9K REE PMD are:
 Prerequisites and Compilation procedure
 ---------------------------------------
 
-   See :doc:`../platform/cn9k` for setup information.
+   See :doc:`../platform/cnxk` for setup information.
 
 Device Setup
 ------------
@@ -45,5 +45,5 @@ Debugging Options
    +---+------------+-------------------------------------------------------+
    | # | Component  | EAL log command                                       |
    +===+============+=======================================================+
-   | 1 | REE        | --log-level='pmd\.regex\.cn9k,8'                 |
+   | 1 | REE        | --log-level='pmd\.regex\.cn9k,8'                      |
    +---+------------+-------------------------------------------------------+
