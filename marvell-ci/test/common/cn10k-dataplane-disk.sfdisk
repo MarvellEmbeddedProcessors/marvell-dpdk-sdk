@@ -1,0 +1,8 @@
+label: dos
+label-id: 0xcd558fd2
+device: cn10k-dataplane-disk.img
+unit: sectors
+
+cn10k-dataplane-disk.img1 : start=        2048, size=      262144, type=83
+cn10k-dataplane-disk.img2 : start=      264192, size=     4194304, type=83
+cn10k-dataplane-disk.img3 : start=     4458496, size=     4716544, type=83
