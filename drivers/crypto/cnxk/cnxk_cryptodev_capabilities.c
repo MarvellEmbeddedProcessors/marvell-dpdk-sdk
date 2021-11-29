@@ -1126,6 +1126,7 @@ static void
 cnxk_sec_caps_update(struct rte_security_capability *sec_cap)
 {
 	sec_cap->ipsec.options.udp_encap = 1;
+	sec_cap->ipsec.options.copy_df = 1;
 }
 
 static void
