@@ -9,9 +9,10 @@ env_files = [
 ]
 
 foreach env : env_files
-	run_command(copy_data, env)
-	install_data(env,
-		     install_mode : 'rw-r--r--',
-		     install_dir : 'bin/cnxk/common/testpmd')
+    run_command(copy_data, env)
+    install_data(
+        env,
+        install_mode : 'rw-r--r--',
+        install_dir : 'bin/cnxk/common/testpmd')
 endforeach
 

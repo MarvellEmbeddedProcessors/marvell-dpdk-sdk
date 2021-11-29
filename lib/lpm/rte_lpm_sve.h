@@ -11,8 +11,7 @@
 extern "C" {
 #endif
 
-__rte_internal
-static void
+static inline void
 __rte_lpm_lookup_vec(const struct rte_lpm *lpm, const uint32_t *ips,
 		uint32_t *__rte_restrict next_hops, const uint32_t n)
 {

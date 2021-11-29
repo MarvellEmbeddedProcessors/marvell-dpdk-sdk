@@ -312,14 +312,10 @@ def prepare_builds(Object s, nodes) {
 					     ['-O3'], [''], ['armv8'], '-Dexamples=all')
 		prepare_build_stages(s, nodes, ['gcc-4.8'], ['static'],
 					     ['-O3'], [''], ['armv8'],
-					     '-Ddisable_drivers=event/octeontx2,event/cnxk',
+					     '-Ddisable_drivers=event/cnxk',
 					     'armv8-gcc-4.8-fix')
 		prepare_build_stages(s, nodes, ['gcc'], ['static'],
 					     ['-O3'], [''], ['armv8'], '-Dexamples=all')
-
-		/* OcteonTX2 Build */
-		prepare_build_stages(s, nodes, ['gcc-marvell'], ['static'],
-				     ['-O3'], [''], ['otx2'], '-Dexamples=all')
 
 		/* CN9K Build */
 		prepare_build_stages(s, nodes, ['gcc-marvell'], ['static'],

@@ -8,9 +8,10 @@ scapy_scripts = [
 ]
 
 foreach script : scapy_scripts
-	run_command(copy_data, script)
-	install_data(script,
-		     install_mode : 'rwxr-xr-x',
-		     install_dir : 'bin/cnxk/common/scapy')
+    run_command(copy_data, script)
+    install_data(
+        script,
+        install_mode : 'rwxr-xr-x',
+        install_dir : 'bin/cnxk/common/scapy')
 endforeach
 

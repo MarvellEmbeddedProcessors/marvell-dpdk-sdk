@@ -2,7 +2,7 @@
 # Copyright(c) 2021, Marvell
 
 if not get_option('tests')
-	subdir_done()
+    subdir_done()
 endif
 
 subdir('common')
@@ -50,5 +50,5 @@ test_subdirs = [
 ]
 
 foreach dir:test_subdirs
-	subdir(dir)
+    subdir(dir)
 endforeach

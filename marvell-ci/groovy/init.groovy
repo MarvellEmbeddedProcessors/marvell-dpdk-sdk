@@ -7,6 +7,7 @@ def init_env_vars(Object s) {
 		/* ASIM binaries and images are picked up based on the ref branch name */
 
 		/* BRANCH NAME       REF BRANCH          Enable CN10k*/
+		["dpdk-21.11-devel", "dpdk-21.05-devel", true],
 		["dpdk-21.08-devel", "dpdk-21.05-devel", true],
 		["dpdk-21.05-devel", "dpdk-21.05-devel", true],
 		["dpdk-20.11-devel", "dpdk-21.05-devel", false]

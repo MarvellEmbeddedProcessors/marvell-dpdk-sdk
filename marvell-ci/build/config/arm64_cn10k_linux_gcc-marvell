@@ -15,4 +15,3 @@ endian = 'little'
 
 [properties]
 platform = 'cn10k'
-disable_drivers = 'common/octeontx2'
