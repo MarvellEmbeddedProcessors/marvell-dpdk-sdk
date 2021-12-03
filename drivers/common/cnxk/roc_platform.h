@@ -60,6 +60,7 @@
 #define PLT_ETHER_ADDR_LEN 	 RTE_ETHER_ADDR_LEN
 #endif
 #define PLT_TAILQ_FOREACH_SAFE	 RTE_TAILQ_FOREACH_SAFE
+
 /** Divide ceil */
 #define PLT_DIV_CEIL(x, y)			\
 	({					\
