@@ -134,7 +134,7 @@ function cleanup()
 }
 
 if [[ ! -f $IMAGE ]]; then
-	dd if=/dev/zero of=$IMAGE count=35 bs=128M
+	dd if=/dev/zero of=$IMAGE count=46 bs=128M
 	sfdisk $IMAGE < $SFDISK_FILE
 	if [[ -f $ASIM_TARGET_IMAGES/image.cksum ]]; then
 		sudo rm $ASIM_TARGET_IMAGES/image.cksum

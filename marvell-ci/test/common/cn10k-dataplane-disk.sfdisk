@@ -4,5 +4,5 @@ device: cn10k-dataplane-disk.img
 unit: sectors
 
 cn10k-dataplane-disk.img1 : start=        2048, size=      262144, type=83
-cn10k-dataplane-disk.img2 : start=      264192, size=     4194304, type=83
-cn10k-dataplane-disk.img3 : start=     4458496, size=     6291456, type=83
+cn10k-dataplane-disk.img2 : start=      264192, size=     1097152, type=83
+cn10k-dataplane-disk.img3 : start=     1361344, size=     10485760, type=83
