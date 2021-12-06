@@ -9441,18 +9441,6 @@ test_ipsec_proto_all(const struct ipsec_test_flags *flags)
 				      td_outb,
 				      nb_pkts);
 
-		/* Use IV from application with cn9k crypto PMD */
-		if (gbl_driver_id == rte_cryptodev_driver_id_get(
-				RTE_STR(CRYPTODEV_NAME_CN9K_PMD))) {
-			unsigned int j;
-
-			if (flags->iv_gen)
-				return TEST_SKIPPED;
-
-			for (j = 0; j < nb_pkts; j++)
-				td_outb[j].ipsec_xform.options.iv_gen_disable = 1;
-		}
-
 		if (!td_outb->aead) {
 			enum rte_crypto_cipher_algorithm cipher_alg;
 			enum rte_crypto_auth_algorithm auth_alg;
