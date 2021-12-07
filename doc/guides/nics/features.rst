@@ -379,9 +379,10 @@ Flow control
 Supports configuring link flow control.
 
 * **[implements] eth_dev_ops**: ``flow_ctrl_get``, ``flow_ctrl_set``,
-  ``priority_flow_ctrl_set``.
+  ``priority_flow_ctrl_set``, ``priority_flow_ctrl_queue_set``.
 * **[related]    API**: ``rte_eth_dev_flow_ctrl_get()``, ``rte_eth_dev_flow_ctrl_set()``,
-  ``rte_eth_dev_priority_flow_ctrl_set()``.
+  ``rte_eth_dev_priority_flow_ctrl_set()``, ``rte_eth_dev_priority_flow_ctrl_queue_set()``.
+* **[provides]   rte_eth_dev_info**: ``pfc_queue_tc_max``.
 
 
 .. _nic_features_rate_limitation:

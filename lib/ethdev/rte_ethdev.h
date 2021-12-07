@@ -1396,6 +1396,28 @@ struct rte_eth_pfc_conf {
 };
 
 /**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * A structure used to configure Ethernet priority flow control parameter for
+ * ethdev queues.
+ */
+struct rte_eth_pfc_queue_conf {
+	enum rte_eth_fc_mode mode;  /**< Link flow control mode */
+
+	struct {
+		uint16_t tx_qid;
+		uint8_t tc; /**< Traffic class as per PFC (802.1Qbb) spec */
+	} rx_pause; /* Valid when (mode == FC_RX_PAUSE || mode == FC_FULL) */
+
+	struct {
+		uint16_t pause_time; /**< Pause quota in the Pause frame */
+		uint16_t rx_qid;
+		uint8_t tc; /**< Traffic class as per PFC (802.1Qbb) spec */
+	} tx_pause; /* Valid when (mode == FC_TX_PAUSE || mode == FC_FULL) */
+};
+
+/**
  * Tunnel type for device-specific classifier configuration.
  * @see rte_eth_udp_tunnel
  */
@@ -1841,8 +1863,30 @@ struct rte_eth_dev_info {
 	 * embedded managed interconnect/switch.
 	 */
 	struct rte_eth_switch_info switch_info;
-
-	uint64_t reserved_64s[2]; /**< Reserved for future fields */
+	/**
+	 * Maximum supported traffic class as per PFC (802.1Qbb) specification.
+	 *
+	 * Based on device support and use-case need, there are two different
+	 * ways to enable PFC. The first case is the port level PFC
+	 * configuration, in this case, rte_eth_dev_priority_flow_ctrl_set()
+	 * API shall be used to configure the PFC, and PFC frames will be
+	 * generated using based on VLAN TC value.
+	 * The second case is the queue level PFC configuration, in this case,
+	 * Any packet field content can be used to steer the packet to the
+	 * specific queue using rte_flow or RSS and then use
+	 * rte_eth_dev_priority_flow_ctrl_queue_set() to set the TC mapping
+	 * on each queue. Based on congestion selected on the specific queue,
+	 * configured TC shall be used to generate PFC frames.
+	 *
+	 * When set to non zero value, application must use queue level
+	 * PFC configuration via rte_eth_dev_priority_flow_ctrl_queue_set() API
+	 * instead of port level PFC configuration via
+	 * rte_eth_dev_priority_flow_ctrl_set() API to realize
+	 * PFC configuration.
+	 */
+	uint8_t pfc_queue_tc_max;
+	uint8_t reserved_8s[7];
+	uint64_t reserved_64s[1]; /**< Reserved for future fields */
 	void *reserved_ptrs[2];   /**< Reserved for future fields */
 };
 
@@ -4109,6 +4153,9 @@ int rte_eth_dev_flow_ctrl_set(uint16_t port_id,
  * Configure the Ethernet priority flow control under DCB environment
  * for Ethernet device.
  *
+ * @see struct rte_eth_dev_info::pfc_queue_tc_max priority
+ * flow control usage models.
+ *
  * @param port_id
  * The port identifier of the Ethernet device.
  * @param pfc_conf
@@ -4119,10 +4166,40 @@ int rte_eth_dev_flow_ctrl_set(uint16_t port_id,
  *   - (-ENODEV)  if *port_id* invalid.
  *   - (-EINVAL)  if bad parameter
  *   - (-EIO)     if flow control setup failure or device is removed.
+ *
  */
 int rte_eth_dev_priority_flow_ctrl_set(uint16_t port_id,
-				struct rte_eth_pfc_conf *pfc_conf);
+				       struct rte_eth_pfc_conf *pfc_conf);
 
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Configure the Ethernet priority flow control for a given queue
+ * for Ethernet device.
+ *
+ * @see struct rte_eth_dev_info::pfc_queue_tc_max priority flow control
+ * usage models.
+ *
+ * @note When an ethdev port switches to PFC mode, the unconfigured
+ * queues shall be configured by the driver with default values such as
+ * lower priority value for TC etc.
+ *
+ * @param port_id
+ *   The port identifier of the Ethernet device.
+ * @param pfc_queue_conf
+ *   The pointer to the structure of the priority flow control parameters
+ *   for the queue.
+ * @return
+ *   - (0) if successful.
+ *   - (-ENOTSUP) if hardware doesn't support priority flow control mode.
+ *   - (-ENODEV)  if *port_id* invalid.
+ *   - (-EINVAL)  if bad parameter
+ *   - (-EIO)     if flow control setup queue failure
+ */
+__rte_experimental
+int rte_eth_dev_priority_flow_ctrl_queue_set(uint16_t port_id,
+					     struct rte_eth_pfc_queue_conf *pfc_queue_conf);
 /**
  * Add a MAC address to the set used for filtering incoming packets.
  *

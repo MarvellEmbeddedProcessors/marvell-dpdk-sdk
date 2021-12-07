@@ -532,6 +532,9 @@ typedef int (*flow_ctrl_set_t)(struct rte_eth_dev *dev,
 /** @internal Setup priority flow control parameter on an Ethernet device. */
 typedef int (*priority_flow_ctrl_set_t)(struct rte_eth_dev *dev,
 				struct rte_eth_pfc_conf *pfc_conf);
+/** @internal Queue setup for priority flow control parameter on an Ethernet device. */
+typedef int (*priority_flow_ctrl_queue_set_t)(struct rte_eth_dev *dev,
+				struct rte_eth_pfc_queue_conf *pfc_queue_conf);
 
 /** @internal Update RSS redirection table on an Ethernet device. */
 typedef int (*reta_update_t)(struct rte_eth_dev *dev,
@@ -1080,7 +1083,8 @@ struct eth_dev_ops {
 	flow_ctrl_set_t            flow_ctrl_set; /**< Setup flow control */
 	/** Setup priority flow control */
 	priority_flow_ctrl_set_t   priority_flow_ctrl_set;
-
+	/** Priority flow control queue setup */
+	priority_flow_ctrl_queue_set_t   priority_flow_ctrl_queue_set;
 	/** Set Unicast Table Array */
 	eth_uc_hash_table_set_t    uc_hash_table_set;
 	/** Set Unicast hash bitmap */

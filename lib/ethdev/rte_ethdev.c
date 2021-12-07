@@ -3998,7 +3998,9 @@ int
 rte_eth_dev_priority_flow_ctrl_set(uint16_t port_id,
 				   struct rte_eth_pfc_conf *pfc_conf)
 {
+	struct rte_eth_dev_info dev_info;
 	struct rte_eth_dev *dev;
+	int ret;
 
 	RTE_ETH_VALID_PORTID_OR_ERR_RET(port_id, -ENODEV);
 	dev = &rte_eth_devices[port_id];
@@ -4010,6 +4012,17 @@ rte_eth_dev_priority_flow_ctrl_set(uint16_t port_id,
 		return -EINVAL;
 	}
 
+	ret = rte_eth_dev_info_get(port_id, &dev_info);
+	if (ret != 0)
+		return ret;
+
+	if (dev_info.pfc_queue_tc_max != 0) {
+		RTE_ETHDEV_LOG(ERR,
+			"Ethdev port %u driver does not support port level PFC config\n",
+			port_id);
+		return -ENOTSUP;
+	}
+
 	if (pfc_conf->priority > (RTE_ETH_DCB_NUM_USER_PRIORITIES - 1)) {
 		RTE_ETHDEV_LOG(ERR, "Invalid priority, only 0-7 allowed\n");
 		return -EINVAL;
@@ -4019,6 +4032,102 @@ rte_eth_dev_priority_flow_ctrl_set(uint16_t port_id,
 	if  (*dev->dev_ops->priority_flow_ctrl_set)
 		return eth_err(port_id, (*dev->dev_ops->priority_flow_ctrl_set)
 					(dev, pfc_conf));
+	return -ENOTSUP;
+}
+
+static inline int
+validate_rx_pause_config(struct rte_eth_dev_info *dev_info,
+			 struct rte_eth_pfc_queue_conf *pfc_queue_conf)
+{
+	if ((pfc_queue_conf->mode == RTE_ETH_FC_RX_PAUSE) ||
+	    (pfc_queue_conf->mode == RTE_ETH_FC_FULL)) {
+		if (pfc_queue_conf->rx_pause.tx_qid >= dev_info->nb_tx_queues) {
+			RTE_ETHDEV_LOG(ERR, "Tx queue not in range for Rx pause"
+				       " (requested: %d configured: %d)\n",
+				       pfc_queue_conf->rx_pause.tx_qid,
+				       dev_info->nb_tx_queues);
+			return -EINVAL;
+		}
+
+		if (pfc_queue_conf->rx_pause.tc >= dev_info->pfc_queue_tc_max) {
+			RTE_ETHDEV_LOG(ERR, "TC not in range for Rx pause"
+				       " (requested: %d max: %d)\n",
+				       pfc_queue_conf->rx_pause.tc,
+				       dev_info->pfc_queue_tc_max);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static inline int
+validate_tx_pause_config(struct rte_eth_dev_info *dev_info,
+			 struct rte_eth_pfc_queue_conf *pfc_queue_conf)
+{
+	if ((pfc_queue_conf->mode == RTE_ETH_FC_TX_PAUSE) ||
+	     (pfc_queue_conf->mode == RTE_ETH_FC_FULL)) {
+		if (pfc_queue_conf->tx_pause.rx_qid >= dev_info->nb_rx_queues) {
+			RTE_ETHDEV_LOG(ERR, "Rx queue not in range for Tx pause"
+				       "(requested: %d configured: %d)\n",
+				       pfc_queue_conf->tx_pause.rx_qid,
+				       dev_info->nb_rx_queues);
+			return -EINVAL;
+		}
+
+		if (pfc_queue_conf->tx_pause.tc >= dev_info->pfc_queue_tc_max) {
+			RTE_ETHDEV_LOG(ERR, "TC not in range for Tx pause"
+				       "(requested: %d max: %d)\n",
+				       pfc_queue_conf->tx_pause.tc,
+				       dev_info->pfc_queue_tc_max);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+int
+rte_eth_dev_priority_flow_ctrl_queue_set(
+	uint16_t port_id, struct rte_eth_pfc_queue_conf *pfc_queue_conf)
+{
+	struct rte_eth_dev_info dev_info;
+	struct rte_eth_dev *dev;
+	int ret;
+
+	RTE_ETH_VALID_PORTID_OR_ERR_RET(port_id, -ENODEV);
+	dev = &rte_eth_devices[port_id];
+
+	if (pfc_queue_conf == NULL) {
+		RTE_ETHDEV_LOG(ERR, "PFC parameters are NULL for port (%u)\n",
+			       port_id);
+		return -EINVAL;
+	}
+
+	ret = rte_eth_dev_info_get(port_id, &dev_info);
+	if (ret != 0)
+		return ret;
+
+	if (dev_info.pfc_queue_tc_max == 0) {
+		RTE_ETHDEV_LOG(ERR,
+			"Ethdev port %u does not support PFC TC values\n",
+			port_id);
+		return -ENOTSUP;
+	}
+
+	ret = validate_rx_pause_config(&dev_info, pfc_queue_conf);
+	if (ret != 0)
+		return ret;
+
+	ret = validate_tx_pause_config(&dev_info, pfc_queue_conf);
+	if (ret != 0)
+		return ret;
+
+
+	if (*dev->dev_ops->priority_flow_ctrl_queue_set)
+		return eth_err(port_id,
+			       (*dev->dev_ops->priority_flow_ctrl_queue_set)(
+				       dev, pfc_queue_conf));
 	return -ENOTSUP;
 }
 
