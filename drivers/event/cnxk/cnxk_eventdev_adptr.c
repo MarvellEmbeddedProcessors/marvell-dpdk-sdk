@@ -345,24 +345,136 @@ cnxk_sso_updt_tx_queue_data(const struct rte_eventdev *event_dev,
 			    void *txq)
 {
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+	uint16_t max_queue_id = dev->max_queue_id[eth_port_id];
 	uint16_t max_port_id = dev->max_port_id;
-	uint64_t *txq_data = dev->tx_adptr_data;
+	uint64_t offset = 0, row = 0;
+	uint64_t *txq_data = NULL;
+	size_t size = 0;
+	int i, j;
 
-	if (txq_data == NULL || eth_port_id > max_port_id) {
-		max_port_id = RTE_MAX(max_port_id, eth_port_id);
-		txq_data = rte_realloc_socket(
-			txq_data,
-			(sizeof(uint64_t) * (max_port_id + 1) *
-			 RTE_MAX_QUEUES_PER_PORT),
-			RTE_CACHE_LINE_SIZE, event_dev->data->socket_id);
-		if (txq_data == NULL)
-			return -ENOMEM;
+	if (((uint64_t)txq) & 0xFFFF000000000000)
+		return -EINVAL;
+
+	if (dev->tx_adptr_data == NULL) {
+		size = (eth_port_id + 1);
+		size += (eth_port_id + tx_queue_id);
+		row = 2 * eth_port_id;
+	} else {
+		if (eth_port_id > max_port_id) {
+			size = (RTE_MAX(eth_port_id, dev->max_queue_id[0]) + 1);
+			for (i = 1; i < eth_port_id; i++)
+				size += (dev->max_queue_id[i] + 1);
+			row = size;
+			size += (tx_queue_id + 1);
+		} else if (tx_queue_id > max_queue_id) {
+			size = !eth_port_id ? tx_queue_id + 1 :
+						    RTE_MAX(max_port_id,
+						      dev->max_queue_id[0]) +
+						      1;
+			for (i = 1; i < max_port_id + 1; i++) {
+				if (i == eth_port_id) {
+					row = size;
+					size += tx_queue_id + 1;
+				} else {
+					size += dev->max_queue_id[i] + 1;
+				}
+			}
+		}
 	}
 
-	((uint64_t(*)[RTE_MAX_QUEUES_PER_PORT])
-		 txq_data)[eth_port_id][tx_queue_id] = (uint64_t)txq;
-	dev->max_port_id = max_port_id;
-	dev->tx_adptr_data = txq_data;
+	size *= sizeof(uint64_t);
+
+	if (size) {
+		uint64_t *otxq_data = dev->tx_adptr_data;
+
+		txq_data = malloc(size);
+		if (txq_data == NULL)
+			return -ENOMEM;
+		memset(txq_data, 0, size);
+		txq_data[eth_port_id] = ((uint64_t)row) << 48;
+		txq_data[row + tx_queue_id] = (uint64_t)txq;
+
+		if (otxq_data != NULL) {
+			for (i = 0; i < dev->max_queue_id[0] + 1; i++) {
+				txq_data[i] |= (otxq_data[i] &
+						~((BIT_ULL(16) - 1) << 48));
+			}
+
+			if (eth_port_id > max_port_id) {
+				dev->max_queue_id[0] = RTE_MAX(
+					dev->max_queue_id[0], eth_port_id);
+				dev->max_port_id =
+					RTE_MAX(dev->max_port_id, eth_port_id);
+
+				for (i = 1; i < eth_port_id; i++) {
+					offset +=
+						(dev->max_queue_id[i - 1] + 1);
+					txq_data[i] |= offset << 48;
+					for (j = 0;
+					     (i < dev->max_port_id) &&
+					     (j < dev->max_queue_id[i] + 1);
+					     j++) {
+
+						txq_data[offset + j] = otxq_data
+							[(otxq_data[i] >> 48) +
+							 j];
+					}
+				}
+				dev->max_queue_id[eth_port_id] =
+					RTE_MAX(dev->max_queue_id[eth_port_id],
+						tx_queue_id);
+			} else if (tx_queue_id > max_queue_id) {
+				dev->max_queue_id[eth_port_id] =
+					RTE_MAX(dev->max_queue_id[eth_port_id],
+						tx_queue_id);
+				dev->max_port_id =
+					RTE_MAX(max_port_id, eth_port_id);
+				for (i = 1; i < max_port_id + 1; i++) {
+					offset +=
+						(dev->max_queue_id[i - 1] + 1);
+					txq_data[i] |= offset << 48;
+					for (j = 0;
+					     j < dev->max_queue_id[i] + 1;
+					     j++) {
+						if (i == eth_port_id &&
+						    j > max_queue_id)
+							continue;
+						txq_data[offset + j] = otxq_data
+							[(otxq_data[i] >> 48) +
+							 j];
+					}
+				}
+			}
+		} else {
+			dev->max_queue_id[0] =
+				RTE_MAX(dev->max_queue_id[0], eth_port_id);
+			for (i = 1; i < eth_port_id; i++) {
+				offset += (dev->max_queue_id[i - 1] + 1);
+				txq_data[i] |= offset << 48;
+
+				for (j = 0; (i < max_port_id) &&
+					    (j < dev->max_queue_id[i] + 1);
+				     j++) {
+
+					txq_data[offset + j] =
+						otxq_data[(otxq_data[i] >> 48) +
+							  j];
+				}
+			}
+			dev->max_port_id =
+				RTE_MAX(dev->max_port_id, eth_port_id);
+			dev->max_queue_id[eth_port_id] = RTE_MAX(
+				dev->max_queue_id[eth_port_id], tx_queue_id);
+		}
+		dev->tx_adptr_data_sz = size;
+		free(otxq_data);
+		dev->tx_adptr_data = txq_data;
+	} else {
+		txq_data = dev->tx_adptr_data;
+		row = txq_data[eth_port_id] >> 48;
+		txq_data[row + tx_queue_id] |= (uint64_t)txq;
+	}
+
 	return 0;
 }
 
@@ -372,7 +484,6 @@ cnxk_sso_tx_adapter_queue_add(const struct rte_eventdev *event_dev,
 			      int32_t tx_queue_id)
 {
 	struct cnxk_eth_dev *cnxk_eth_dev = eth_dev->data->dev_private;
-	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
 	struct roc_nix_sq *sq;
 	int i, ret;
 	void *txq;
@@ -388,8 +499,6 @@ cnxk_sso_tx_adapter_queue_add(const struct rte_eventdev *event_dev,
 			event_dev, eth_dev->data->port_id, tx_queue_id, txq);
 		if (ret < 0)
 			return ret;
-
-		dev->tx_offloads |= cnxk_eth_dev->tx_offload_flags;
 	}
 
 	return 0;
