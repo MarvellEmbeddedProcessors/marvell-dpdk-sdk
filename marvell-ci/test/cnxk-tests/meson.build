@@ -48,6 +48,7 @@ test_subdirs = [
         'crypto_autotest',
         'tm_test',
         'flow_perf',
+        'txrx_stats',
 ]
 
 foreach dir:test_subdirs
