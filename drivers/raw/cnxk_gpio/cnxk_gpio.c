@@ -456,7 +456,7 @@ cnxk_gpio_process_buf(struct cnxk_gpio *gpio, struct rte_rawdev_buf *rbuf)
 	}
 	gpio->rsp = rsp;
 
-	return 0;
+	return ret;
 }
 
 static int
