@@ -37,7 +37,7 @@ struct cn10k_ipsec_sa {
 
 struct cn10k_sec_session {
 	struct cn10k_ipsec_sa sa;
-} __rte_cache_aligned;
+} __rte_aligned(ROC_ALIGN);
 
 void cn10k_sec_ops_override(void);
 
