@@ -32,7 +32,8 @@
 #define OTX_EP_PCI_RING_ALIGN   65536
 #define SDP_PKIND 40
 #define SDP_OTX2_PKIND_FS24 57	/* Front size 24, NIC mode */
-#define SDP_OTX2_PKIND_FS0  63	/* Front size 0, LOOP packet mode */
+/* Use LBK PKIND */
+#define SDP_OTX2_PKIND_FS0  0	/* Front size 0, LOOP packet mode */
 
 /*
  * Values for SDP packet mode
