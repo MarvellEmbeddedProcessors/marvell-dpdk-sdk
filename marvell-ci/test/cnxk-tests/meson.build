@@ -49,6 +49,7 @@ test_subdirs = [
         'tm_test',
         'flow_perf',
         'txrx_stats',
+        'flow_regression',
 ]
 
 foreach dir:test_subdirs
