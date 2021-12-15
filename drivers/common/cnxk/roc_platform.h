@@ -154,6 +154,10 @@
 #define plt_write64(val, addr)                                                 \
 	rte_write64_relaxed((val), (volatile void *)(addr))
 
+#define plt_read32(addr) rte_read32_relaxed((volatile void *)(addr))
+#define plt_write32(val, addr)                                                 \
+	rte_write64_relaxed((val), (volatile void *)(addr))
+
 #define plt_wmb()		rte_wmb()
 #define plt_rmb()		rte_rmb()
 #define plt_io_wmb()		rte_io_wmb()
@@ -173,9 +177,10 @@
 #define plt_memzone_reserve_aligned(name, len, flags, align)                   \
 	rte_memzone_reserve_aligned((name), (len), 0, (flags), (align))
 
-#define plt_tsc_hz   rte_get_tsc_hz
-#define plt_delay_ms rte_delay_ms
-#define plt_delay_us rte_delay_us
+#define plt_tsc_hz     rte_get_tsc_hz
+#define plt_tsc_cycles rte_get_tsc_cycles
+#define plt_delay_ms   rte_delay_ms
+#define plt_delay_us   rte_delay_us
 
 #define plt_lcore_id rte_lcore_id
 
