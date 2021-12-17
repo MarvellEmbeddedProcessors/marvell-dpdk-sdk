@@ -7,7 +7,7 @@ set -e
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 PREFIX="ipsec_dpdk"
 PKTLOSS_ALLOWED_P=0
-IPSEC_COREMASK="0xf00"
+IPSEC_COREMASK="0xe"
 
 if [[ -d /sys/bus/pci/drivers/octeontx2-nicvf ]]; then
 	NICVF="octeontx2-nicvf"
@@ -40,9 +40,14 @@ function sig_handler()
 	trap - EXIT
 	if [[ $status -ne 0 ]]; then
 		echo "$1 Handler"
+		awk ' { print FILENAME": " $0 } ' $APP_FULL_LOG
+		awk ' { print FILENAME": " $0 } ' $APP_LOG
+		awk ' { print FILENAME": " $0 } ' $APP_RESULT
+		awk ' { print FILENAME": " $0 } ' $PING_LOG
 	fi
 	ip netns exec vm0 ip xfrm state deleteall
 	ip netns exec vm0 ip xfrm policy deleteall
+	killall -9 dpdk-ipsec-secgw
 	cleanup_interfaces
 	exit $status
 }
@@ -90,7 +95,7 @@ function start_ping_test()
 				continue
 			fi
 		fi
-		if [[ $1 == "2" ]]; then
+		if [[ $1 == "2" ]] || [[ $1 == "3" ]]; then
 			if [[ $Y -gt 1 && $Y -lt 8 ]]; then
 				((++Y))
 				((++X))
@@ -103,7 +108,7 @@ function start_ping_test()
 		for pkt_size in $PKT_LIST
 		do
 			echo -e "ping_pkts :-------" "$pkt_size" "$Y"
-			ip netns exec vm0 ping 192.168.$Y.2 -i 0.001 -c $PING_PKTS -s $pkt_size | tee -a $PING_LOG
+			ip netns exec vm0 ping 192.168.$Y.2 -i $PKT_GAP -c $PING_PKTS -s $pkt_size $PING_ARGS | tee -a $PING_LOG
 			RESULT=`tail -n 3 $PING_LOG | grep -o "\w*\.\w*%\|\w*%"`
 			# Wait until the process is killed
 #			while (ps -ef | grep ping); do
@@ -134,7 +139,26 @@ function run_test()
 	local cmd=$1
 #	nohup $cmd >> $APP_LOG 2>&1 &
 	eval "nohup $1 >> $APP_LOG 2>&1 &"
+	PT1="IPSEC: entering main loop on lcore"
+	PT2="IPSEC: Launching event mode worker"
+
+	local itr=0
+	while ! (cat $APP_LOG | grep -q -e "$PT1" -e "$PT2")
+	do
+		sleep 1
+		((itr+=1))
+
+		if [[ $itr -eq 100 ]]
+		then
+			echo "Timeout waiting for IPSEC main loop"
+			exit 2
+		fi
+
+		if [[ $((itr%5)) -eq 0 ]]
+		then echo "Waiting for IPSEC main loop"; fi
+	done
 	sleep 5
+
 	echo "Starting ping test" | tee $PING_LOG
 	start_ping_test $2
 
@@ -143,16 +167,21 @@ function run_test()
 	while (ps -ef | grep dpdk-ipsec-secgw | grep -q $PREFIX); do
 		continue
 	done
+
+	rm -rf /var/run/dpdk/$PREFIX
+	sync
+	cat $APP_LOG >>$APP_FULL_LOG
+	rm -rf $APP_LOG
 }
 
-function run_ipsec_secgw()
+function run_ipsec_secgw_cn9k()
 {
 	# DPDK IPSEC-SECGW App - lookaside none mode
 	X=101
 	Y=1
 	echo -e "Lookaside none ipsec-secgw"
 	echo -e "--------------------------"
-	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_crypto_test.cfg --config="(0,0,8),(1,0,9)"' 0
+	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_crypto_test.cfg --config="(0,0,1),(1,0,2)"' 0
 
 	sleep 5
 	# DPDK IPSEC-SECGW App - lookaside protocol mode
@@ -161,16 +190,53 @@ function run_ipsec_secgw()
 	echo -e ""
 	echo -e "Lookaside protocol ipsec-secgw"
 	echo -e "------------------------------"
-	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_lookaside_test.cfg --config="(0,0,8),(1,0,9)"' 1
+	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_lookaside_test.cfg --config="(0,0,1),(1,0,2)"' 1
 
 	sleep 5
-	# DPDK IPSEC-SECGW App - inline protocol mode
+	# DPDK IPSEC-SECGW App - inline protocol event mode
 	X=101
 	Y=1
 	echo -e ""
-	echo -e "Inline protocol ipsec-secgw"
+	echo -e "Inline protocol ipsec-secgw event mode"
 	echo -e "---------------------------"
 	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 -- -P -p 0x3 -u 0x1 -f ./ep1_inline_test.cfg --transfer-mode event --event-schedule-type parallel' 2
+}
+
+function run_ipsec_secgw_cn10k()
+{
+	# DPDK IPSEC-SECGW App - lookaside none mode
+	X=101
+	Y=1
+#	echo -e "Lookaside none ipsec-secgw"
+#	echo -e "--------------------------"
+#	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_crypto_test.cfg --config="(0,0,1),(1,0,2)"' 0
+
+	sleep 5
+	# DPDK IPSEC-SECGW App - lookaside protocol mode
+	X=101
+	Y=1
+#	echo -e ""
+#	echo -e "Lookaside protocol ipsec-secgw"
+#	echo -e "------------------------------"
+#	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_lookaside_test.cfg --config="(0,0,1),(1,0,2)"' 1
+
+	sleep 5
+	# DPDK IPSEC-SECGW App - inline protocol event mode
+	X=101
+	Y=1
+	echo -e ""
+	echo -e "Inline protocol ipsec-secgw event mode"
+	echo -e "---------------------------"
+	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128,force_inb_inl_dev=1 -a $LIF4,ipsec_in_max_spi=128,force_inb_inl_dev=1 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_inline_test.cfg --transfer-mode event --event-schedule-type parallel' 2
+
+	sleep 5
+	# DPDK IPSEC-SECGW App - inline protocol poll mode
+	X=101
+	Y=1
+	echo -e ""
+	echo -e "Inline protocol ipsec-secgw poll mode"
+	echo -e "---------------------------"
+	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_inline_test.cfg --transfer-mode poll --config="(0,0,1),(1,0,2)"' 3
 }
 
 #configure vm0
@@ -267,7 +333,12 @@ function cleanup_interfaces()
 function main()
 {
 	setup_interfaces
-	run_ipsec_secgw
+	if [[ $IS_CN10K -ne 0 ]]
+	then
+		run_ipsec_secgw_cn10k
+	else
+		run_ipsec_secgw_cn9k
+	fi
 }
 
 trap "sig_handler ERR" ERR
@@ -292,6 +363,8 @@ CASE=(
 
 PING_PKTS=320
 PKT_LIST="64 380 1410"
+PKT_GAP="0.001"
+PING_ARGS=""
 
 #VM0_MAC and VM2_MAC are taken from hard coded destination MAC addresses of ipsec-secgw app
 VM0_MAC=00:16:3e:7e:94:9a
@@ -302,8 +375,33 @@ LIF2=0002:01:00.6
 LIF3=0002:01:00.7
 LIF4=0002:01:01.0
 
-CDEV_VF=0002:10:00.1
-CDEV_PF=0002:10:00.0
+! $(cat /proc/device-tree/compatible | grep -q "cn10k")
+IS_CN10K=$?
+! $(cat /proc/device-tree/soc@0/runplatform | grep -q "ASIM_PLATFORM")
+IS_ASIM=$?
+
+if [[ $IS_ASIM -ne 0 ]]
+then
+	PING_PKTS=10
+	PKT_GAP=1
+	# Wait for more time in case of ASIM
+	PING_ARGS="-W 3"
+fi
+
+CDEV_PF=$(lspci -d :a0fd | head -1 | awk -e '{ print $1 }')
+CDEV_VF=$(lspci -d :a0fe | head -1 | awk -e '{ print $1 }')
+if [ -z "$CDEV_PF" ]
+then
+	CDEV_PF=$(lspci -d :a0f2 | head -1 | awk -e '{ print $1 }')
+	CDEV_VF=$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')
+	if [ -z "$CDEV_PF" ]
+	then
+		echo "Error: CPTPF not found"
+		exit 1;
+	fi
+fi
+
+INLINE_DEV=0002:1d:00.0
 SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 EVENT_VF=$SSO_DEV
 
@@ -311,10 +409,16 @@ LBK1=""
 LBK3=""
 
 APP_LOG=app.log
+APP_FULL_LOG=app_full.log
 APP_RESULT=app_result.log
 PING_LOG=ping.log
 VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
-rm -f $APP_LOG $APP_RESULT $PING_LOG
+if ! [[ -f $VFIO_DEVBIND ]]
+then
+VFIO_DEVBIND=$(which oxk-devbind-basic.sh)
+fi
+
+rm -f $APP_LOG $APP_FULL_LOG $APP_RESULT $PING_LOG
 
 MAX_X=110
 MAX_Y=10
