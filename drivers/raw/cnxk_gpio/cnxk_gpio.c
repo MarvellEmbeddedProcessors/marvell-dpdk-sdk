@@ -89,10 +89,14 @@ cnxk_gpio_parse_args(struct cnxk_gpiochip *gpiochip,
 					 cnxk_gpio_parse_arg_gpiochip,
 					 &gpiochip->num);
 		if (ret)
-			return ret;
+			goto out;
 	}
 
-	return 0;
+	ret = 0;
+out:
+	rte_kvargs_free(kvlist);
+
+	return ret;
 }
 
 static int
