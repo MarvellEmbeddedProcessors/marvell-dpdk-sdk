@@ -50,6 +50,7 @@ test_subdirs = [
         'flow_perf',
         'txrx_stats',
         'flow_regression',
+        'read_config',
 ]
 
 foreach dir:test_subdirs
