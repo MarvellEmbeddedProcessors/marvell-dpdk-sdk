@@ -41,7 +41,7 @@ struct prod_data {
 	uint8_t queue_id;
 	uint8_t cdev_id;
 	uint16_t cdev_qp_id;
-	struct rte_cryptodev_sym_session *crypto_sess;
+	struct rte_cryptodev_sym_session **crypto_sess;
 	struct test_perf *t;
 } __rte_cache_aligned;
 

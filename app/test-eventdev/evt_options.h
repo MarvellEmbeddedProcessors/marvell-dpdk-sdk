@@ -9,6 +9,7 @@
 #include <stdbool.h>
 
 #include <rte_common.h>
+#include <rte_cryptodev.h>
 #include <rte_ethdev.h>
 #include <rte_eventdev.h>
 #include <rte_lcore.h>
@@ -298,6 +299,7 @@ evt_dump_producer_type(struct evt_options *opt)
 			 "Event crypto adapter producers");
 		evt_dump("crypto adapter mode", "%s",
 			 opt->crypto_adptr_mode ? "OP_FORWARD" : "OP_NEW");
+		evt_dump("nb_cryptodev", "%u", rte_cryptodev_count());
 		break;
 	}
 	evt_dump("prod_type", "%s", name);

@@ -6,6 +6,8 @@
 
 #include "test_perf_common.h"
 
+#define NB_CRYPTODEV_DESCRIPTORS 128
+
 int
 perf_test_result(struct evt_test *test, struct evt_options *opt)
 {
@@ -275,24 +277,25 @@ perf_event_timer_producer_burst(void *arg)
 static inline void
 crypto_adapter_enq_op_new(struct prod_data *p)
 {
-	union rte_event_crypto_metadata *m_data;
-	const uint8_t dev_id = p->dev_id;
-	const uint8_t port = p->port_id;
+	struct rte_cryptodev_sym_session **crypto_sess = p->crypto_sess;
 	struct test_perf *t = p->t;
-	struct rte_mempool *pool = t->pool;
 	const uint32_t nb_flows = t->nb_flows;
 	const uint64_t nb_pkts = t->nb_pkts;
+	struct rte_mempool *pool = t->pool;
 	struct rte_crypto_sym_op *sym_op;
 	struct evt_options *opt = t->opt;
+	uint16_t qp_id = p->cdev_qp_id;
+	uint8_t cdev_id = p->cdev_id;
 	uint32_t flow_counter = 0;
 	struct rte_crypto_op *op;
-	uint64_t count = 0;
 	struct rte_mbuf *m;
+	uint64_t count = 0;
 	uint16_t len;
 
 	if (opt->verbose_level > 1)
-		printf("%s(): lcore %d dev_id %d port=%d queue %d\n", __func__,
-		       rte_lcore_id(), dev_id, port, p->queue_id);
+		printf("%s(): lcore %d queue %d cdev_id %u cdev_qp_id %u\n",
+		       __func__, rte_lcore_id(), p->queue_id, p->cdev_id,
+		       p->cdev_qp_id);
 
 	len = opt->mbuf_sz ? opt->mbuf_sz : RTE_ETHER_MIN_LEN;
 
@@ -308,13 +311,10 @@ crypto_adapter_enq_op_new(struct prod_data *p)
 		sym_op->m_src = m;
 		sym_op->cipher.data.offset = 0;
 		sym_op->cipher.data.length = len;
-		m_data =
-			rte_cryptodev_sym_session_get_user_data(p->crypto_sess);
-		m_data->response_info.queue_id = p->queue_id;
-		m_data->response_info.flow_id = flow_counter++ % nb_flows;
-		rte_crypto_op_attach_sym_session(op, p->crypto_sess);
-		while (rte_cryptodev_enqueue_burst(p->cdev_id, p->cdev_qp_id,
-						   &op, 1) != 1) {
+		rte_crypto_op_attach_sym_session(
+			op, crypto_sess[flow_counter++ % nb_flows]);
+		while (rte_cryptodev_enqueue_burst(cdev_id, qp_id, &op, 1) !=
+		       1) {
 			if (t->done)
 				break;
 			rte_pause();
@@ -326,7 +326,7 @@ crypto_adapter_enq_op_new(struct prod_data *p)
 static inline void
 crypto_adapter_enq_op_fwd(struct prod_data *p)
 {
-	union rte_event_crypto_metadata *m_data;
+	struct rte_cryptodev_sym_session **crypto_sess = p->crypto_sess;
 	const uint8_t dev_id = p->dev_id;
 	const uint8_t port = p->port_id;
 	struct test_perf *t = p->t;
@@ -338,13 +338,14 @@ crypto_adapter_enq_op_fwd(struct prod_data *p)
 	uint32_t flow_counter = 0;
 	struct rte_crypto_op *op;
 	struct rte_event ev;
-	uint64_t count = 0;
 	struct rte_mbuf *m;
+	uint64_t count = 0;
 	uint16_t len;
 
 	if (opt->verbose_level > 1)
-		printf("%s(): lcore %d dev_id %d port=%d queue %d\n", __func__,
-		       rte_lcore_id(), dev_id, port, p->queue_id);
+		printf("%s(): lcore %d port %d queue %d cdev_id %u cdev_qp_id %u\n",
+		       __func__, rte_lcore_id(), port, p->queue_id, p->cdev_id,
+		       p->cdev_qp_id);
 
 	ev.event = 0;
 	ev.op = RTE_EVENT_OP_NEW;
@@ -365,13 +366,8 @@ crypto_adapter_enq_op_fwd(struct prod_data *p)
 		sym_op->m_src = m;
 		sym_op->cipher.data.offset = 0;
 		sym_op->cipher.data.length = len;
-		m_data =
-			rte_cryptodev_sym_session_get_user_data(p->crypto_sess);
-		m_data->request_info.cdev_id = p->cdev_id;
-		m_data->request_info.queue_pair_id = p->cdev_qp_id;
-		m_data->response_info.queue_id = p->queue_id;
-		m_data->response_info.flow_id = flow_counter++ % nb_flows;
-		rte_crypto_op_attach_sym_session(op, p->crypto_sess);
+		rte_crypto_op_attach_sym_session(
+			op, crypto_sess[flow_counter++ % nb_flows]);
 		ev.event_ptr = op;
 		while (rte_event_crypto_adapter_enqueue(dev_id, port, &ev, 1) !=
 		       1) {
@@ -712,8 +708,18 @@ perf_event_crypto_adapter_setup(struct test_perf *t,
 			return -EINVAL;
 		}
 
-		ret = rte_event_crypto_adapter_queue_pair_add(
-			t->crypto_adptr.id, cdev_id, -1, NULL);
+		if (cap &
+		    RTE_EVENT_CRYPTO_ADAPTER_CAP_INTERNAL_PORT_QP_EV_BIND) {
+			struct rte_event response_info;
+
+			response_info.event = 0;
+			ret = rte_event_crypto_adapter_queue_pair_add(
+				t->crypto_adptr.id, cdev_id, -1,
+				&response_info);
+		} else {
+			ret = rte_event_crypto_adapter_queue_pair_add(
+				t->crypto_adptr.id, cdev_id, -1, NULL);
+		}
 		if (ret)
 			return ret;
 	}
@@ -722,20 +728,15 @@ perf_event_crypto_adapter_setup(struct test_perf *t,
 }
 
 static struct rte_cryptodev_sym_session *
-create_sym_sesssion(struct prod_data *p, struct test_perf *t)
+cryptodev_sym_sess_create(struct prod_data *p, struct test_perf *t)
 {
-	struct rte_cryptodev_sym_session *sess;
 	struct rte_crypto_sym_xform cipher_xform;
-	union rte_event_crypto_metadata m_data = {0};
+	struct rte_cryptodev_sym_session *sess;
 
 	cipher_xform.type = RTE_CRYPTO_SYM_XFORM_CIPHER;
-	cipher_xform.next = NULL;
 	cipher_xform.cipher.algo = RTE_CRYPTO_CIPHER_NULL;
 	cipher_xform.cipher.op = RTE_CRYPTO_CIPHER_OP_ENCRYPT;
-
-	m_data.response_info.op = RTE_EVENT_OP_NEW;
-	m_data.response_info.sched_type = RTE_SCHED_TYPE_ATOMIC;
-	m_data.response_info.event_type = RTE_EVENT_TYPE_CPU;
+	cipher_xform.next = NULL;
 
 	sess = rte_cryptodev_sym_session_create(t->crypto_adptr.sess_pool);
 	if (sess == NULL) {
@@ -748,8 +749,6 @@ create_sym_sesssion(struct prod_data *p, struct test_perf *t)
 		evt_err("Failed to init session");
 		return NULL;
 	}
-
-	rte_cryptodev_sym_session_set_user_data(sess, &m_data, sizeof(m_data));
 
 	return sess;
 }
@@ -821,7 +820,10 @@ perf_event_dev_port_setup(struct evt_test *test, struct evt_options *opt,
 
 		prod = 0;
 		for (; port < perf_nb_event_ports(opt); port++) {
+			struct rte_cryptodev_sym_session *crypto_sess;
+			union rte_event_crypto_metadata m_data;
 			struct prod_data *p = &t->prod[port];
+			uint32_t flow_id;
 
 			if (qp_id == rte_cryptodev_queue_pair_count(cdev_id)) {
 				cdev_id++;
@@ -829,10 +831,30 @@ perf_event_dev_port_setup(struct evt_test *test, struct evt_options *opt,
 			}
 
 			p->dev_id = opt->dev_id;
+			p->port_id = port;
 			p->queue_id = prod * stride;
 			p->cdev_id = cdev_id;
 			p->cdev_qp_id = qp_id;
-			p->crypto_sess = create_sym_sesssion(p, t);
+			p->crypto_sess = rte_zmalloc_socket(
+				NULL, sizeof(crypto_sess) * t->nb_flows,
+				RTE_CACHE_LINE_SIZE, opt->socket_id);
+
+			m_data.request_info.cdev_id = p->cdev_id;
+			m_data.request_info.queue_pair_id = p->cdev_qp_id;
+			m_data.response_info.op = RTE_EVENT_OP_NEW;
+			m_data.response_info.sched_type = RTE_SCHED_TYPE_ATOMIC;
+			m_data.response_info.event_type = RTE_EVENT_TYPE_CPU;
+			m_data.response_info.queue_id = p->queue_id;
+			for (flow_id = 0; flow_id < t->nb_flows; flow_id++) {
+				crypto_sess = cryptodev_sym_sess_create(p, t);
+				if (crypto_sess == NULL)
+					return -ENOMEM;
+
+				m_data.response_info.flow_id = flow_id;
+				rte_cryptodev_sym_session_set_user_data(
+					crypto_sess, &m_data, sizeof(m_data));
+				p->crypto_sess[flow_id] = crypto_sess;
+			}
 			p->t = t;
 			qp_id++;
 			prod++;
@@ -1084,11 +1106,10 @@ void perf_ethdev_destroy(struct evt_test *test, struct evt_options *opt)
 	}
 }
 
-#define DEFAULT_NUM_OPS_INFLIGHT 128
 int
 perf_cryptodev_setup(struct evt_test *test, struct evt_options *opt)
 {
-	uint8_t cdev_count, cdev_id, nb_plcores, req_nb_qps;
+	uint8_t cdev_count, cdev_id, nb_plcores, nb_qps;
 	struct test_perf *t = evt_test_priv(test);
 	unsigned int max_session_size;
 	uint32_t nb_sessions;
@@ -1111,7 +1132,7 @@ perf_cryptodev_setup(struct evt_test *test, struct evt_options *opt)
 		return -ENOMEM;
 	}
 
-	nb_sessions = evt_nr_active_lcores(opt->plcores);
+	nb_sessions = evt_nr_active_lcores(opt->plcores) * t->nb_flows;
 	t->crypto_adptr.sess_pool = rte_cryptodev_sym_session_pool_create(
 		"ca_sess_pool", nb_sessions, 0, 0,
 		sizeof(union rte_event_crypto_metadata), SOCKET_ID_ANY);
@@ -1141,8 +1162,8 @@ perf_cryptodev_setup(struct evt_test *test, struct evt_options *opt)
 	}
 
 	nb_plcores = evt_nr_active_lcores(opt->plcores);
-	req_nb_qps = (nb_plcores % cdev_count) ? (nb_plcores / cdev_count) + 1 :
-						 nb_plcores / cdev_count;
+	nb_qps = (nb_plcores % cdev_count) ? (nb_plcores / cdev_count) + 1 :
+					     nb_plcores / cdev_count;
 	for (cdev_id = 0; cdev_id < cdev_count; cdev_id++) {
 		struct rte_cryptodev_qp_conf qp_conf;
 		struct rte_cryptodev_config conf;
@@ -1150,14 +1171,14 @@ perf_cryptodev_setup(struct evt_test *test, struct evt_options *opt)
 		int qp_id;
 
 		rte_cryptodev_info_get(cdev_id, &info);
-		if (req_nb_qps > info.max_nb_queue_pairs) {
+		if (nb_qps > info.max_nb_queue_pairs) {
 			evt_err("Not enough queue pairs per cryptodev (%u)",
-				req_nb_qps);
+				nb_qps);
 			ret = -EINVAL;
 			goto err;
 		}
 
-		conf.nb_queue_pairs = req_nb_qps;
+		conf.nb_queue_pairs = nb_qps;
 		conf.socket_id = SOCKET_ID_ANY;
 		conf.ff_disable = RTE_CRYPTODEV_FF_SECURITY;
 
@@ -1167,7 +1188,7 @@ perf_cryptodev_setup(struct evt_test *test, struct evt_options *opt)
 			goto err;
 		}
 
-		qp_conf.nb_descriptors = DEFAULT_NUM_OPS_INFLIGHT;
+		qp_conf.nb_descriptors = NB_CRYPTODEV_DESCRIPTORS;
 		qp_conf.mp_session = t->crypto_adptr.sess_pool;
 		qp_conf.mp_session_private = t->crypto_adptr.sess_priv_pool;
 
@@ -1195,9 +1216,10 @@ err:
 void
 perf_cryptodev_destroy(struct evt_test *test, struct evt_options *opt)
 {
-	RTE_SET_USED(opt);
 	uint8_t cdev_id, cdev_count = rte_cryptodev_count();
 	struct test_perf *t = evt_test_priv(test);
+
+	RTE_SET_USED(opt);
 
 	if (opt->prod_type != EVT_PROD_TYPE_EVENT_CRYPTO_ADPTR)
 		return;
