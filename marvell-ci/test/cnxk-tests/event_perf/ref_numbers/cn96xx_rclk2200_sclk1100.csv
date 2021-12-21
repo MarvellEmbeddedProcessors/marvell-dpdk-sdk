@@ -49,6 +49,23 @@ cores, RESULT
 16, 81.383
 
 ------------------------------------------------------------------------
+PIPELINE_ATQ_TX_FIRST (parallel queue) output in packets per second
+cores, RESULT
+1, 9.771
+8, 72.165
+16, 110.001
+PIPELINE_ATQ_TX_FIRST (atomic queue) output in packets per second
+cores, RESULT
+1, 9.774
+8, 71.971
+16, 110.001
+PIPELINE_ATQ_TX_FIRST (ordered queue) output in packets per second
+cores, RESULT
+1, 9.767
+8, 71.898
+16, 109.886
+
+------------------------------------------------------------------------
 CRYPTO_ADAPTER_FWD (parallel queue) output in packets per second
 cores, RESULT
 1, 3.419

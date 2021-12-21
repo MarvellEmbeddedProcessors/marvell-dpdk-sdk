@@ -51,6 +51,7 @@ test_subdirs = [
         'txrx_stats',
         'flow_regression',
         'read_config',
+        'mempool_perf',
 ]
 
 foreach dir:test_subdirs

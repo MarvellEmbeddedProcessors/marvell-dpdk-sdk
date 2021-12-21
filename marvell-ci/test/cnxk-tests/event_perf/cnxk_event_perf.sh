@@ -7,6 +7,8 @@ GENERATOR_BOARD=${GENERATOR_BOARD:?}
 REMOTE_DIR=${REMOTE_DIR:-$(pwd | cut -d/ -f 1-3)}
 CORES=(1 8 16)
 IF0=${IF0:-0002:02:00.0}
+IF1=${IF1:-0002:01:00.1}
+IF2=${IF2:-0002:01:00.2}
 EVENT_DEV=${EVENT_DEV:-0002:0e:00.0}
 CRYPTO_DEV=${CRYPTO_DEV:-0002:10:00.1}
 TOLERANCE=${TOLERANCE:-5}
@@ -45,6 +47,12 @@ get_test_args()
 			echo "-l 0-$num_cores -n 4 -a $IF0 -a $EVENT_DEV --" \
 				"--prod_type_ethdev --nb_pkts=0 --test=perf_atq" \
 				"--stlist=${sched_mode:0:1} --wlcores=1-$num_cores"
+			;;
+		PIPELINE_ATQ_TX_FIRST)
+			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $EVENT_DEV -- " \
+				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
+				"--test=pipeline_atq --stlist=${sched_mode:0:1}"\
+				"--wlcores=1-$num_cores --tx_first 256"
 			;;
 		CRYPTO_ADAPTER_FWD)
 			local req_cores=$((num_cores * 2))
@@ -249,6 +257,7 @@ run_event_perf_regression()
 	L2FWD_EVENT		dpdk-l2fwd-event	=*
 	L3FWD_EVENT		dpdk-l3fwd		L3FWD: entering lpm_event_loop_single on lcore [0-9]*
 	PERF_ATQ		dpdk-test-eventdev	0.000 mpps avg 0.000 mpps
+	PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
 	CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
 
 	while IFS= read -r test; do
