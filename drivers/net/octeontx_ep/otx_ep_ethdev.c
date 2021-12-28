@@ -544,7 +544,8 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	otx_epvf->pdev = pdev;
 
 	otx_epdev_init(otx_epvf);
-	if (pdev->id.device_id == PCI_DEVID_OCTEONTX2_EP_NET_VF) {
+	if (pdev->id.device_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
+	    pdev->id.device_id == PCI_DEVID_CN98XX_EP_NET_VF) {
 		if (otx_epvf->sdp_packet_mode == SDP_PACKET_MODE_NIC)
 			otx_epvf->pkind = SDP_OTX2_PKIND_FS24;
 		else
