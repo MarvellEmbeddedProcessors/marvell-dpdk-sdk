@@ -52,6 +52,7 @@ test_subdirs = [
         'flow_regression',
         'read_config',
         'mempool_perf',
+        'mac_test',
 ]
 
 foreach dir:test_subdirs
