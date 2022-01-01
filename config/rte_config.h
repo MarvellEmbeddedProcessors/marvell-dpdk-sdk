@@ -102,6 +102,10 @@
 #define RTE_GRAPH_BURST_SIZE 256
 #define RTE_LIBRTE_GRAPH_STATS 1
 
+/* mldev defines */
+#define RTE_ML_MAX_DEVS 64
+#define RTE_MLDEV_NAME_LEN 64
+
 /****** driver defines ********/
 
 /* Packet prefetching in PMDs */

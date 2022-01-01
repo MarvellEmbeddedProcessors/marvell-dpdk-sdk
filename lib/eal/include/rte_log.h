@@ -48,6 +48,7 @@ extern "C" {
 #define RTE_LOGTYPE_EFD       18 /**< Log related to EFD. */
 #define RTE_LOGTYPE_EVENTDEV  19 /**< Log related to eventdev. */
 #define RTE_LOGTYPE_GSO       20 /**< Log related to GSO. */
+#define RTE_LOGTYPE_MLDEV     21 /**< Log related to ML. */
 
 /* these log types can be used in an application */
 #define RTE_LOGTYPE_USER1     24 /**< User-defined log type 1. */
