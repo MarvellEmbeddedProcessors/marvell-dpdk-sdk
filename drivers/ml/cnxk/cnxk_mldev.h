@@ -6,6 +6,8 @@
 
 #include "roc_ml.h"
 
+#define ML_FIRMWARE_STRLEN 512
+
 /**
  * Memory resources
  */
@@ -26,6 +28,12 @@ struct cnxk_ml_dev {
 
 	/** ML device memory resources */
 	struct cnxk_ml_mem mem;
+
+	/** ML firmware path */
+	char firmware[ML_FIRMWARE_STRLEN];
 };
+
+int cnxk_mldev_parse_devargs(struct rte_devargs *devargs,
+			     struct cnxk_ml_dev *cnxk_dev);
 
 #endif

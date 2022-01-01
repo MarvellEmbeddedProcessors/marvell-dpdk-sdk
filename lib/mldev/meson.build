@@ -14,4 +14,4 @@ driver_sdk_headers += files(
         'mldev_pmd.h',
 )
 
-deps += ['kvargs', 'mbuf', 'rcu', 'telemetry']
+deps += ['kvargs']

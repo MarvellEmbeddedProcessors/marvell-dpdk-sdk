@@ -8,6 +8,7 @@ if not is_linux or not dpdk_conf.get('RTE_ARCH_64')
 endif
 
 sources = files(
+        'cnxk_mldev.c',
         'cn10k_mldev.c',
 )
 

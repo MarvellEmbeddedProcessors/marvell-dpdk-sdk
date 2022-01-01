@@ -47,6 +47,12 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
 		cnxk_dev->ml.pci_dev = pci_dev;
 
+		rc = cnxk_mldev_parse_devargs(mldev->device->devargs, cnxk_dev);
+		if (rc) {
+			plt_err("Failed to parse devargs rc=%d", rc);
+			goto pmd_destroy;
+		}
+
 		rc = roc_ml_dev_init(&cnxk_dev->ml);
 		if (rc) {
 			plt_err("Failed to initialize roc ml rc = %d", rc);
