@@ -55,11 +55,12 @@ struct roc_sso {
 } __plt_cache_aligned;
 
 static __plt_always_inline uint64_t
-roc_sso_hws_head_wait(uintptr_t tag_op)
+roc_sso_hws_head_wait(uintptr_t base)
 {
+	uintptr_t tag_op = base + SSOW_LF_GWS_TAG;
 	uint64_t tag;
 
-#ifdef RTE_ARCH_ARM64
+#if defined(__aarch64__)
 	asm volatile(PLT_CPU_FEATURE_PREAMBLE
 		     "		ldr %[tag], [%[tag_op]]	\n"
 		     "		tbnz %[tag], 35, done%=		\n"

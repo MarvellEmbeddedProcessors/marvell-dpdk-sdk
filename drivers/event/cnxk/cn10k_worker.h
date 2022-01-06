@@ -515,8 +515,7 @@ cn10k_sso_tx_one(struct cn10k_sso_hws *ws, struct rte_mbuf *m, uint64_t *cmd,
 		pa = txq->io_addr | ((segdw - 1) << 4);
 
 	if (!CNXK_TAG_IS_HEAD(ws->gw_rdata) && !sched_type)
-		ws->gw_rdata =
-			roc_sso_hws_head_wait(ws->base + SSOW_LF_GWS_TAG);
+		ws->gw_rdata = roc_sso_hws_head_wait(ws->base);
 
 	roc_lmt_submit_steorl(lmt_id, pa);
 }
