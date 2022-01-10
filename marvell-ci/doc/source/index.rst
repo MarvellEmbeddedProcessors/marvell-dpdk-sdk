@@ -126,7 +126,7 @@ How to skip build in CI ?
   Builds can be skipped in CI using the ``skip_build`` directive.
 
   | **Note:** If builds are skipped, CI will not give +1.
-  | **Note:** Test builds are enabled only if corresponsing test stage is
+  | **Note:** Test builds are enabled only if corresponding test stage is
     enabled.
 
 Handling exe_wrapper in test builds
