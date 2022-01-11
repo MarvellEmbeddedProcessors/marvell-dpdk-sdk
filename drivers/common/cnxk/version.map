@@ -8,6 +8,7 @@ INTERNAL {
 	cnxk_logtype_base;
 	cnxk_logtype_cpt;
 	cnxk_logtype_mbox;
+	cnxk_logtype_ml;
 	cnxk_logtype_nix;
 	cnxk_logtype_npa;
 	cnxk_logtype_npc;
