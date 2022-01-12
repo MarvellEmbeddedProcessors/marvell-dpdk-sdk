@@ -59,7 +59,7 @@ get_test_args()
 			local max_cores=$(($(grep -c ^processor /proc/cpuinfo) - 1))
 			((req_cores = req_cores>max_cores?max_cores:req_cores))
 			echo "-l 0-$req_cores -n 4 -a $CRYPTO_DEV -a $EVENT_DEV --" \
-				"--prod_type_cryptodev --crypto_adptr_mode 1" \
+				"--prod_type_cryptodev --crypto_adptr_mode 1 --nb_flows=100" \
 				"--nb_pkts=0 --test=perf_atq --stlist=${sched_mode:0:1}" \
 				"--plcores=1-$num_cores --wlcores=$((num_cores + 1))-$req_cores"
 			;;
