@@ -920,6 +920,10 @@ struct rte_cryptodev_sym_session {
 
 /** Cryptodev asymmetric crypto session */
 struct rte_cryptodev_asym_session {
+	uint16_t nb_drivers;
+	/**< number of elements in sess_data array */
+	uint16_t user_data_sz;
+	/**< session user data will be placed after sess_data */
 	__extension__ void *sess_private_data[0];
 	/**< Private asymmetric session material */
 };
@@ -1217,6 +1221,40 @@ __rte_experimental
 void *
 rte_cryptodev_sym_session_get_user_data(
 					struct rte_cryptodev_sym_session *sess);
+/**
+ * Store user data in an asymmetric session.
+ *
+ * @param	sess		Session pointer allocated by
+ *				*rte_cryptodev_asym_session_create*.
+ * @param	data		Pointer to the user data.
+ * @param	size		Size of the user data.
+ *
+ * @return
+ *  - On success, zero.
+ *  - On failure, a negative value.
+ */
+__rte_experimental
+int
+rte_cryptodev_asym_session_set_user_data(
+					struct rte_cryptodev_asym_session *sess,
+					void *data,
+					uint16_t size);
+
+/**
+ * Get user data stored in an asymmetric session.
+ *
+ * @param	sess		Session pointer allocated by
+ *				*rte_cryptodev_asym_session_create*.
+ *
+ * @return
+ *  - On success return pointer to user data.
+ *  - On failure returns NULL.
+ */
+__rte_experimental
+void *
+rte_cryptodev_asym_session_get_user_data(
+					struct rte_cryptodev_asym_session *sess);
+
 
 /**
  * Perform actual crypto processing (encrypt/digest or auth/decrypt)

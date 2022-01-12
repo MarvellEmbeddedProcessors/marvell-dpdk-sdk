@@ -1898,6 +1898,7 @@ struct rte_cryptodev_asym_session *
 rte_cryptodev_asym_session_create(struct rte_mempool *mp)
 {
 	struct rte_cryptodev_asym_session *sess;
+	struct rte_cryptodev_sym_session_pool_private_data *pool_priv;
 	unsigned int session_size =
 			rte_cryptodev_asym_get_header_session_size();
 
@@ -1923,6 +1924,9 @@ rte_cryptodev_asym_session_create(struct rte_mempool *mp)
 	 * Include the flag indicating presence of private data
 	 */
 	memset(sess, 0, session_size);
+	pool_priv = rte_mempool_get_priv(mp);
+	sess->nb_drivers = pool_priv->nb_drivers;
+	sess->user_data_sz = pool_priv->user_data_sz;
 
 	rte_cryptodev_trace_asym_session_create(mp, sess);
 	return sess;
@@ -2058,6 +2062,13 @@ rte_cryptodev_sym_get_existing_header_session_size(
 				rte_cryptodev_sym_session_data_size(sess));
 }
 
+static unsigned int
+rte_cryptodev_asym_session_data_size(struct rte_cryptodev_asym_session *sess)
+{
+	return (sizeof(sess->sess_private_data[0]) * sess->nb_drivers) +
+			sess->user_data_sz;
+}
+
 unsigned int
 rte_cryptodev_asym_get_header_session_size(void)
 {
@@ -2066,7 +2077,11 @@ rte_cryptodev_asym_get_header_session_size(void)
 	 * of all registered drivers, and a flag which
 	 * indicates presence of private data
 	 */
-	return ((sizeof(void *) * nb_drivers) + sizeof(uint8_t));
+	struct rte_cryptodev_asym_session s = {0};
+
+	s.nb_drivers = nb_drivers;
+
+	return (sizeof(s) + rte_cryptodev_asym_session_data_size(&s));
 }
 
 unsigned int
@@ -2135,6 +2150,32 @@ rte_cryptodev_sym_session_get_user_data(
 		return NULL;
 
 	return (void *)(sess->sess_data + sess->nb_drivers);
+}
+
+int
+rte_cryptodev_asym_session_set_user_data(
+					struct rte_cryptodev_asym_session *sess,
+					void *data,
+					uint16_t size)
+{
+	if (sess == NULL)
+		return -EINVAL;
+
+	if (sess->user_data_sz < size)
+		return -ENOMEM;
+
+	rte_memcpy(sess->sess_private_data + sess->nb_drivers, data, size);
+	return 0;
+}
+
+void *
+rte_cryptodev_asym_session_get_user_data(
+					struct rte_cryptodev_asym_session *sess)
+{
+	if (sess == NULL || sess->user_data_sz == 0)
+		return NULL;
+
+	return (void *)(sess->sess_private_data + sess->nb_drivers);
 }
 
 static inline void
