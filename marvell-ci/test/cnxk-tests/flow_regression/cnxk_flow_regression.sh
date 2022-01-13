@@ -123,21 +123,13 @@ testpmd_test_flow $PRFX FLOW_VLAN "flow create 0 ingress pattern vlan \
  vid is 0x123 inner_type is 0x800 / end actions queue index 3 / count \
  / end" "pcap/eth_vlan_ipv4_tcp.pcap"
 
-testpmd_test_flow $PRFX FLOW_2VLAN "flow create 0 ingress pattern vlan \
- vid is 0x123 / vlan / end actions queue index 4 / count / end" \
- "pcap/eth_qinq_ipv4_udp.pcap"
-
 testpmd_test_flow $PRFX FLOW_IPV4_1 "flow create 0 ingress pattern ipv4 src \
  is 10.11.12.13 / end actions queue index 1 / count / end" \
  "pcap/eth_vlan_ipv4_tcp.pcap"
 
 testpmd_test_flow $PRFX FLOW_IPV4_2 "flow create 0 ingress pattern ipv4 src \
- is 10.11.12.13 dst is 10.10.10.10 tos is 4 / end actions queue index 1 / \
+ is 10.11.12.13 dst is 10.10.10.10 / end actions queue index 1 / \
  count / end" "pcap/eth_vlan_ipv4_tcp.pcap"
-
-testpmd_test_flow $PRFX FLOW_IPV6 "flow create 0 ingress pattern ipv6 tc is \
- 123 hop is 5 proto is 6 flow is 700 / end actions queue index 5 / count / \
- end" "pcap/eth_vlan_ipv6_tcp.pcap"
 
 testpmd_test_flow $PRFX FLOW_TCP "flow create 0 ingress pattern tcp src is \
  0x345 / end actions queue index 1 / count / end" "pcap/eth_vlan_ipv4_tcp.pcap"
@@ -147,7 +139,7 @@ testpmd_test_flow $PRFX FLOW_UDP "flow create 0 ingress pattern udp src is \
 
 testpmd_test_flow $PRFX FLOW_ALL "flow create 0 ingress pattern eth dst is \
  aa:bb:cc:dd:ee:ff  type is 0x800 / ipv4 src is 10.11.12.13 dst is 10.10.10.10 \
- tos is 4 / tcp src is 0x345 / end actions queue index 1 / count / end" \
+ / tcp src is 0x345 / end actions queue index 1 / count / end" \
  "pcap/eth_vlan_ipv4_tcp.pcap"
 
 testpmd_test_flow $PRFX FLOW_LTYPE_TEST1 "flow create 0 ingress pattern eth / \
