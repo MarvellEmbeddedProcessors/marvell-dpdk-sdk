@@ -683,6 +683,12 @@ cnxk_pktmbuf_detach(struct rte_mbuf *m)
 static __rte_always_inline uint64_t
 cnxk_nix_prefree_seg(struct rte_mbuf *m)
 {
+	if (unlikely(m->ol_flags & RTE_MBUF_F_EXTERNAL)) {
+		/* If external buffer is set, free the mbuf. */
+		rte_pktmbuf_free_seg(m);
+		return 1;
+	}
+
 	if (likely(rte_mbuf_refcnt_read(m) == 1)) {
 		if (!RTE_MBUF_DIRECT(m))
 			return cnxk_pktmbuf_detach(m);
