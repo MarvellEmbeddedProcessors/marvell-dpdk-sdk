@@ -614,7 +614,16 @@ cnxk_gpio_dequeue_bufs(struct rte_rawdev *dev, struct rte_rawdev_buf **buffers,
 	return 0;
 }
 
+static int
+cnxk_gpio_dev_close(struct rte_rawdev *dev)
+{
+	RTE_SET_USED(dev);
+
+	return 0;
+}
+
 static const struct rte_rawdev_ops cnxk_gpio_rawdev_ops = {
+	.dev_close = cnxk_gpio_dev_close,
 	.enqueue_bufs = cnxk_gpio_enqueue_bufs,
 	.dequeue_bufs = cnxk_gpio_dequeue_bufs,
 	.queue_def_conf = cnxk_gpio_queue_def_conf,
