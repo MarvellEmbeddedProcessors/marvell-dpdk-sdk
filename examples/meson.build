@@ -14,6 +14,7 @@ all_examples = [
         'distributor',
         'dma',
         'ethtool',
+        'extbuf',
         'eventdev_pipeline',
         'fips_validation',
         'flow_classify',
