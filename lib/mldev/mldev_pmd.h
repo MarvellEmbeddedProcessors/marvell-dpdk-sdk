@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(c) 2022 Marvell
+ * Copyright(c) 2022 Marvell.
  */
 
-#ifndef _MLDEV_PMD_H
-#define _MLDEV_PMD_H
+#ifndef _MLDEV_PMD_H_
+#define _MLDEV_PMD_H_
 
 /**
  * @file
@@ -104,8 +104,8 @@ struct rte_mldev *rte_mldev_pmd_get_named_dev(const char *name);
  * Allocates a new mldev slot for an ml device and returns the pointer
  * to that slot for the driver to use.
  *
- * @param	name		Unique identifier name for each device
- * @param	socket_id	Socket to allocate resources on.
+ * @param name		Unique identifier name for each device
+ * @param socket_id	Socket to allocate resources on.
  * @return
  *   - Slot in the rte_dev_devices array for a new device;
  */
@@ -131,9 +131,9 @@ extern int rte_mldev_pmd_release_device(struct rte_mldev *mldev);
  * PMD assist function to provide boiler plate code for ml driver to create
  * and allocate resources for a new ml PMD device instance.
  *
- * @param	name	ml device name.
- * @param	device	base device instance
- * @param	params	PMD initialisation parameters
+ * @param name		ML device name.
+ * @param device	Base device instance
+ * @param params	PMD initialisation parameters
  *
  * @return
  *  - ml device instance on success
@@ -150,7 +150,7 @@ rte_mldev_pmd_create(const char *name, struct rte_device *device,
  * PMD assist function to provide boiler plate code for ml driver to
  * destroy and free resources associated with a ml PMD device instance.
  *
- * @param	mldev	ml device handle.
+ * @param mldev	ML device handle.
  *
  * @return
  *  - 0 on success
@@ -164,7 +164,7 @@ int rte_mldev_pmd_destroy(struct rte_mldev *mldev);
  * This is the last step of device probing. It must be called after a
  * mldev is allocated and initialized successfully.
  *
- * @param	dev	Pointer to mldev struct
+ * @param dev	Pointer to mldev struct
  *
  * @return
  *  void
@@ -176,4 +176,4 @@ void rte_mldev_pmd_probing_finish(struct rte_mldev *dev);
 }
 #endif
 
-#endif /* RTE_MLDEV_PMD_H */
+#endif /* _MLDEV_PMD_H */

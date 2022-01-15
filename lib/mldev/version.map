@@ -1,3 +1,13 @@
+EXPERIMENTAL {
+	global:
+
+	rte_mldev_get_dev_id;
+	rte_mldev_name_get;
+	rte_mldev_count;
+	rte_mldev_socket_id;
+	rte_mldev_is_valid_dev;
+};
+
 INTERNAL {
 	global:
 

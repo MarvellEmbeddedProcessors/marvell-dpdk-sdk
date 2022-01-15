@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright(c) 2022 Marvell
+# Copyright(c) 2022 Marvell.
 
 sources = files(
         'mldev_pmd.c',

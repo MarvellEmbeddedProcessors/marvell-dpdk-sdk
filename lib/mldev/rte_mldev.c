@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(c) 2022 Marvell
+ * Copyright(c) 2022 Marvell.
  */
 
 #include <rte_eal.h>
@@ -41,6 +41,71 @@ rte_mldev_pmd_get_named_dev(const char *name)
 	}
 
 	return NULL;
+}
+
+static inline uint8_t
+rte_mldev_is_valid_device_data(uint8_t dev_id)
+{
+	if (dev_id >= RTE_ML_MAX_DEVS ||
+			rte_ml_devices[dev_id].data == NULL)
+		return 0;
+
+	return 1;
+}
+
+unsigned int
+rte_mldev_is_valid_dev(uint8_t dev_id)
+{
+	struct rte_mldev *dev = NULL;
+
+	if (!rte_mldev_is_valid_device_data(dev_id))
+		return 0;
+
+	dev = rte_mldev_pmd_get_dev(dev_id);
+	if (dev->attached != RTE_MLDEV_ATTACHED)
+		return 0;
+	else
+		return 1;
+}
+
+int
+rte_mldev_get_dev_id(const char *name)
+{
+	unsigned int i;
+
+	if (name == NULL)
+		return -1;
+
+	for (i = 0; i < RTE_ML_MAX_DEVS; i++) {
+		if (!rte_mldev_is_valid_device_data(i))
+			continue;
+		if ((strcmp(mldev_globals.devs[i].data->name, name)
+				== 0) &&
+				(mldev_globals.devs[i].attached ==
+						RTE_MLDEV_ATTACHED))
+			return i;
+	}
+
+	return -1;
+}
+
+uint8_t
+rte_mldev_count(void)
+{
+	return mldev_globals.nb_devs;
+}
+
+int
+rte_mldev_socket_id(uint8_t dev_id)
+{
+	struct rte_mldev *dev;
+
+	if (!rte_mldev_is_valid_dev(dev_id))
+		return -1;
+
+	dev = rte_mldev_pmd_get_dev(dev_id);
+
+	return dev->data->socket_id;
 }
 
 static inline int
@@ -187,4 +252,21 @@ rte_mldev_pmd_release_device(struct rte_mldev *mldev)
 	mldev->attached = RTE_MLDEV_DETACHED;
 	mldev_globals.nb_devs--;
 	return 0;
+}
+
+const char *
+rte_mldev_name_get(uint8_t dev_id)
+{
+	struct rte_mldev *dev;
+
+	if (!rte_mldev_is_valid_device_data(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id=%x", dev_id);
+		return NULL;
+	}
+
+	dev = rte_mldev_pmd_get_dev(dev_id);
+	if (dev == NULL)
+		return NULL;
+
+	return dev->data->name;
 }
