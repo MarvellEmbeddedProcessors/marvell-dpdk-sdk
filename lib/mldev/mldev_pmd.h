@@ -48,6 +48,10 @@ struct rte_mldev_data {
 	/** Unique identifier name */
 	char name[RTE_MLDEV_NAME_LEN];
 
+	__extension__
+	/** Device state: STARTED(1) / STOPPED(0) */
+	uint8_t dev_started : 1;
+
 	/** PMD-specific private data */
 	void *dev_private;
 } __rte_cache_aligned;
@@ -56,6 +60,9 @@ struct rte_mldev_data {
 struct rte_mldev {
 	/** Pointer to device data */
 	struct rte_mldev_data *data;
+
+	/** Functions exported by PMD */
+	struct rte_mldev_ops *dev_ops;
 
 	/** Backing device */
 	struct rte_device *device;
@@ -97,6 +104,42 @@ struct rte_mldev *rte_mldev_pmd_get_dev(uint8_t dev_id);
  */
 __rte_internal
 struct rte_mldev *rte_mldev_pmd_get_named_dev(const char *name);
+
+/**
+ * Definitions of all functions exported by a driver through the
+ * generic structure of type *ml_dev_ops* supplied in the
+ * *rte_mldev* structure associated with a device.
+ */
+
+/**
+ * Function used to configure device.
+ *
+ * @param	dev	ML device pointer
+ * @param	config	ML device configurations
+ *
+ * @return	Returns 0 on success
+ */
+typedef int (*mldev_configure_t)(struct rte_mldev *dev,
+		struct rte_mldev_config *config);
+
+/**
+ * Function used to close a configured device.
+ *
+ * @param	dev	ML device pointer
+ * @return
+ * - 0 on success.
+ * - EAGAIN if can't close as device is busy
+ */
+typedef int (*mldev_close_t)(struct rte_mldev *dev);
+
+/** ML device operations function pointer table */
+struct rte_mldev_ops {
+	/**< Configure device. */
+	mldev_configure_t dev_configure;
+
+	/**< Close device. */
+	mldev_close_t dev_close;
+};
 
 /**
  * Function for internal use by dummy drivers primarily, e.g. ring-based

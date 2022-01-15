@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(C) 2022 Marvell
+ * Copyright(C) 2022 Marvell.
  */
 #ifndef _CNXK_MLDEV_H_
 #define _CNXK_MLDEV_H_
@@ -36,4 +36,4 @@ struct cnxk_ml_dev {
 int cnxk_mldev_parse_devargs(struct rte_devargs *devargs,
 			     struct cnxk_ml_dev *cnxk_dev);
 
-#endif
+#endif /* _CNXK_MLDEV_H_ */

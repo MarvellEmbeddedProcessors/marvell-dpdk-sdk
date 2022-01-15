@@ -96,6 +96,13 @@ __rte_experimental
 extern int
 rte_mldev_socket_id(uint8_t dev_id);
 
+/** ML device configuration structure */
+struct rte_mldev_config {
+	/**< Socket to allocate resources on */
+	int socket_id;
+};
+
+
 /**
  * Validate if the ML device index is valid attached ML device.
  *
@@ -107,6 +114,37 @@ rte_mldev_socket_id(uint8_t dev_id);
 __rte_experimental
 unsigned int
 rte_mldev_is_valid_dev(uint8_t dev_id);
+
+/**
+ * Configure a device.
+ *
+ * This function must be invoked first before any other function in the
+ * API. This function can also be re-invoked when a device is in the
+ * stopped state.
+ *
+ * @param dev_id	The identifier of the device to configure.
+ * @param config	The ML device configuration structure.
+ *
+ * @return
+ *   - 0: Success, device configured.
+ *   - <0: Error code returned by the driver configuration function.
+ */
+__rte_experimental
+extern int
+rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config);
+
+/**
+ * Close an device. The device cannot be restarted!
+ *
+ * @param dev_id	The identifier of the device.
+ *
+ * @return
+ *  - 0 on successfully closing device
+ *  - <0 on failure to close device
+ */
+__rte_experimental
+extern int
+rte_mldev_close(uint8_t dev_id);
 
 #ifdef __cplusplus
 }

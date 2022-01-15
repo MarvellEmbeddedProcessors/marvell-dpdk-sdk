@@ -219,6 +219,7 @@ rte_mldev_pmd_allocate(const char *name, int socket_id)
 
 			mldev->data->dev_id = dev_id;
 			mldev->data->socket_id = socket_id;
+			mldev->data->dev_started = 0;
 			MLDEV_LOG_DEBUG("PRIMARY: init data");
 		}
 
@@ -269,4 +270,55 @@ rte_mldev_name_get(uint8_t dev_id)
 		return NULL;
 
 	return dev->data->name;
+}
+
+int
+rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config)
+{
+	struct rte_mldev *dev;
+
+	if (!rte_mldev_is_valid_dev(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
+		return -EINVAL;
+	}
+
+	dev = &rte_ml_devices[dev_id];
+
+	if (dev->data->dev_started) {
+		MLDEV_LOG_ERR("device %d must be stopped to allow configuration", dev_id);
+		return -EBUSY;
+	}
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_configure, -ENOTSUP);
+
+	return (*dev->dev_ops->dev_configure)(dev, config);
+}
+
+int
+rte_mldev_close(uint8_t dev_id)
+{
+	struct rte_mldev *dev;
+	int retval;
+
+	if (!rte_mldev_is_valid_dev(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id=%x", dev_id);
+		return -1;
+	}
+
+	dev = &rte_ml_devices[dev_id];
+
+	/* Device must be stopped before it can be closed */
+	if (dev->data->dev_started == 1) {
+		MLDEV_LOG_ERR("Device %u must be stopped before closing",
+				dev_id);
+		return -EBUSY;
+	}
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_close, -ENOTSUP);
+	retval = (*dev->dev_ops->dev_close)(dev);
+
+	if (retval < 0)
+		return retval;
+
+	return 0;
 }

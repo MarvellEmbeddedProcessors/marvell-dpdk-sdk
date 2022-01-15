@@ -10,6 +10,7 @@ endif
 sources = files(
         'cnxk_mldev.c',
         'cn10k_mldev.c',
+        'cn10k_mldev_ops.c',
 )
 
 headers = files(

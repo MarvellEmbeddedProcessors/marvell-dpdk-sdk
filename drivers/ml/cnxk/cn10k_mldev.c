@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright (C) 2022 Marvell
+ * Copyright (C) 2022 Marvell.
  */
 
 #include <mldev_pmd.h>
@@ -9,6 +9,7 @@
 #include <rte_pci.h>
 
 #include "cn10k_mldev.h"
+#include "cn10k_mldev_ops.h"
 #include "cnxk_mldev.h"
 
 #include "roc_api.h"
@@ -59,6 +60,8 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 			goto pmd_destroy;
 		}
 	}
+
+	mldev->dev_ops = &cn10k_ml_ops;
 
 	rte_mldev_pmd_probing_finish(mldev);
 
