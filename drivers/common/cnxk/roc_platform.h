@@ -40,6 +40,7 @@
 #define PLT_MEMZONE_NAMESIZE	 RTE_MEMZONE_NAMESIZE
 #define PLT_STD_C11		 RTE_STD_C11
 #define PLT_PTR_ADD		 RTE_PTR_ADD
+#define PLT_PTR_SUB		 RTE_PTR_SUB
 #define PLT_PTR_DIFF		 RTE_PTR_DIFF
 #define PLT_MAX_RXTX_INTR_VEC_ID RTE_MAX_RXTX_INTR_VEC_ID
 #define PLT_INTR_VEC_RXTX_OFFSET RTE_INTR_VEC_RXTX_OFFSET
@@ -57,16 +58,26 @@
 #define PLT_ALIGN_CEIL		 RTE_ALIGN_CEIL
 #define PLT_INIT		 RTE_INIT
 #ifndef PLT_ETHER_ADDR_LEN
-#define PLT_ETHER_ADDR_LEN 	 RTE_ETHER_ADDR_LEN
+#define PLT_ETHER_ADDR_LEN RTE_ETHER_ADDR_LEN
 #endif
-#define PLT_TAILQ_FOREACH_SAFE	 RTE_TAILQ_FOREACH_SAFE
+#define PLT_TAILQ_FOREACH_SAFE RTE_TAILQ_FOREACH_SAFE
+
+/* Cast to specific datatypes */
+#define PLT_PTR_CAST(val) ((void *)(val))
+#define PLT_U64_CAST(val) ((uint64_t)(val))
+#define PLT_U32_CAST(val) ((uint32_t)(val))
+#define PLT_U16_CAST(val) ((uint16_t)(val))
+
+/* Add / Sub pointer with scalar and cast to uint64_t */
+#define PLT_PTR_ADD_U64_CAST(__ptr, __x) PLT_U64_CAST(PLT_PTR_ADD(__ptr, __x))
+#define PLT_PTR_SUB_U64_CAST(__ptr, __x) PLT_U64_CAST(PLT_PTR_SUB(__ptr, __x))
 
 /** Divide ceil */
-#define PLT_DIV_CEIL(x, y)			\
-	({					\
-		__typeof(x) __x = x;		\
-		__typeof(y) __y = y;		\
-		(__x + __y - 1) / __y;		\
+#define PLT_DIV_CEIL(x, y)                                                     \
+	({                                                                     \
+		__typeof(x) __x = x;                                           \
+		__typeof(y) __y = y;                                           \
+		(__x + __y - 1) / __y;                                         \
 	})
 
 #define __plt_cache_aligned __rte_cache_aligned
@@ -156,7 +167,7 @@
 
 #define plt_read32(addr) rte_read32_relaxed((volatile void *)(addr))
 #define plt_write32(val, addr)                                                 \
-	rte_write64_relaxed((val), (volatile void *)(addr))
+	rte_write32_relaxed((val), (volatile void *)(addr))
 
 #define plt_wmb()		rte_wmb()
 #define plt_rmb()		rte_rmb()
