@@ -18,4 +18,4 @@ headers = files(
         'cnxk_mldev.h',
 )
 
-deps += ['common_cnxk', 'mldev']
+deps += ['eal', 'common_cnxk', 'mldev']
