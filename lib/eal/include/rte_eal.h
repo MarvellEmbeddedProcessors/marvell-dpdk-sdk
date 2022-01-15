@@ -475,6 +475,15 @@ rte_eal_mbuf_user_pool_ops(void);
 const char *
 rte_eal_get_runtime_dir(void);
 
+/**
+ * Get the OS-specific EAL base address.
+ *
+ * @return
+ *    The base address.
+ */
+__rte_internal
+uint64_t rte_eal_get_baseaddr(void);
+
 #ifdef __cplusplus
 }
 #endif
