@@ -54,6 +54,7 @@ test_subdirs = [
         'read_config',
         'mempool_perf',
         'mac_test',
+        'extbuf',
 ]
 
 foreach dir:test_subdirs
