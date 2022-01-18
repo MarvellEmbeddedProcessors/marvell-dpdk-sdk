@@ -131,10 +131,14 @@ cnxk_event_crypto_mdata_get(struct rte_crypto_op *op)
 {
 	union rte_event_crypto_metadata *ec_mdata;
 
-	if (op->sess_type == RTE_CRYPTO_OP_WITH_SESSION)
-		ec_mdata = rte_cryptodev_sym_session_get_user_data(
-			op->sym->session);
-	else if (op->sess_type == RTE_CRYPTO_OP_SESSIONLESS &&
+	if (op->sess_type == RTE_CRYPTO_OP_WITH_SESSION) {
+		if (op->type == RTE_CRYPTO_OP_TYPE_SYMMETRIC)
+			ec_mdata = rte_cryptodev_sym_session_get_user_data(
+					op->sym->session);
+		else
+			ec_mdata = rte_cryptodev_asym_session_get_user_data(
+					op->asym->session);
+	} else if (op->sess_type == RTE_CRYPTO_OP_SESSIONLESS &&
 		 op->private_data_offset)
 		ec_mdata = (union rte_event_crypto_metadata
 				    *)((uint8_t *)op + op->private_data_offset);
