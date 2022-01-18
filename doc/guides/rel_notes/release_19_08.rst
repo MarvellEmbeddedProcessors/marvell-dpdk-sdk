@@ -152,12 +152,12 @@ New Features
   ``eventdev Tx adapter``, ``eventdev Timer adapter`` and ``rawdev DMA``
   drivers for various HW co-processors available in ``OCTEON TX2`` SoC.
 
-  See :doc:`../platform/octeontx2` and driver information:
+  See :doc: platform/octeontx2 and driver information:
 
-  * :doc:`../nics/octeontx2`
-  * :doc:`../mempool/octeontx2`
-  * :doc:`../eventdevs/octeontx2`
-  * ``rawdevs/octeontx2_dma``
+  * :doc:nics/octeontx2
+  * :doc:mempool/octeontx2
+  * :doc:eventdevs/octeontx2
+  * rawdevs/octeontx2_dma
 
 * **Introduced the Intel NTB PMD.**
 
