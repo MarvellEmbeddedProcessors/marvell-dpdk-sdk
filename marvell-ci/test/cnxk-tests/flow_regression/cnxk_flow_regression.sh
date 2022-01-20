@@ -73,6 +73,15 @@ function testpmd_check_hits()
 	return -1
 }
 
+function testpmd_enable_verbose()
+{
+	local prefix=$1
+
+	testpmd_cmd $prefix "set verbose 1"
+
+	testpmd_prompt $prefix
+}
+
 function testpmd_test_flow()
 {
 	local prefix=$1
@@ -110,10 +119,63 @@ function testpmd_test_flow()
 	fi
 }
 
+function check_pkt_count()
+{
+	local pkt_filt_cmd=$1
+	local expected_cnt=$2
+
+	TCPDUMP_OUT=`$pkt_filt_cmd`
+
+	PKTCOUNT=`echo $TCPDUMP_OUT | grep "packet" | cut -d' ' -f1`
+
+	echo "packet count:$PKTCOUNT"
+
+	if [[ "$PKTCOUNT" -ne "$expected_cnt" ]]; then
+		echo "Expected:$expected_cnt, Found:$PKTCOUNT"
+		return 1
+	fi
+
+	return 0
+}
+
+function testpmd_check_mark_id()
+{
+	local prefix=$1
+	local out=testpmd.out.$prefix
+	local markid=$2
+
+	COUNT=`cat $out | grep "FDIR matched ID=$markid" | wc -l`
+
+	echo "MARKID occurrence count:" $COUNT
+
+	if [[ "$COUNT" -gt "0" ]]; then
+		return 0
+	fi
+
+	return -1
+}
+
+function testpmd_check_vlan_flags()
+{
+	local prefix=$1
+	local out=testpmd.out.$prefix
+
+	COUNT=`cat $out | grep "RTE_MBUF_F_RX_VLAN_STRIPPED" | wc -l`
+
+	echo "VLAN_STRIPPED occurrence count:" $COUNT
+
+	if [[ "$COUNT" -gt "0" ]]; then
+		return 0
+	fi
+
+	return -1
+}
+
 echo "Testpmd running with $TESTPMD_PORT, Coremask=$TESTPMD_COREMASK"
 testpmd_launch $PRFX \
 		" -c $TESTPMD_COREMASK -a $TESTPMD_PORT" \
-		" --no-flush-rx --nb-cores=1 --rxq 8 --txq 8"
+		" --no-flush-rx --nb-cores=1 --rxq 8 --txq 8" \
+		" --port-topology=loop"
 
 testpmd_test_flow $PRFX FLOW_ETH "flow create 0 ingress pattern eth dst is \
  aa:bb:cc:dd:ee:ff / end actions queue index 3 / \
@@ -154,7 +216,87 @@ testpmd_test_flow $PRFX FLOW_LTYPE_TEST3 "flow create 0 ingress pattern eth / \
  vlan / ipv6 / tcp / end actions queue index 2 / count / end" \
  "pcap/eth_vlan_ipv6_tcp.pcap"
 
-testpmd_quit  $PRFX
+VID1=0xBAD
+VID2=0xABC
+#---------------------------FLOW_ACTION_1VLAN_INSERT---------------------------
 
+testpmd_test_flow $PRFX FLOW_ACTION_1VLAN_INSERT "flow create 0 egress pattern \
+ eth / end actions of_push_vlan ethertype 0x88A8 / of_set_vlan_pcp vlan_pcp 3 \
+ / of_set_vlan_vid vlan_vid $VID1 / count / end" \
+ "pcap/eth_ipv4_tcp.pcap"
+
+TCPDUMP_CMD="tcpdump --count -r ./$PKTGEN_OUTPCAP (vlan $VID1)"
+
+if ! check_pkt_count "$TCPDUMP_CMD" 1; then
+	echo FAILED
+	exit 1
+fi
+echo "FLOW_ACTION_1VLAN_INSERT passed"
+
+#---------------------------FLOW_ACTION_2VLAN_INSERT---------------------------
+
+testpmd_test_flow $PRFX FLOW_ACTION_2VLAN_INSERT "flow create 0 egress pattern \
+ eth / end actions of_push_vlan ethertype 0x88A8 / of_set_vlan_pcp vlan_pcp 3 \
+ / of_set_vlan_vid vlan_vid $VID1 / of_set_vlan_vid vlan_vid $VID2 / \
+ of_push_vlan ethertype 0x8100 / of_set_vlan_pcp vlan_pcp 4 / count / end" \
+ "pcap/eth_ipv4_tcp.pcap"
+
+TCPDUMP_CMD="tcpdump --count -r ./$PKTGEN_OUTPCAP (vlan $VID1 and vlan $VID2)"
+
+if ! check_pkt_count "$TCPDUMP_CMD" 1; then
+	echo FAILED
+	exit 1
+fi
+echo "FLOW_ACTION_2VLAN_INSERT passed"
+
+testpmd_enable_verbose $PRFX
+#---------------------------FLOW_ACTION_VLAN_STRIP-----------------------------
+
+testpmd_test_flow $PRFX FLOW_VLAN_POP "flow create 0 ingress pattern ipv4 src \
+ is 10.11.12.13  / end actions of_pop_vlan / queue index 0 / count / end" \
+ "pcap/eth_vlan_ipv4_tcp.pcap"
+
+#Note: "(host 10.11.12.13)" will not match if a vlan is present.
+#Expression to match vlan and an IPv4 address is "(vlan and host 10.11.12.13)".
+TCPDUMP_CMD="tcpdump --count -r ./$PKTGEN_OUTPCAP ( host 10.11.12.13 )"
+if ! check_pkt_count "$TCPDUMP_CMD" 1; then
+	echo "FAILED: vlan stripped packet not found"
+	exit 1
+fi
+
+if ! testpmd_check_vlan_flags $PRFX; then
+	echo "FAILED: ol_flags VLAN_STRIPPED not set"
+	exit 1
+fi
+
+echo "FLOW_ACTION_VLAN_STRIP passed"
+
+#---------------------------FLOW_ACTION_MARK-----------------------------------
+MARKID=0xdead
+
+testpmd_test_flow $PRFX FLOW_MARK "flow create 0 ingress pattern ipv4 src is \
+ 10.11.12.13 / end actions mark id $MARKID / queue index 0 / count / end" \
+ "pcap/eth_ipv4_tcp.pcap"
+
+if ! testpmd_check_mark_id $PRFX $MARKID; then
+	echo "FAILED: mark not set in ol_flags"
+	exit 1
+fi
+
+echo "FLOW_ACTION_MARK passed"
+#---------------------------FLOW_ACTION_FLAG-----------------------------------
+MARKID=0xfffd
+
+testpmd_test_flow $PRFX FLOW_FLAG "flow create 0 ingress pattern ipv4 src is \
+ 10.11.12.13 / end actions flag / queue index 0 / count / end" \
+ "pcap/eth_ipv4_tcp.pcap"
+
+if ! testpmd_check_mark_id $PRFX $MARKID; then
+	echo "FAILED: mark not set in ol_flags"
+	exit 1
+fi
+echo "FLOW_ACTION_FLAG passed"
+
+testpmd_quit  $PRFX
 echo "SUCCESS: flow regression tests completed"
 exit 0
