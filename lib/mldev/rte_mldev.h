@@ -46,6 +46,33 @@ extern "C" {
 #define RTE_MLDEV_DETACHED (0)
 #define RTE_MLDEV_ATTACHED (1)
 
+/** Input / Output datatype enumeration. */
+enum rte_mldev_io_type {
+	/** 8-bit integer. */
+	RTE_MLDEV_IO_TYPE_INT8 = 1,
+
+	/** 8-bit unsigned integer. */
+	RTE_MLDEV_IO_TYPE_UINT8,
+
+	/** 16-bit integer. */
+	RTE_MLDEV_IO_TYPE_INT16,
+
+	/** 16-bit unsigned integer. */
+	RTE_MLDEV_IO_TYPE_UINT16,
+
+	/** 32-bit integer. */
+	RTE_MLDEV_IO_TYPE_INT32,
+
+	/** 32-bit unsigned integer. */
+	RTE_MLDEV_IO_TYPE_UINT32,
+
+	/** 16-bit floating point number. */
+	RTE_MLDEV_IO_TYPE_FP16,
+
+	/** 32-bit floating point number. */
+	RTE_MLDEV_IO_TYPE_FP32
+};
+
 /**
  * Get the device identifier for the named ML device.
  *

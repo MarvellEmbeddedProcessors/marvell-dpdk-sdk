@@ -303,6 +303,28 @@ cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 	return ret;
 }
 
+__plt_unused static int
+cnxk_ml_io_type_get_size(enum rte_mldev_io_type type)
+{
+	switch (type) {
+	case RTE_MLDEV_IO_TYPE_INT8:
+	case RTE_MLDEV_IO_TYPE_UINT8:
+		return sizeof(uint8_t);
+	case RTE_MLDEV_IO_TYPE_INT16:
+	case RTE_MLDEV_IO_TYPE_UINT16:
+		return sizeof(uint16_t);
+	case RTE_MLDEV_IO_TYPE_INT32:
+	case RTE_MLDEV_IO_TYPE_UINT32:
+		return sizeof(uint32_t);
+	case RTE_MLDEV_IO_TYPE_FP16:
+		return sizeof(float) / 2;
+	case RTE_MLDEV_IO_TYPE_FP32:
+		return sizeof(float);
+	default:
+		return -EINVAL;
+	}
+}
+
 static int
 cnxk_ml_metadata_check(struct cnxk_ml_model_metadata *metadata)
 {
