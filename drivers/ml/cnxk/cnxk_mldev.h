@@ -9,6 +9,8 @@
 #define ML_FIRMWARE_STRLEN   512
 #define ML_FW_VERSION_STRLEN 32
 
+#define ML_MODEL_NAME_LEN 64
+
 /* ML Job commands */
 enum cnxk_ml_job_cmd {
 	CNXK_ML_JOB_CMD_RUN = 0,
@@ -186,6 +188,43 @@ struct cnxk_ml_fw {
 	struct cnxk_ml_job_result job_result;
 };
 
+/* ML Model Object */
+struct cnxk_ml_model {
+	/* Configuration reference */
+	struct cnxk_ml_config *ml_config;
+
+	/* Model name */
+	char name[ML_MODEL_NAME_LEN];
+
+	/* Model ID */
+	uint32_t model_id;
+};
+
+/* Configuration object */
+struct cnxk_ml_config {
+	/* Device reference */
+	struct cnxk_ml_dev *ml_dev;
+
+	/* Active flag */
+	bool active;
+
+	/* Maximum number of models to be created */
+	uint32_t max_models_created;
+
+	/* ML model array */
+	struct cnxk_ml_model **ml_models;
+
+	/* Spin lock for slow path
+	 * Enqueue / access through scratch registers
+	 */
+	rte_spinlock_t scratch_lock;
+
+	/* Spin lock for fastpath
+	 * Enqueue through JCMDQ
+	 */
+	rte_spinlock_t run_lock;
+};
+
 /* ML Device private data */
 struct cnxk_ml_dev {
 	/* Device ROC */
@@ -196,6 +235,9 @@ struct cnxk_ml_dev {
 
 	/* Firmware handle */
 	struct cnxk_ml_fw ml_fw;
+
+	/* Configuration handle */
+	struct cnxk_ml_config ml_config;
 };
 
 int cnxk_mldev_parse_devargs(struct rte_devargs *devargs,

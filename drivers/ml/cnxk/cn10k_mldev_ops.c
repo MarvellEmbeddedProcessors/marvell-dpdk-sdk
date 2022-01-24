@@ -19,6 +19,9 @@
 #define FW_LINKER_OFFSET 0x80000
 #define FW_WAIT_CYCLES	 100
 
+/* ML configuration macros */
+#define ML_CONFIG_MEMZONE_NAME "ml_cn10k_config_mz"
+
 /* Timeout */
 #define ML_TIMEOUT_FW_LOAD_S 10
 
@@ -300,10 +303,13 @@ cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 int
 cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 {
+	struct cnxk_ml_config *ml_config;
 	const struct plt_memzone *mz;
 	struct cnxk_ml_dev *ml_dev;
 	struct cnxk_ml_fw *ml_fw;
+	uint64_t ml_models_size;
 	uint64_t reg_val64;
+	uint32_t model_id;
 	uint64_t mz_size;
 	uint64_t fw_size;
 	void *fw_buffer;
@@ -312,7 +318,7 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	if (dev == NULL || conf == NULL)
 		return -EINVAL;
 
-	/* Update device reference in firmware */
+	/* Update device reference in firmware and set handles */
 	ml_dev = dev->data->dev_private;
 	ml_fw = &ml_dev->ml_fw;
 	ml_fw->ml_dev = ml_dev;
@@ -350,10 +356,41 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	if (ret != 0)
 		goto err_exit;
 
+	ml_config = &ml_dev->ml_config;
+	ml_config->ml_dev = ml_dev;
+	ml_config->max_models_created = ML_CN10K_MAX_MODELS;
+
+	/* Reserve memzone for configuration data and update ml_config */
+	ml_models_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model *) *
+						ML_CN10K_MAX_MODELS,
+					ML_CN10K_ALIGN_SIZE);
+	mz_size = ml_models_size;
+	mz = plt_memzone_reserve_aligned(ML_CONFIG_MEMZONE_NAME, mz_size, 0,
+					 ML_CN10K_ALIGN_SIZE);
+	if (mz == NULL) {
+		plt_err("plt_memzone_reserve failed : %s",
+			ML_CONFIG_MEMZONE_NAME);
+		goto err_exit;
+	}
+
+	ml_config->ml_models = mz->addr;
+	for (model_id = 0; model_id < ml_config->max_models_created; model_id++)
+		ml_config->ml_models[model_id] = NULL;
+
+	rte_spinlock_init(&ml_config->scratch_lock);
+	rte_spinlock_init(&ml_config->run_lock);
+
+	ml_config->active = true;
+
 	return 0;
 
 err_exit:
 	/* Clear resources */
+	mz = plt_memzone_lookup(ML_CONFIG_MEMZONE_NAME);
+	if (mz != NULL)
+		plt_memzone_free(mz);
+
+	mz = plt_memzone_lookup(FW_MEMZONE_NAME);
 	if (mz != NULL)
 		plt_memzone_free(mz);
 
@@ -368,11 +405,16 @@ err_exit:
 int
 cn10k_ml_dev_close(struct rte_mldev *dev)
 {
+	struct cnxk_ml_config *ml_config;
 	const struct plt_memzone *mz;
 	struct cnxk_ml_dev *ml_dev;
 	int ret = 0;
 
 	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+
+	/* Set config inactive */
+	ml_config->active = false;
 
 	/* Set MLIP clock off and stall on */
 	roc_ml_clk_force_off(&ml_dev->roc);
@@ -391,6 +433,11 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 	roc_ml_reg_write64(&ml_dev->roc, 0, ML_MLR_BASE);
 	plt_ml_dbg("ML_MLR_BASE = 0x%016lx",
 		   roc_ml_reg_read64(&ml_dev->roc, ML_MLR_BASE));
+
+	/* Clear resources */
+	mz = plt_memzone_lookup(ML_CONFIG_MEMZONE_NAME);
+	if (mz != NULL)
+		plt_memzone_free(mz);
 
 	mz = plt_memzone_lookup(FW_MEMZONE_NAME);
 	if (mz)

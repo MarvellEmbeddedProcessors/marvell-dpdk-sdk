@@ -13,5 +13,6 @@
 
 /* Device macros */
 #define ML_CN10K_ALIGN_SIZE 128
+#define ML_CN10K_MAX_MODELS 16
 
 #endif /* _CN10K_MLDEV_H_ */
