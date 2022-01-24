@@ -1142,7 +1142,7 @@ struct nix_bp_cfg_req {
  */
 #define NIX_MAX_CHAN	 64
 #define NIX_CGX_MAX_CHAN 16
-#define NIX_LBK_MAX_CHAN NIX_MAX_CHAN
+#define NIX_LBK_MAX_CHAN 1
 struct nix_bp_cfg_rsp {
 	struct mbox_msghdr hdr;
 	/* Channel and bpid mapping */
