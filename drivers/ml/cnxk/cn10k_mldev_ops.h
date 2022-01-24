@@ -14,4 +14,8 @@ int cn10k_ml_dev_configure(struct rte_mldev *dev,
 
 int cn10k_ml_dev_close(struct rte_mldev *dev);
 
+int cn10k_ml_dev_start(struct rte_mldev *dev);
+
+void cn10k_ml_dev_stop(struct rte_mldev *dev);
+
 #endif /* _CNXK_MLDEV_OPS_H_ */

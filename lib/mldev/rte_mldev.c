@@ -322,3 +322,53 @@ rte_mldev_close(uint8_t dev_id)
 
 	return 0;
 }
+
+int rte_mldev_start(uint8_t dev_id)
+{
+	struct rte_mldev *dev;
+	int retval;
+
+	if (!rte_mldev_is_valid_dev(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id=%x", dev_id);
+		return -1;
+	}
+
+	dev = &rte_ml_devices[dev_id];
+
+	/* Device must be stopped before it can be closed */
+	if (dev->data->dev_started != 0) {
+		MLDEV_LOG_ERR("Device %u is already started", dev_id);
+		return -EBUSY;
+	}
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_start, -ENOTSUP);
+	retval = (*dev->dev_ops->dev_start)(dev);
+
+	if (retval == 0)
+		dev->data->dev_started = 1;
+	else
+		return retval;
+
+	return 0;
+}
+
+void rte_mldev_stop(uint8_t dev_id)
+{
+	struct rte_mldev *dev;
+
+	if (!rte_mldev_is_valid_dev(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
+		return;
+	}
+
+	dev = &rte_ml_devices[dev_id];
+
+	/* Device must be stopped before it can be closed */
+	if (dev->data->dev_started == 0) {
+		MLDEV_LOG_ERR("Device %u is not started", dev_id);
+		return;
+	}
+
+	(*dev->dev_ops->dev_stop)(dev);
+	dev->data->dev_started = 0;
+}

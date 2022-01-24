@@ -146,6 +146,29 @@ __rte_experimental
 extern int
 rte_mldev_close(uint8_t dev_id);
 
+/**
+ * Start an device.
+ *
+ * The device start step consists of setting the configured offload
+ * features and in starting accepting the ML inferences jobs on the device.
+ *
+ * @param dev_id	The identifier of the device.
+ * @return
+ *   - 0: Success, device started.
+ *   - <0: Error code of the driver device start function.
+ */
+__rte_experimental
+extern int rte_mldev_start(uint8_t dev_id);
+
+/**
+ * Stop an device. The device can be restarted with a call to
+ * rte_mldev_start()
+ *
+ * @param dev_id	The identifier of the device.
+ */
+__rte_experimental
+extern void rte_mldev_stop(uint8_t dev_id);
+
 #ifdef __cplusplus
 }
 #endif

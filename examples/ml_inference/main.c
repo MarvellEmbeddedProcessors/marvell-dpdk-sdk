@@ -42,7 +42,6 @@ main(int argc, char **argv)
 	struct rte_mldev_config ml_config;
 	uint8_t dev_count;
 	uint8_t dev_id;
-	uint8_t i;
 	int ret;
 
 	/* Init EAL */
@@ -61,20 +60,28 @@ main(int argc, char **argv)
 
 	/* Get total number of ML devices initialized */
 	dev_count = rte_mldev_count();
-
-	/* Configure ML devices */
-	for (dev_id = 0; dev_id < dev_count; dev_id++) {
-		ml_config.socket_id = rte_mldev_socket_id(dev_id);
-		if (rte_mldev_configure(dev_id, &ml_config) != 0) {
-			printf("Device configuration failed, dev_id = %d\n", dev_id);
-			goto close_dev;
-		}
+	if (dev_count <= 0) {
+		printf("No ML devices found. exit.\n");
+		return -ENODEV;
 	}
 
+	/* Configure ML devices, use only dev_id = 0 */
+	dev_id = 0;
+	ml_config.socket_id = rte_mldev_socket_id(dev_id);
+	if (rte_mldev_configure(dev_id, &ml_config) != 0) {
+		printf("Device configuration failed, dev_id = %d\n", dev_id);
+		goto close_dev;
+	}
+
+	/* Start device */
+	rte_mldev_start(dev_id);
+
+	/* Stop device */
+	rte_mldev_stop(dev_id);
+
 close_dev:
-	/* Close ML devices */
-	for (i = 0; i < dev_id; i++)
-		rte_mldev_close(i);
+	/* Close ML device */
+	rte_mldev_close(dev_id);
 
 	/* clean up the EAL */
 	rte_eal_cleanup();

@@ -287,6 +287,13 @@ cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
 	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
 
+	/* Disable job execution, to be enabled in start */
+	reg_val64 = roc_ml_reg_read64(&ml_dev->roc, ML_CFG);
+	reg_val64 &= ~ROC_ML_CFG_ENA;
+	roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_CFG);
+	plt_ml_dbg("ML_CFG => 0x%016lx",
+		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
+
 	return ret;
 }
 
@@ -392,8 +399,42 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 	return ret;
 }
 
+int
+cn10k_ml_dev_start(struct rte_mldev *dev)
+{
+	struct cnxk_ml_dev *ml_dev;
+	uint64_t reg_val64;
+
+	ml_dev = dev->data->dev_private;
+
+	reg_val64 = roc_ml_reg_read64(&ml_dev->roc, ML_CFG);
+	reg_val64 |= ROC_ML_CFG_ENA;
+	roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_CFG);
+	plt_ml_dbg("ML_CFG => 0x%016lx",
+		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
+
+	return 0;
+}
+
+void
+cn10k_ml_dev_stop(struct rte_mldev *dev)
+{
+	struct cnxk_ml_dev *ml_dev;
+	uint64_t reg_val64;
+
+	ml_dev = dev->data->dev_private;
+
+	reg_val64 = roc_ml_reg_read64(&ml_dev->roc, ML_CFG);
+	reg_val64 &= ~ROC_ML_CFG_ENA;
+	roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_CFG);
+	plt_ml_dbg("ML_CFG => 0x%016lx",
+		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
+}
+
 struct rte_mldev_ops cn10k_ml_ops = {
 	/* Device control ops */
 	.dev_configure = cn10k_ml_dev_configure,
 	.dev_close = cn10k_ml_dev_close,
+	.dev_start = cn10k_ml_dev_start,
+	.dev_stop = cn10k_ml_dev_stop,
 };

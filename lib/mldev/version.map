@@ -8,6 +8,8 @@ EXPERIMENTAL {
 	rte_mldev_is_valid_dev;
 	rte_mldev_configure;
 	rte_mldev_close;
+	rte_mldev_start;
+	rte_mldev_stop;
 };
 
 INTERNAL {

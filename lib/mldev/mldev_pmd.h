@@ -114,8 +114,8 @@ struct rte_mldev *rte_mldev_pmd_get_named_dev(const char *name);
 /**
  * Function used to configure device.
  *
- * @param	dev	ML device pointer
- * @param	config	ML device configurations
+ * @param dev		ML device pointer
+ * @param config	ML device configurations
  *
  * @return	Returns 0 on success
  */
@@ -125,12 +125,28 @@ typedef int (*mldev_configure_t)(struct rte_mldev *dev,
 /**
  * Function used to close a configured device.
  *
- * @param	dev	ML device pointer
+ * @param dev	ML device pointer
  * @return
  * - 0 on success.
  * - EAGAIN if can't close as device is busy
  */
 typedef int (*mldev_close_t)(struct rte_mldev *dev);
+
+/**
+ * Function used to start a configured device.
+ *
+ * @param dev	ML device pointer
+ *
+ * @return	Returns 0 on success
+ */
+typedef int (*mldev_start_t)(struct rte_mldev *dev);
+
+/**
+ * Function used to stop a configured device.
+ *
+ * @param dev	ML device pointer
+ */
+typedef void (*mldev_stop_t)(struct rte_mldev *dev);
 
 /** ML device operations function pointer table */
 struct rte_mldev_ops {
@@ -139,6 +155,12 @@ struct rte_mldev_ops {
 
 	/**< Close device. */
 	mldev_close_t dev_close;
+
+	/**< Start device. */
+	mldev_start_t dev_start;
+
+	/**< Stop device. */
+	mldev_stop_t dev_stop;
 };
 
 /**
