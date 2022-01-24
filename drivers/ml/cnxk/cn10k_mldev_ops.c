@@ -303,6 +303,40 @@ cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 	return ret;
 }
 
+static int
+cnxk_ml_metadata_check(struct cnxk_ml_model_metadata *metadata)
+{
+	uint8_t version[4];
+	char str[PATH_MAX] = {0};
+
+	if (strncmp((char *)metadata->metadata_header.magic,
+		    ML_MODEL_MAGIC_STRING, 4) != 0) {
+		plt_err("Invalid model, magic = %s",
+			metadata->metadata_header.magic);
+		return -1;
+	}
+
+	if (metadata->metadata_header.target_architecture !=
+	    ML_MODEL_TARGET_ARCH) {
+		plt_err("Model target architecture (%d) not supported",
+			metadata->metadata_header.target_architecture);
+		return -1;
+	}
+
+	memcpy(version, metadata->metadata_header.version, 4 * sizeof(uint8_t));
+	snprintf(str, PATH_MAX, "%d.%d.%d.%d", version[0], version[1],
+		 version[2], version[3]);
+	if (version[0] * 1000 + version[1] * 100 < ML_MODEL_VERSION) {
+		plt_err("Metadata version = %s (< %d.%d.%d.%d) not supported",
+			str, (ML_MODEL_VERSION / 1000) % 10,
+			(ML_MODEL_VERSION / 100) % 10,
+			(ML_MODEL_VERSION / 10) % 10, ML_MODEL_VERSION % 10);
+		return -1;
+	}
+
+	return 0;
+}
+
 int
 cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 {
@@ -485,18 +519,25 @@ int
 cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 			  uint8_t *model_id)
 {
+	struct cnxk_ml_model_metadata *model_metadata;
+	struct cnxk_ml_model_metadata metadata;
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
 
 	const struct plt_memzone *mz;
 	char str[PATH_MAX] = {0};
-
 	uint64_t mz_size;
+	uint8_t *buffer;
 	uint8_t idx;
 
 	PLT_ASSERT(model != NULL);
 	PLT_ASSERT(model_id != NULL);
+
+	buffer = model->model_buffer;
+	memcpy(&metadata, buffer, sizeof(struct cnxk_ml_model_metadata));
+	if (cnxk_ml_metadata_check(&metadata) != 0)
+		return -1;
 
 	ml_dev = dev->data->dev_private;
 	ml_config = &ml_dev->ml_config;
@@ -532,6 +573,10 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 			    sizeof(ml_model->name));
 		plt_ml_dbg("ml_model->name = %s", ml_model->name);
 	}
+
+	model_metadata = &ml_model->model_metadata;
+	memcpy(model_metadata, &metadata,
+	       sizeof(struct cnxk_ml_model_metadata));
 
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
 	ml_config->ml_models[idx] = ml_model;
