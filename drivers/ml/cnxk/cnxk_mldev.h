@@ -530,6 +530,24 @@ struct cnxk_ml_mem {
 	struct rte_mem_resource res4;
 };
 
+/* ML Model OCM map structure */
+struct cnxk_ml_ocm_model_map {
+	/* status of OCM reservation */
+	bool ocm_reserved;
+
+	/* Mask of OCM tiles for the model */
+	uint64_t tilemask;
+
+	/* Start page for the model load, default = -1 */
+	int wb_page_start;
+
+	/* Number of pages required for weights and bias */
+	uint16_t wb_pages;
+
+	/* Number of pages required for scratch memory */
+	uint16_t scratch_pages;
+};
+
 /* ML firmware structure */
 struct cnxk_ml_fw {
 	/* Device reference */
@@ -561,6 +579,9 @@ struct cnxk_ml_model {
 
 	/* Model ID */
 	uint32_t model_id;
+
+	/* Tile and memory information object */
+	struct cnxk_ml_ocm_model_map model_mem_map;
 
 	/* Model metadata */
 	struct cnxk_ml_model_metadata model_metadata;
@@ -595,6 +616,24 @@ struct cnxk_ml_config {
 	 * Enqueue through JCMDQ
 	 */
 	rte_spinlock_t run_lock;
+
+	/* Number of OCM tiles */
+	uint8_t ocm_num_tiles;
+
+	/* OCM size per each tile */
+	uint64_t ocm_size;
+
+	/* OCM page size */
+	uint64_t ocm_page_size;
+
+	/* OCM pages */
+	uint16_t ocm_pages;
+
+	/* Words per OCM mask */
+	uint16_t ocm_mask_words;
+
+	/* OCM memory info and status*/
+	void *ocm_tile_info;
 };
 
 /* ML Device private data */

@@ -470,13 +470,16 @@ cnxk_ml_model_addr_update(struct cnxk_ml_model_metadata *model_metadata,
 int
 cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 {
+	struct cn10k_ml_ocm_tile_info *ocm_tile_info;
 	struct cnxk_ml_config *ml_config;
 	const struct plt_memzone *mz;
+	uint64_t ocm_tile_info_size;
 	struct cnxk_ml_dev *ml_dev;
 	struct cnxk_ml_fw *ml_fw;
 	uint64_t ml_models_size;
 	uint64_t reg_val64;
 	uint32_t model_id;
+	uint16_t tile_id;
 	uint64_t mz_size;
 	uint64_t fw_size;
 	void *fw_buffer;
@@ -531,7 +534,10 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	ml_models_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model *) *
 						ML_CN10K_MAX_MODELS,
 					ML_CN10K_ALIGN_SIZE);
-	mz_size = ml_models_size;
+	ocm_tile_info_size = PLT_ALIGN_CEIL(
+		sizeof(struct cn10k_ml_ocm_tile_info) * ML_CN10K_OCM_NUMTILES,
+		ML_CN10K_ALIGN_SIZE);
+	mz_size = ml_models_size + ocm_tile_info_size;
 	mz = plt_memzone_reserve_aligned(ML_CONFIG_MEMZONE_NAME, mz_size, 0,
 					 ML_CN10K_ALIGN_SIZE);
 	if (mz == NULL) {
@@ -541,8 +547,23 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	}
 
 	ml_config->ml_models = mz->addr;
+	ml_config->ocm_tile_info =
+		PLT_PTR_ADD(ml_config->ml_models, ml_models_size);
+	ml_config->max_models_created = ML_CN10K_MAX_MODELS;
+	ml_config->ocm_num_tiles = ML_CN10K_OCM_NUMTILES;
+	ml_config->ocm_size = ML_CN10K_OCM_TILESIZE;
+	ml_config->ocm_page_size = ML_CN10K_OCM_PAGESIZE;
+	ml_config->ocm_pages = ml_config->ocm_size / ml_config->ocm_page_size;
+	ml_config->ocm_mask_words =
+		ml_config->ocm_pages / (8 * sizeof(uint8_t));
+
 	for (model_id = 0; model_id < ml_config->max_models_created; model_id++)
 		ml_config->ml_models[model_id] = NULL;
+
+	ocm_tile_info =
+		(struct cn10k_ml_ocm_tile_info *)(ml_config->ocm_tile_info);
+	for (tile_id = 0; tile_id < ml_config->ocm_num_tiles; tile_id++)
+		ocm_tile_info[tile_id].last_wb_page = -1;
 
 	rte_spinlock_init(&ml_config->scratch_lock);
 	rte_spinlock_init(&ml_config->run_lock);
@@ -672,6 +693,11 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 	int blobsz;
 	int fpos;
 
+	uint16_t scratch_pages;
+	uint64_t scratch_size;
+	uint16_t wb_pages;
+	uint64_t wb_size;
+
 	PLT_ASSERT(model != NULL);
 	PLT_ASSERT(model_id != NULL);
 
@@ -725,6 +751,32 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 	model_metadata = &ml_model->model_metadata;
 	memcpy(model_metadata, &metadata,
 	       sizeof(struct cnxk_ml_model_metadata));
+
+	wb_size = model_metadata->model.ocm_wb_range_end -
+		  model_metadata->model.ocm_wb_range_start + 1;
+	if (wb_size % ml_config->ocm_page_size)
+		wb_pages = wb_size / ml_config->ocm_page_size + 1;
+	else
+		wb_pages = wb_size / ml_config->ocm_page_size;
+	plt_ml_dbg("wb_size = %" PRIu64 ", wb_pages = %" PRIu16, wb_size,
+		   wb_pages);
+
+	scratch_size =
+		ml_config->ocm_size - model_metadata->model.ocm_tmp_range_floor;
+	if (model_metadata->model.ocm_tmp_range_floor %
+	    ml_config->ocm_page_size)
+		scratch_pages = scratch_size / ml_config->ocm_page_size + 1;
+	else
+		scratch_pages = scratch_size / ml_config->ocm_page_size;
+	plt_ml_dbg("scratch_size = %" PRIu64 ", scratch_pages = %" PRIu16,
+		   scratch_size, scratch_pages);
+
+	/* Check if the model can be loaded on OCM */
+	if ((wb_pages + scratch_pages) > ML_CN10K_OCM_NUMPAGES) {
+		plt_err("Cannot create model, OCM pages required = %d (> %d)",
+			wb_pages + scratch_pages, ML_CN10K_OCM_NUMPAGES);
+		goto err_exit;
+	}
 
 	/* Set DMA base address */
 	base_dma_addr = PLT_PTR_ADD(mz->addr,
@@ -806,6 +858,14 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 
 	/* Copy data from load to run. run address to be used by MLIP */
 	memcpy(base_dma_addr_run, base_dma_addr_load, model_data_size);
+
+	memset(&ml_model->model_mem_map, 0,
+	       sizeof(struct cnxk_ml_ocm_model_map));
+	ml_model->model_mem_map.ocm_reserved = false;
+	ml_model->model_mem_map.tilemask = 0;
+	ml_model->model_mem_map.wb_page_start = -1;
+	ml_model->model_mem_map.wb_pages = wb_pages;
+	ml_model->model_mem_map.scratch_pages = scratch_pages;
 
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
 	ml_config->ml_models[idx] = ml_model;
