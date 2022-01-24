@@ -10,6 +10,8 @@ EXPERIMENTAL {
 	rte_mldev_close;
 	rte_mldev_start;
 	rte_mldev_stop;
+	rte_mldev_model_create;
+	rte_mldev_model_destroy;
 };
 
 INTERNAL {

@@ -19,6 +19,14 @@ enum cnxk_ml_job_cmd {
 	CNXK_ML_JOB_CMD_FW_LOAD,
 };
 
+/* Model states */
+enum cnxk_ml_model_state {
+	CNXK_ML_MODEL_STATE_CREATED,
+	CNXK_ML_MODEL_STATE_LOAD_ACTIVE,
+	CNXK_ML_MODEL_STATE_LOADED,
+	CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE,
+};
+
 /* Event mode compl_W0 structure */
 union cnxk_ml_compl_W0 {
 	uint64_t u;
@@ -198,6 +206,9 @@ struct cnxk_ml_model {
 
 	/* Model ID */
 	uint32_t model_id;
+
+	/* Model state */
+	enum cnxk_ml_model_state state;
 };
 
 /* Configuration object */

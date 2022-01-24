@@ -22,6 +22,9 @@
 /* ML configuration macros */
 #define ML_CONFIG_MEMZONE_NAME "ml_cn10k_config_mz"
 
+/* ML model macros */
+#define ML_MODEL_MEMZONE_NAME "ml_cn10k_model_mz"
+
 /* Timeout */
 #define ML_TIMEOUT_FW_LOAD_S 10
 
@@ -478,10 +481,103 @@ cn10k_ml_dev_stop(struct rte_mldev *dev)
 		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
 }
 
+int
+cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
+			  uint8_t *model_id)
+{
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_model *ml_model;
+	struct cnxk_ml_dev *ml_dev;
+
+	const struct plt_memzone *mz;
+	char str[PATH_MAX] = {0};
+
+	uint64_t mz_size;
+	uint8_t idx;
+
+	PLT_ASSERT(model != NULL);
+	PLT_ASSERT(model_id != NULL);
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+
+	/* Assign model ID */
+	for (idx = 0; idx < ml_config->max_models_created; idx++) {
+		if (ml_config->ml_models[idx] == NULL)
+			break;
+	}
+
+	if (idx >= ml_config->max_models_created) {
+		plt_err("No slots available to load new model");
+		return -1;
+	}
+
+	/* Get MZ size */
+	mz_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
+				 ML_CN10K_ALIGN_SIZE);
+
+	/* Allocate memzone for model object and model data */
+	snprintf(str, PATH_MAX, "%s_%d", ML_MODEL_MEMZONE_NAME, idx);
+	mz = plt_memzone_reserve_aligned(str, mz_size, 0, ML_CN10K_ALIGN_SIZE);
+	if (!mz) {
+		plt_err("plt_memzone_reserve failed : %s", str);
+		goto err_exit;
+	}
+
+	ml_model = mz->addr;
+	ml_model->ml_config = ml_config;
+	ml_model->model_id = idx;
+	if (model->model_name) {
+		plt_strlcpy(ml_model->name, model->model_name,
+			    sizeof(ml_model->name));
+		plt_ml_dbg("ml_model->name = %s", ml_model->name);
+	}
+
+	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
+	ml_config->ml_models[idx] = ml_model;
+
+	plt_ml_dbg("model = 0x%016lx", PLT_U64_CAST(ml_model));
+	*model_id = idx;
+	return 0;
+
+err_exit:
+	snprintf(str, PATH_MAX, "%s_%d", ML_MODEL_MEMZONE_NAME, idx);
+	mz = plt_memzone_lookup(str);
+	if (mz)
+		plt_memzone_free(mz);
+
+	return -1;
+}
+
+int
+cn10k_ml_dev_model_destroy(struct rte_mldev *dev, uint8_t model_id)
+{
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_dev *ml_dev;
+	struct cnxk_ml_model *ml_model;
+	char str[PATH_MAX] = {0};
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ml_model = ml_config->ml_models[model_id];
+
+	if (ml_model->state != CNXK_ML_MODEL_STATE_CREATED) {
+		plt_err("Cannot destroy. Model in use.");
+		return -EBUSY;
+	}
+
+	ml_config->ml_models[model_id] = NULL;
+
+	snprintf(str, PATH_MAX, "%s_%d", ML_MODEL_MEMZONE_NAME, model_id);
+	return plt_memzone_free(plt_memzone_lookup(str));
+}
+
 struct rte_mldev_ops cn10k_ml_ops = {
 	/* Device control ops */
 	.dev_configure = cn10k_ml_dev_configure,
 	.dev_close = cn10k_ml_dev_close,
 	.dev_start = cn10k_ml_dev_start,
 	.dev_stop = cn10k_ml_dev_stop,
+	.dev_model_create = cn10k_ml_dev_model_create,
+	.dev_model_destroy = cn10k_ml_dev_model_destroy,
 };

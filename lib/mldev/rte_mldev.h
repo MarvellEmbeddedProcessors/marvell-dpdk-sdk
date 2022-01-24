@@ -169,6 +169,50 @@ extern int rte_mldev_start(uint8_t dev_id);
 __rte_experimental
 extern void rte_mldev_stop(uint8_t dev_id);
 
+/** ML model configuration structure */
+struct rte_mldev_model {
+	char *model_name;
+	/**< Model name */
+
+	void *model_buffer;
+	/**< Model buffer address */
+
+	size_t model_size;
+	/**< Model buffer size */
+};
+
+/**
+ * Create an ML model.
+ *
+ * Memory and other resources are reserved for the new model. Model binary
+ * is copied, checked and prepared for loading. Model should be loaded after
+ * calling this API.
+ *
+ * @param[in] dev_id	Device identifier
+ * @param[in] model	Parameters for the model to be created
+ * @param[out] model_id	Identifier for the model created
+ *
+ * @return
+ * - Returns 0 on success
+ * - Returns negative value on failure
+ */
+__rte_experimental
+int rte_mldev_model_create(uint8_t dev_id, struct rte_mldev_model *model, uint8_t *model_id);
+
+/**
+ * Destroy an ML model.
+ *
+ * Model host memory and other resources are released for the model. Model
+ * should be unloaded prior to calling this API.
+ * @param[out] model_id	Identifier for the model created
+ *
+ * @return
+ * - Returns 0 on success
+ * - Returns negative value on failure
+ */
+__rte_experimental
+int rte_mldev_model_destroy(uint8_t dev_id, uint8_t model_id);
+
 #ifdef __cplusplus
 }
 #endif
