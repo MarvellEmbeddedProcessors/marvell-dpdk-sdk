@@ -303,6 +303,69 @@ struct cnxk_ml_model_metadata {
 	uint8_t reserved3[16];
 };
 
+/* Model address structure */
+struct cnxk_ml_model_addr {
+	/* Init section load address */
+	void *init_load_addr;
+
+	/* Init section run address */
+	void *init_run_addr;
+
+	/* Main section load address */
+	void *main_load_addr;
+
+	/* Main section run address */
+	void *main_run_addr;
+
+	/* Finish section load address */
+	void *finish_load_addr;
+
+	/* Finish section run address */
+	void *finish_run_addr;
+
+	/* Weights and Bias base address */
+	void *wb_base_addr;
+
+	/* Weights and bias load address */
+	void *wb_load_addr;
+
+	/* Start tile */
+	uint8_t tile_start;
+
+	/* End tile */
+	uint8_t tile_end;
+
+	/* Input address and size */
+	struct {
+		/* Input size */
+		uint32_t sz;
+
+		/* Quantized input size */
+		uint32_t sz_q;
+
+		/* Input base address */
+		void *addr_base;
+
+		/* Input DMA address */
+		void *addr;
+	} input[ML_INPUT_OUTPUT_SIZE];
+
+	/* Output address and size */
+	struct {
+		/* Output size */
+		uint32_t sz;
+
+		/* Quantized output size */
+		uint32_t sz_q;
+
+		/* Output base address */
+		void *addr_base;
+
+		/* Output DMA address */
+		void *addr;
+	} output[ML_INPUT_OUTPUT_SIZE];
+};
+
 /* ML Job commands */
 enum cnxk_ml_job_cmd {
 	CNXK_ML_JOB_CMD_RUN = 0,
@@ -501,6 +564,9 @@ struct cnxk_ml_model {
 
 	/* Model metadata */
 	struct cnxk_ml_model_metadata model_metadata;
+
+	/* Model address structure */
+	struct cnxk_ml_model_addr model_addr;
 
 	/* Model state */
 	enum cnxk_ml_model_state state;

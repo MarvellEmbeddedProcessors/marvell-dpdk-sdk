@@ -303,7 +303,7 @@ cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 	return ret;
 }
 
-__plt_unused static int
+static int
 cnxk_ml_io_type_get_size(enum rte_mldev_io_type type)
 {
 	switch (type) {
@@ -354,6 +354,114 @@ cnxk_ml_metadata_check(struct cnxk_ml_model_metadata *metadata)
 			(ML_MODEL_VERSION / 100) % 10,
 			(ML_MODEL_VERSION / 10) % 10, ML_MODEL_VERSION % 10);
 		return -1;
+	}
+
+	return 0;
+}
+
+static int
+cnxk_ml_model_addr_update(struct cnxk_ml_model_metadata *model_metadata,
+			  struct cnxk_ml_model_addr *model_addr, char **dmaaddr)
+{
+	int output_type_size, model_output_type_size;
+	int input_type_size, model_input_type_size;
+	uint32_t w, x, y, z;
+	uint8_t i;
+
+	/* Inputs */
+	for (i = 0; i < model_metadata->model.num_input; i++) {
+		input_type_size = cnxk_ml_io_type_get_size(
+			model_metadata->input[i].input_type);
+		if (input_type_size <= 0) {
+			plt_err("input[%d] - invalid metadata, input_type = %d",
+				i, model_metadata->input[i].input_type);
+			return -EINVAL;
+		}
+
+		model_input_type_size = cnxk_ml_io_type_get_size(
+			model_metadata->input[i].model_input_type);
+		if (model_input_type_size <= 0) {
+			plt_err("input[%d] - invalid metadata, model_input_type = %d",
+				i, model_metadata->input[i].model_input_type);
+			return -EINVAL;
+		}
+
+		if (model_metadata->input[i].relocatable != 1) {
+			plt_err("input[%d] - invalid metadata, relocatable = %d",
+				i, model_metadata->input[i].relocatable);
+			return -EINVAL;
+		}
+
+		w = model_metadata->input[i].shape.w;
+		x = model_metadata->input[i].shape.x;
+		y = model_metadata->input[i].shape.y;
+		z = model_metadata->input[i].shape.z;
+
+		if (w == 0)
+			w = 1;
+		if (x == 0)
+			x = 1;
+		if (y == 0)
+			y = 1;
+		if (z == 0)
+			z = 1;
+
+		model_addr->input[i].sz = (w * x * y * z) * input_type_size;
+		model_addr->input[i].sz_q =
+			(w * x * y * z) * model_input_type_size;
+		plt_ml_dbg("input[%d] - w:%d x:%d y:%d z:%d, sz = %d sz_q = %d",
+			   i, w, x, y, z, model_addr->input[i].sz,
+			   model_addr->input[i].sz_q);
+
+		model_addr->input[i].addr_base = PLT_PTR_SUB(
+			*dmaaddr, model_metadata->input[i].mem_offset);
+		*dmaaddr = PLT_PTR_ADD(model_addr->input[i].addr_base,
+				       model_metadata->input[i].mem_offset);
+
+		model_addr->input[i].addr = *dmaaddr;
+		*dmaaddr += model_addr->input[i].sz;
+	}
+
+	/* Outputs */
+	for (i = 0; i < model_metadata->model.num_output; i++) {
+		output_type_size = cnxk_ml_io_type_get_size(
+			model_metadata->output[i].output_type);
+		if (output_type_size <= 0) {
+			plt_err("output[%d] - invalid metadata, output_type = %d",
+				i, model_metadata->output[i].output_type);
+			return -EINVAL;
+		}
+
+		model_output_type_size = cnxk_ml_io_type_get_size(
+			model_metadata->output[i].model_output_type);
+		if (model_output_type_size <= 0) {
+			plt_err("output[%d] - invalid metadata, model_output_type = %d",
+				i, model_metadata->output[i].model_output_type);
+			return -EINVAL;
+		}
+
+		if (model_metadata->output[i].relocatable != 1) {
+			plt_err("output[%d] - invalid metadata, relocatable = %d",
+				i, model_metadata->output[i].relocatable);
+			return -EINVAL;
+		}
+
+		model_addr->output[i].sz =
+			model_metadata->output[i].size * output_type_size;
+		model_addr->output[i].sz_q =
+			model_metadata->output[i].size * model_output_type_size;
+
+		plt_ml_dbg("output[%d] - sz = %d, sz_q = %d", i,
+			   model_addr->output[i].sz,
+			   model_addr->output[i].sz_q);
+
+		model_addr->output[i].addr_base = PLT_PTR_SUB(
+			*dmaaddr, model_metadata->output[i].mem_offset);
+		*dmaaddr = PLT_PTR_ADD(model_addr->output[i].addr_base,
+				       model_metadata->output[i].mem_offset);
+
+		model_addr->output[i].addr = *dmaaddr;
+		*dmaaddr += model_addr->output[i].sz;
 	}
 
 	return 0;
@@ -543,6 +651,7 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 {
 	struct cnxk_ml_model_metadata *model_metadata;
 	struct cnxk_ml_model_metadata metadata;
+	struct cnxk_ml_model_addr *model_addr;
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
@@ -552,6 +661,16 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 	uint64_t mz_size;
 	uint8_t *buffer;
 	uint8_t idx;
+
+	uint8_t *base_dma_addr_load;
+	uint8_t *base_dma_addr_run;
+	size_t model_data_size;
+	uint8_t *base_dma_addr;
+	uint8_t *dma_addr_load;
+	uint8_t *dma_addr_run;
+	uint8_t *wb_load_addr;
+	int blobsz;
+	int fpos;
 
 	PLT_ASSERT(model != NULL);
 	PLT_ASSERT(model_id != NULL);
@@ -576,8 +695,14 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 	}
 
 	/* Get MZ size */
+	model_data_size = metadata.init_model.file_size +
+			  metadata.main_model.file_size +
+			  metadata.finish_model.file_size +
+			  metadata.weights_bias.file_size;
+	model_data_size = PLT_ALIGN_CEIL(model_data_size, ML_CN10K_ALIGN_SIZE);
 	mz_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
-				 ML_CN10K_ALIGN_SIZE);
+				 ML_CN10K_ALIGN_SIZE) +
+		  2 * model_data_size;
 
 	/* Allocate memzone for model object and model data */
 	snprintf(str, PATH_MAX, "%s_%d", ML_MODEL_MEMZONE_NAME, idx);
@@ -596,9 +721,91 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 		plt_ml_dbg("ml_model->name = %s", ml_model->name);
 	}
 
+	model_addr = &ml_model->model_addr;
 	model_metadata = &ml_model->model_metadata;
 	memcpy(model_metadata, &metadata,
 	       sizeof(struct cnxk_ml_model_metadata));
+
+	/* Set DMA base address */
+	base_dma_addr = PLT_PTR_ADD(mz->addr,
+				    PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
+						   ML_CN10K_ALIGN_SIZE));
+	base_dma_addr_load = base_dma_addr;
+	base_dma_addr_run = base_dma_addr + model_data_size;
+	dma_addr_load = base_dma_addr_load;
+	dma_addr_run = base_dma_addr_run;
+
+	/* Init Section */
+	fpos = sizeof(struct cnxk_ml_model_metadata);
+	blobsz = model_metadata->init_model.file_size;
+	if (blobsz <= 0) {
+		plt_err("Invalid metadata, init_model.file_size = %d", blobsz);
+		goto err_exit;
+	}
+	model_addr->init_load_addr = dma_addr_load;
+	model_addr->init_run_addr = dma_addr_run;
+	memcpy(dma_addr_load, buffer + fpos, blobsz);
+
+	/* Main Section */
+	dma_addr_load += blobsz;
+	dma_addr_run += blobsz;
+	fpos += blobsz;
+	blobsz = model_metadata->main_model.file_size;
+	if (blobsz <= 0) {
+		plt_err("Invalid metadata, main_model.file_size = %d", blobsz);
+		goto err_exit;
+	}
+	model_addr->main_load_addr = dma_addr_load;
+	model_addr->main_run_addr = dma_addr_run;
+	memcpy(dma_addr_load, buffer + fpos, blobsz);
+
+	/* Finish Section */
+	dma_addr_load += blobsz;
+	dma_addr_run += blobsz;
+	fpos += blobsz;
+	blobsz = model_metadata->finish_model.file_size;
+	if (blobsz <= 0) {
+		plt_err("Invalid metadata, finish_model.file_size = %d",
+			blobsz);
+		goto err_exit;
+	}
+	model_addr->finish_load_addr = dma_addr_load;
+	model_addr->finish_run_addr = dma_addr_run;
+	memcpy(dma_addr_load, buffer + fpos, blobsz);
+
+	/* Weights & Bias Section*/
+	dma_addr_load += blobsz;
+	dma_addr_run += blobsz;
+	fpos += blobsz;
+	blobsz = model_metadata->weights_bias.file_size;
+	if (blobsz <= 0) {
+		plt_err("Invalid metadata, weights_bias.file_size = %d",
+			blobsz);
+		goto err_exit;
+	}
+	if (model_metadata->weights_bias.relocatable == 1) {
+		model_addr->wb_base_addr = PLT_PTR_SUB(
+			dma_addr_load, model_metadata->weights_bias.mem_offset);
+		dma_addr_load =
+			PLT_PTR_ADD(model_addr->wb_base_addr,
+				    model_metadata->weights_bias.mem_offset);
+		wb_load_addr = dma_addr_load;
+		dma_addr_load += blobsz;
+		plt_ml_dbg("wb_load_addr = 0x%016lx", (uint64_t)wb_load_addr);
+	} else {
+		plt_err("Non-relocatable models not supported");
+		goto err_exit;
+	}
+	model_addr->wb_load_addr = wb_load_addr;
+	memcpy(wb_load_addr, buffer + fpos, blobsz);
+
+	dma_addr_load += blobsz;
+	if (cnxk_ml_model_addr_update(model_metadata, model_addr,
+				      (char **)dma_addr_load) < 0)
+		goto err_exit;
+
+	/* Copy data from load to run. run address to be used by MLIP */
+	memcpy(base_dma_addr_run, base_dma_addr_load, model_data_size);
 
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
 	ml_config->ml_models[idx] = ml_model;
