@@ -39,6 +39,7 @@ parse_args(int argc, char **argv)
 int
 main(int argc, char **argv)
 {
+	struct rte_mldev_config ml_config;
 	uint8_t dev_count;
 	uint8_t dev_id;
 	uint8_t i;
@@ -63,7 +64,8 @@ main(int argc, char **argv)
 
 	/* Configure ML devices */
 	for (dev_id = 0; dev_id < dev_count; dev_id++) {
-		if (rte_mldev_configure(dev_id, NULL) != 0) {
+		ml_config.socket_id = rte_mldev_socket_id(dev_id);
+		if (rte_mldev_configure(dev_id, &ml_config) != 0) {
 			printf("Device configuration failed, dev_id = %d\n", dev_id);
 			goto close_dev;
 		}

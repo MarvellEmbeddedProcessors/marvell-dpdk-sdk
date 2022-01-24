@@ -19,7 +19,7 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		   struct rte_pci_device *pci_dev)
 {
 	char name[RTE_MLDEV_NAME_LEN];
-	struct cnxk_ml_dev *cnxk_dev;
+	struct cnxk_ml_dev *ml_dev;
 	struct rte_mldev *mldev;
 	int rc;
 
@@ -43,18 +43,18 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	}
 
 	/* Get private data space allocated */
-	cnxk_dev = mldev->data->dev_private;
+	ml_dev = mldev->data->dev_private;
 
 	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
-		cnxk_dev->ml.pci_dev = pci_dev;
+		ml_dev->roc.pci_dev = pci_dev;
 
-		rc = cnxk_mldev_parse_devargs(mldev->device->devargs, cnxk_dev);
+		rc = cnxk_mldev_parse_devargs(mldev->device->devargs, ml_dev);
 		if (rc) {
 			plt_err("Failed to parse devargs rc=%d", rc);
 			goto pmd_destroy;
 		}
 
-		rc = roc_ml_dev_init(&cnxk_dev->ml);
+		rc = roc_ml_dev_init(&ml_dev->roc);
 		if (rc) {
 			plt_err("Failed to initialize roc ml rc = %d", rc);
 			goto pmd_destroy;
@@ -80,7 +80,7 @@ static int
 cn10k_ml_pci_remove(struct rte_pci_device *pci_dev)
 {
 	char name[RTE_MLDEV_NAME_LEN];
-	struct cnxk_ml_dev *cnxk_dev;
+	struct cnxk_ml_dev *ml_dev;
 	struct rte_mldev *mldev;
 	int rc;
 
@@ -94,8 +94,8 @@ cn10k_ml_pci_remove(struct rte_pci_device *pci_dev)
 		return -ENODEV;
 
 	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
-		cnxk_dev = mldev->data->dev_private;
-		rc = roc_ml_dev_fini(&cnxk_dev->ml);
+		ml_dev = mldev->data->dev_private;
+		rc = roc_ml_dev_fini(&ml_dev->roc);
 		if (rc)
 			return rc;
 	}

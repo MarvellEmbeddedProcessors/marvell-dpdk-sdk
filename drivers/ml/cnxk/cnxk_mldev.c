@@ -27,7 +27,7 @@ parse_mldev_firmware(const char *key __rte_unused, const char *value,
 
 int
 cnxk_mldev_parse_devargs(struct rte_devargs *devargs,
-			 struct cnxk_ml_dev *cnxk_dev)
+			 struct cnxk_ml_dev *ml_dev)
 {
 	struct rte_kvargs *kvlist;
 	char *firmware = NULL;
@@ -50,16 +50,16 @@ cnxk_mldev_parse_devargs(struct rte_devargs *devargs,
 
 null_devargs:
 	if (firmware == NULL) {
-		rte_strscpy(cnxk_dev->firmware, CNXK_ML_FIRMWARE_PATH,
-			    sizeof(cnxk_dev->firmware));
+		rte_strscpy(ml_dev->ml_fw.filepath, CNXK_ML_FIRMWARE_PATH,
+			    sizeof(ml_dev->ml_fw.filepath));
 	} else {
-		if (rte_strscpy(cnxk_dev->firmware, firmware,
-				sizeof(cnxk_dev->firmware)) < 0) {
+		if (rte_strscpy(ml_dev->ml_fw.filepath, firmware,
+				sizeof(ml_dev->ml_fw.filepath)) < 0) {
 			plt_err("%s : firmware path too long", firmware);
 			free(firmware);
 		}
 	}
-	plt_ml_dbg("ML firmware = %s", cnxk_dev->firmware);
+	plt_ml_dbg("ML firmware = %s", ml_dev->ml_fw.filepath);
 
 	return 0;
 

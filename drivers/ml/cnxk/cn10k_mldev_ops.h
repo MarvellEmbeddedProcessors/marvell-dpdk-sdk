@@ -9,7 +9,8 @@
 
 extern struct rte_mldev_ops cn10k_ml_ops;
 
-int cn10k_ml_dev_config(struct rte_mldev *dev, struct rte_mldev_config *conf);
+int cn10k_ml_dev_configure(struct rte_mldev *dev,
+			   struct rte_mldev_config *conf);
 
 int cn10k_ml_dev_close(struct rte_mldev *dev);
 

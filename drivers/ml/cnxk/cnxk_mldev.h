@@ -55,7 +55,7 @@ struct cnxk_ml_jd_header {
 	uint64_t *job_result;
 };
 
-/** ML Firmware capability structure */
+/* ML Firmware capability structure */
 union cnxk_ml_fw_cap {
 	uint64_t u;
 
@@ -87,7 +87,7 @@ union cnxk_ml_fw_cap {
 	} s;
 };
 
-/** ML Firmware debug capability structure */
+/* ML Firmware debug capability structure */
 struct cnxk_ml_fw_debug_cap {
 	/* ACC core 0 debug buffer */
 	uint64_t fw_core0_dbg_ptr;
@@ -101,8 +101,11 @@ struct cnxk_ml_fw_debug_cap {
 	/* ACC core 1 exception state buffer */
 	uint64_t fw_core1_exception_buffer;
 
+	/* Debug buffer size per core */
+	uint32_t fw_dbg_buffer_size;
+
 	/* Exception state dump size */
-	uint64_t fw_exception_state_size;
+	uint32_t fw_exception_state_size;
 };
 
 /* ML firmware stats */
@@ -122,29 +125,29 @@ struct cnxk_ml_fw_stats {
 
 /* ML internal result structure */
 struct cnxk_ml_job_result {
-	/** Job status, success = ML_STATUS_SUCCESS, failure = ML_STATUS_FAILURE
+	/* Job status, success = ML_STATUS_SUCCESS, failure = ML_STATUS_FAILURE
 	 */
 	uint64_t status;
 
-	/** Job error code, if status = ML_STATUS_FAILURE */
+	/* Job error code, if status = ML_STATUS_FAILURE */
 	uint64_t error_code;
 
-	/** Firmware stats */
+	/* Firmware stats */
 	struct cnxk_ml_fw_stats fw_stats;
 
 	/* User context pointer */
 	void *user_ptr;
 };
 
-/** Firmware Load completion structure */
+/* Firmware Load completion structure */
 struct cnxk_ml_fw_load_compl {
 	/* Entry header (32 bytes) */
 	struct cnxk_ml_jd_header hdr;
 
-	/* FW capability structure (8 bytes) */
+	/* Firmware capability structure (8 bytes) */
 	union cnxk_ml_fw_cap cap;
 
-	/* FW version (32 bytes) */
+	/* Firmware version (32 bytes) */
 	uint8_t version[ML_FW_VERSION_STRLEN];
 
 	/* Debug capability structure (40 bytes) */
@@ -153,44 +156,49 @@ struct cnxk_ml_fw_load_compl {
 	uint8_t rsvd[16];
 };
 
-/**
- * Memory resources
- */
+/* Memory resources */
 struct cnxk_ml_mem {
-	/** Memory for BAR0 */
+	/* Memory for BAR0 */
 	struct rte_mem_resource res0;
 
-	/** Memory for BAR4 */
+	/* Memory for BAR4 */
 	struct rte_mem_resource res4;
 };
 
-/**
- * Device private data
- */
-struct cnxk_ml_dev {
-	/** Ml device ROC */
-	struct roc_ml ml;
+/* ML firmware structure */
+struct cnxk_ml_fw {
+	/* Device reference */
+	struct cnxk_ml_dev *ml_dev;
 
-	/** ML device memory resources */
-	struct cnxk_ml_mem mem;
+	/* Firmware file path */
+	char filepath[ML_FIRMWARE_STRLEN];
 
-	/** ML firmware path */
-	char firmware[ML_FIRMWARE_STRLEN];
-
-	/* Firmware load completion structure */
+	/* Load completion structure */
 	struct cnxk_ml_fw_load_compl *load_fw;
 
-	/** Firmware buffer */
+	/* Data buffer */
 	uint8_t *data_fw;
 
-	/* Firmware load status pointer */
+	/* Load status pointer */
 	volatile uint64_t status_ptr;
 
-	/* FW result structure */
+	/* Result structure */
 	struct cnxk_ml_job_result job_result;
 };
 
+/* ML Device private data */
+struct cnxk_ml_dev {
+	/* Device ROC */
+	struct roc_ml roc;
+
+	/* Device memory resources */
+	struct cnxk_ml_mem mem;
+
+	/* Firmware handle */
+	struct cnxk_ml_fw ml_fw;
+};
+
 int cnxk_mldev_parse_devargs(struct rte_devargs *devargs,
-			     struct cnxk_ml_dev *cnxk_dev);
+			     struct cnxk_ml_dev *ml_dev);
 
 #endif /* _CNXK_MLDEV_H_ */
