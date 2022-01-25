@@ -41,7 +41,10 @@ struct prod_data {
 	uint8_t queue_id;
 	uint8_t cdev_id;
 	uint16_t cdev_qp_id;
-	struct rte_cryptodev_sym_session **crypto_sess;
+	union {
+		struct rte_cryptodev_sym_session **sym_sess;
+		struct rte_cryptodev_asym_session **asym_sess;
+	};
 	struct test_perf *t;
 } __rte_cache_aligned;
 
@@ -111,8 +114,6 @@ perf_process_last_stage(struct rte_mempool *const pool,
 		struct rte_event *const ev, struct worker_data *const w,
 		void *bufs[], int const buf_sz, uint8_t count)
 {
-	bufs[count++] = ev->event_ptr;
-
 	/* release fence here ensures event_prt is
 	 * stored before updating the number of
 	 * processed packets for worker lcores
@@ -120,9 +121,19 @@ perf_process_last_stage(struct rte_mempool *const pool,
 	rte_atomic_thread_fence(__ATOMIC_RELEASE);
 	w->processed_pkts++;
 
-	if (unlikely(count == buf_sz)) {
-		count = 0;
-		rte_mempool_put_bulk(pool, bufs, buf_sz);
+	if (ev->event_type == RTE_EVENT_TYPE_CRYPTODEV &&
+			((struct rte_crypto_op *)ev->event_ptr)->type ==
+				RTE_CRYPTO_OP_TYPE_ASYMMETRIC) {
+		struct rte_crypto_op *op = ev->event_ptr;
+
+		rte_free(op->asym->modex.result.data);
+		rte_crypto_op_free(op);
+	} else {
+		bufs[count++] = ev->event_ptr;
+		if (unlikely(count == buf_sz)) {
+			count = 0;
+			rte_mempool_put_bulk(pool, bufs, buf_sz);
+		}
 	}
 	return count;
 }
@@ -135,8 +146,6 @@ perf_process_last_stage_latency(struct rte_mempool *const pool,
 	uint64_t latency;
 	struct perf_elt *const m = ev->event_ptr;
 
-	bufs[count++] = ev->event_ptr;
-
 	/* release fence here ensures event_prt is
 	 * stored before updating the number of
 	 * processed packets for worker lcores
@@ -144,15 +153,23 @@ perf_process_last_stage_latency(struct rte_mempool *const pool,
 	rte_atomic_thread_fence(__ATOMIC_RELEASE);
 	w->processed_pkts++;
 
-	if (unlikely(count == buf_sz)) {
-		count = 0;
-		latency = rte_get_timer_cycles() - m->timestamp;
-		rte_mempool_put_bulk(pool, bufs, buf_sz);
+	if (ev->event_type == RTE_EVENT_TYPE_CRYPTODEV &&
+			((struct rte_crypto_op *)m)->type ==
+				RTE_CRYPTO_OP_TYPE_ASYMMETRIC) {
+		rte_free(((struct rte_crypto_op *)m)->asym->modex.result.data);
+		rte_crypto_op_free((struct rte_crypto_op *)m);
 	} else {
-		latency = rte_get_timer_cycles() - m->timestamp;
-	}
+		bufs[count++] = ev->event_ptr;
+		if (unlikely(count == buf_sz)) {
+			count = 0;
+			latency = rte_get_timer_cycles() - m->timestamp;
+			rte_mempool_put_bulk(pool, bufs, buf_sz);
+		} else {
+			latency = rte_get_timer_cycles() - m->timestamp;
+		}
 
-	w->latency += latency;
+		w->latency += latency;
+	}
 	return count;
 }
 
