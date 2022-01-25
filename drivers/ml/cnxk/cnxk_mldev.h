@@ -504,6 +504,24 @@ struct cnxk_ml_job_result {
 	void *user_ptr;
 };
 
+/* ML job structure
+ *
+ * A buffer of size cnxk_ml_job_compl_t is required for every ML job. For poll
+ * mode jobs, the buffer is created by the library and returned the user. For
+ * event mode jobs, the buffer is handled by the user. For sync mode jobs, the
+ * buffer is created by the library and destroyed before return.
+ */
+struct cnxk_ml_job_compl {
+	/* Job completion result */
+	struct cnxk_ml_job_result job_result;
+
+	/* Job status pointer */
+	volatile uint64_t status_ptr;
+
+	/* Job start time */
+	uint64_t start_time;
+};
+
 /* Firmware Load completion structure */
 struct cnxk_ml_fw_load_compl {
 	/* Entry header (32 bytes) */
@@ -760,6 +778,9 @@ struct cnxk_ml_config {
 
 	/* OCM memory info and status*/
 	void *ocm_tile_info;
+
+	/* Internal job pool, for sync and poll mode */
+	struct rte_mempool *job_pool;
 };
 
 /* ML Device private data */

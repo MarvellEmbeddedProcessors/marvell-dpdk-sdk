@@ -21,6 +21,8 @@
 
 /* ML configuration macros */
 #define ML_CONFIG_MEMZONE_NAME "ml_cn10k_config_mz"
+#define ML_JOBPOOL_NAME	       "ml_cn10k_model_jobpool"
+#define ML_JOBPOOL_SIZE	       1024
 
 /* ML model macros */
 #define ML_MODEL_MEMZONE_NAME "ml_cn10k_model_mz"
@@ -661,6 +663,17 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	for (tile_id = 0; tile_id < ml_config->ocm_num_tiles; tile_id++)
 		ocm_tile_info[tile_id].last_wb_page = -1;
 
+	/* Internal Job completion pool. Used for sync and poll mode jobs */
+	ml_config->job_pool =
+		rte_mempool_create(ML_JOBPOOL_NAME, ML_JOBPOOL_SIZE,
+				   sizeof(struct cnxk_ml_job_compl), 0, 0, NULL,
+				   NULL, NULL, NULL, rte_socket_id(), 0);
+	if (ml_config->job_pool == NULL) {
+		plt_err("Job pool creation failed : %s", ML_JOBPOOL_NAME);
+		ret = -1;
+		goto err_exit;
+	}
+
 	rte_spinlock_init(&ml_config->scratch_lock);
 	rte_spinlock_init(&ml_config->run_lock);
 
@@ -691,6 +704,7 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 {
 	struct cnxk_ml_config *ml_config;
 	const struct plt_memzone *mz;
+	struct rte_mempool *job_pool;
 	struct cnxk_ml_dev *ml_dev;
 	int ret = 0;
 
@@ -717,6 +731,11 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 	roc_ml_reg_write64(&ml_dev->roc, 0, ML_MLR_BASE);
 	plt_ml_dbg("ML_MLR_BASE = 0x%016lx",
 		   roc_ml_reg_read64(&ml_dev->roc, ML_MLR_BASE));
+
+	/* Destroy poll mode job pool*/
+	job_pool = rte_mempool_lookup(ML_JOBPOOL_NAME);
+	if (job_pool != NULL)
+		rte_mempool_free(job_pool);
 
 	/* Clear resources */
 	mz = plt_memzone_lookup(ML_CONFIG_MEMZONE_NAME);
