@@ -1032,6 +1032,20 @@ cn10k_ml_dev_model_destroy(struct rte_mldev *dev, uint8_t model_id)
 	return plt_memzone_free(plt_memzone_lookup(str));
 }
 
+int
+cn10k_ml_dev_model_load(__rte_unused struct rte_mldev *dev,
+			__rte_unused uint8_t model_id)
+{
+	return 0;
+}
+
+int
+cn10k_ml_dev_model_unload(__rte_unused struct rte_mldev *dev,
+			  __rte_unused uint8_t model_id)
+{
+	return 0;
+}
+
 struct rte_mldev_ops cn10k_ml_ops = {
 	/* Device control ops */
 	.dev_configure = cn10k_ml_dev_configure,
@@ -1040,4 +1054,6 @@ struct rte_mldev_ops cn10k_ml_ops = {
 	.dev_stop = cn10k_ml_dev_stop,
 	.dev_model_create = cn10k_ml_dev_model_create,
 	.dev_model_destroy = cn10k_ml_dev_model_destroy,
+	.dev_model_load = cn10k_ml_dev_model_load,
+	.dev_model_unload = cn10k_ml_dev_model_unload,
 };

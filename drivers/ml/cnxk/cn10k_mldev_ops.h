@@ -23,4 +23,8 @@ int cn10k_ml_dev_model_create(struct rte_mldev *dev,
 
 int cn10k_ml_dev_model_destroy(struct rte_mldev *dev, uint8_t model_id);
 
+int cn10k_ml_dev_model_load(struct rte_mldev *dev, uint8_t model_id);
+
+int cn10k_ml_dev_model_unload(struct rte_mldev *dev, uint8_t model_id);
+
 #endif /* _CNXK_MLDEV_OPS_H_ */

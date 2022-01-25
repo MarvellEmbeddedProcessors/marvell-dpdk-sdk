@@ -240,6 +240,38 @@ int rte_mldev_model_create(uint8_t dev_id, struct rte_mldev_model *model, uint8_
 __rte_experimental
 int rte_mldev_model_destroy(uint8_t dev_id, uint8_t model_id);
 
+/**
+ * Load model into HW engines.
+ *
+ * This function blocks until load is finished. Model is ready for inference requests after load has
+ * finished. The same model can be later unloaded and loaded again.
+ *
+ * @param[in] dev_id	Device identifier
+ * @param[in] model_id	Identifier for the model created
+ *
+ * @return
+ * - Returns 0 on success
+ * - Returns negative value on failure
+ */
+__rte_experimental
+int rte_mldev_model_load(uint8_t dev_id, uint8_t model_id);
+
+/**
+ * Unload model.
+ *
+ * This function blocks until unload is finished. Host memory and other resources are kept for
+ * future reloading. All inference jobs must have been completed before model unload is attempted.
+ *
+ * @param[in] dev_id	Device identifier
+ * @param[in] model_id	Identifier for the model created
+ *
+ * @return
+ * - Returns 0 on success
+ * - Returns negative value on failure
+ */
+__rte_experimental
+int rte_mldev_model_unload(uint8_t dev_id, uint8_t model_id);
+
 #ifdef __cplusplus
 }
 #endif

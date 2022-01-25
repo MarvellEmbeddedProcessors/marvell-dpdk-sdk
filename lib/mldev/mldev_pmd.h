@@ -169,6 +169,22 @@ typedef int (*mldev_model_create_t)(struct rte_mldev *dev,
  */
 typedef int (*mldev_model_destroy_t)(struct rte_mldev *dev, uint8_t model_id);
 
+/**
+ * Function used to load an ML model.
+ *
+ * @param dev		ML device pointer
+ * @param model_id	Model ID to use
+ */
+typedef int (*mldev_model_load_t)(struct rte_mldev *dev, uint8_t model_id);
+
+/**
+ * Function used to unload an ML model.
+ *
+ * @param dev		ML device pointer
+ * @param model_id	Model ID to use
+ */
+typedef int (*mldev_model_unload_t)(struct rte_mldev *dev, uint8_t model_id);
+
 /** ML device operations function pointer table */
 struct rte_mldev_ops {
 	/**< Configure device. */
@@ -188,6 +204,12 @@ struct rte_mldev_ops {
 
 	/**< Destroy model. */
 	mldev_model_destroy_t dev_model_destroy;
+
+	/**< Load model. */
+	mldev_model_load_t dev_model_load;
+
+	/**< Unoad model. */
+	mldev_model_load_t dev_model_unload;
 };
 
 /**
