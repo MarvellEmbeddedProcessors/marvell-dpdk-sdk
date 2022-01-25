@@ -159,6 +159,22 @@ main(int argc, char **argv)
 		}
 	}
 
+	for (idx = 0; idx < g_models_counter; idx++) {
+		if (rte_mldev_model_load(dev_id, ml_models[idx].model_id) !=
+		    0) {
+			fprintf(stderr, "Error loading model : %s\n",
+				ml_model.model_name);
+			goto error_destroy;
+		}
+
+		if (rte_mldev_model_unload(dev_id, ml_models[idx].model_id) !=
+		    0) {
+			fprintf(stderr, "Error unloading model : %s\n",
+				ml_model.model_name);
+			goto error_destroy;
+		}
+	}
+
 error_destroy:
 	for (i = 0; i < idx; i++)
 		rte_mldev_model_destroy(dev_id, ml_models[i].model_id);
