@@ -24,6 +24,14 @@
 
 /* ML model macros */
 #define ML_MODEL_MEMZONE_NAME "ml_cn10k_model_mz"
+#define ML_MODEL_JD_POOL_SIZE 0x20
+#define JD_LOAD		      (ML_MODEL_JD_POOL_SIZE - 2)
+#define JD_UNLOAD	      (ML_MODEL_JD_POOL_SIZE - 1)
+
+/* ML Job descriptor flags */
+#define ML_FLAGS_POLL_COMPL BIT(0)
+#define ML_FLAGS_SSO_COMPL  BIT(1)
+#define ML_FLAGS_CMPC_COMPL BIT(2)
 
 /* Timeout */
 #define ML_TIMEOUT_FW_LOAD_S 10
@@ -467,6 +475,94 @@ cnxk_ml_model_addr_update(struct cnxk_ml_model_metadata *model_metadata,
 	return 0;
 }
 
+static void
+cnxk_ml_jd_init(struct rte_mldev *dev, struct cnxk_ml_model *ml_model)
+{
+	struct cnxk_ml_model_metadata *model_metadata;
+	struct cnxk_ml_model_addr *model_addr;
+	struct cnxk_ml_dev *ml_dev;
+	uint8_t i;
+
+	ml_dev = dev->data->dev_private;
+	model_addr = &ml_model->model_addr;
+	model_metadata = &ml_model->model_metadata;
+
+	/* Initialize load job descriptor */
+	ml_model->jd[JD_LOAD].hdr.compl_W0.u = 0;
+	ml_model->jd[JD_LOAD].hdr.compl_W1.status_ptr = 0; /* Updated at load */
+	ml_model->jd[JD_LOAD].hdr.model_id = ml_model->model_id;
+	ml_model->jd[JD_LOAD].hdr.command = CNXK_ML_JOB_CMD_LOAD;
+	ml_model->jd[JD_LOAD].hdr.flags = 0;
+	ml_model->jd[JD_LOAD].hdr.job_result = NULL; /* Updated at load */
+	ml_model->jd[JD_LOAD].load.model_src_ddr_addr = PLT_U64_CAST(
+		roc_ml_addr_ap2mlip(&ml_dev->roc, model_addr->init_load_addr));
+	ml_model->jd[JD_LOAD].load.model_dst_ddr_addr = PLT_U64_CAST(
+		roc_ml_addr_ap2mlip(&ml_dev->roc, model_addr->init_run_addr));
+	ml_model->jd[JD_LOAD].load.model_init_offset = 0x0;
+	ml_model->jd[JD_LOAD].load.model_main_offset =
+		model_metadata->init_model.file_size;
+	ml_model->jd[JD_LOAD].load.model_finish_offset =
+		model_metadata->init_model.file_size +
+		model_metadata->main_model.file_size;
+	ml_model->jd[JD_LOAD].load.model_init_size =
+		model_metadata->init_model.file_size;
+	ml_model->jd[JD_LOAD].load.model_main_size =
+		model_metadata->main_model.file_size;
+	ml_model->jd[JD_LOAD].load.model_finish_size =
+		model_metadata->finish_model.file_size;
+	ml_model->jd[JD_LOAD].load.model_wb_offset =
+		model_metadata->init_model.file_size +
+		model_metadata->main_model.file_size +
+		model_metadata->finish_model.file_size;
+	ml_model->jd[JD_LOAD].load.num_layers =
+		model_metadata->model.num_layers;
+	ml_model->jd[JD_LOAD].load.num_gather_entries = 0;
+	ml_model->jd[JD_LOAD].load.num_scatter_entries = 0;
+	ml_model->jd[JD_LOAD].load.tilemask = 0x0; /* Updated at load */
+	ml_model->jd[JD_LOAD].load.ocm_wb_base_address =
+		0x0; /* Updated at load */
+	ml_model->jd[JD_LOAD].load.ocm_wb_range_start =
+		model_metadata->model.ocm_wb_range_start;
+	ml_model->jd[JD_LOAD].load.ocm_wb_range_end =
+		model_metadata->model.ocm_wb_range_end;
+	ml_model->jd[JD_LOAD].load.ddr_wb_base_address =
+		PLT_U64_CAST(roc_ml_addr_ap2mlip(
+			&ml_dev->roc,
+			PLT_PTR_ADD(model_addr->finish_load_addr,
+				    model_metadata->finish_model.file_size)));
+	ml_model->jd[JD_LOAD].load.ddr_wb_range_start =
+		model_metadata->model.ddr_wb_range_start;
+	ml_model->jd[JD_LOAD].load.ddr_wb_range_end =
+		model_metadata->model.ddr_wb_range_end;
+	ml_model->jd[JD_LOAD].load.input.s.ddr_range_start =
+		model_metadata->model.ddr_input_range_start;
+	ml_model->jd[JD_LOAD].load.input.s.ddr_range_end =
+		model_metadata->model.ddr_input_range_end;
+	ml_model->jd[JD_LOAD].load.output.s.ddr_range_start =
+		model_metadata->model.ddr_output_range_start;
+	ml_model->jd[JD_LOAD].load.output.s.ddr_range_end =
+		model_metadata->model.ddr_output_range_end;
+
+	/* Initialize unload job descriptor */
+	memset(&ml_model->jd[JD_UNLOAD], 0, sizeof(struct cnxk_ml_jd));
+	ml_model->jd[JD_UNLOAD].hdr.model_id = ml_model->model_id;
+	ml_model->jd[JD_UNLOAD].hdr.command = CNXK_ML_JOB_CMD_UNLOAD;
+	ml_model->jd[JD_UNLOAD].hdr.compl_W1.status_ptr =
+		0; /* Updated at unload */
+
+	/* Initialize run job descriptors */
+	for (i = 0; i < ML_MODEL_JD_POOL_SIZE - 2; i++) {
+		ml_model->jd[i].hdr.model_id = ml_model->model_id;
+		ml_model->jd[i].hdr.command = CNXK_ML_JOB_CMD_RUN;
+		ml_model->jd[i].hdr.flags = ML_FLAGS_SSO_COMPL;
+		ml_model->jd[i].hdr.job_result = NULL;	 /* Updated at run */
+		ml_model->jd[i].hdr.compl_W0.u = 0;	 /* Updated at run */
+		ml_model->jd[i].hdr.compl_W1.W1 = 0;	 /* Updated at run */
+		ml_model->jd[i].run.input_ddr_addr = 0;	 /* Updated at run */
+		ml_model->jd[i].run.output_ddr_addr = 0; /* Updated at run */
+	}
+}
+
 int
 cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 {
@@ -728,7 +824,10 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 	model_data_size = PLT_ALIGN_CEIL(model_data_size, ML_CN10K_ALIGN_SIZE);
 	mz_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
 				 ML_CN10K_ALIGN_SIZE) +
-		  2 * model_data_size;
+		  2 * model_data_size +
+		  PLT_ALIGN_CEIL(ML_MODEL_JD_POOL_SIZE *
+					 sizeof(struct cnxk_ml_jd),
+				 ML_CN10K_ALIGN_SIZE);
 
 	/* Allocate memzone for model object and model data */
 	snprintf(str, PATH_MAX, "%s_%d", ML_MODEL_MEMZONE_NAME, idx);
@@ -866,6 +965,14 @@ cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
 	ml_model->model_mem_map.wb_page_start = -1;
 	ml_model->model_mem_map.wb_pages = wb_pages;
 	ml_model->model_mem_map.scratch_pages = scratch_pages;
+
+	/* Update run JD pool */
+	ml_model->jd = PLT_PTR_ADD(mz->addr,
+				   PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
+						  ML_CN10K_ALIGN_SIZE) +
+					   2 * model_data_size);
+	ml_model->jd_index = 0;
+	cnxk_ml_jd_init(dev, ml_model);
 
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
 	ml_config->ml_models[idx] = ml_model;

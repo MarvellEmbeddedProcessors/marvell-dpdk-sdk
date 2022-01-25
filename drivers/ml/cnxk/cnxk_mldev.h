@@ -521,6 +521,122 @@ struct cnxk_ml_fw_load_compl {
 	uint8_t rsvd[16];
 };
 
+struct cnxk_ml_jd {
+	/* Job descriptor header (32 bytes) */
+	struct cnxk_ml_jd_header hdr;
+
+	union {
+		struct cnxk_ml_jd_section_load {
+			/* Source model start address in DDR
+			 * relative to MLAB_MLR_BASE
+			 */
+			uint64_t model_src_ddr_addr;
+
+			/* Destination model start address in DDR
+			 * relative to MLAB_MLR_BASE
+			 */
+			uint64_t model_dst_ddr_addr;
+
+			/* Offset to model init section in the model */
+			uint64_t model_init_offset : 32;
+
+			/* Size of init section in the model */
+			uint64_t model_init_size : 32;
+
+			/* Offset to model main section in the model */
+			uint64_t model_main_offset : 32;
+
+			/* Size of main section in the model */
+			uint64_t model_main_size : 32;
+
+			/* Offset to model finish section in the model */
+			uint64_t model_finish_offset : 32;
+
+			/* Size of finish section in the model */
+			uint64_t model_finish_size : 32;
+
+			/* Offset to WB in model bin */
+			uint64_t model_wb_offset : 32;
+
+			/* Number of model layers */
+			uint64_t num_layers : 8;
+
+			/* Number of gather entries
+			 * 0 means linear input mode(= no gather)
+			 */
+			uint64_t num_gather_entries : 8;
+
+			/* Number of scatter entries
+			 * 0 means linear input mode (= no scatter)
+			 */
+			uint64_t num_scatter_entries : 8;
+
+			/* Tile mask to load model */
+			uint64_t tilemask : 8;
+
+			/* OCM WB base address */
+			uint64_t rsvd : 32;
+			uint64_t ocm_wb_base_address : 32;
+
+			/* OCM WB range start */
+			uint64_t ocm_wb_range_start : 32;
+
+			/* OCM WB range End */
+			uint64_t ocm_wb_range_end : 32;
+
+			/* DDR WB address */
+			uint64_t ddr_wb_base_address;
+
+			/* DDR WB range start */
+			uint64_t ddr_wb_range_start : 32;
+
+			/* DDR WB range end */
+			uint64_t ddr_wb_range_end : 32;
+
+			union {
+				/* Pointer to gather list,
+				 * if num_gather_entries > 0
+				 */
+				void *gather_list;
+				struct {
+					/* Linear input mode */
+					uint64_t ddr_range_start : 32;
+					uint64_t ddr_range_end : 32;
+				} s;
+			} input;
+
+			union {
+				/* Pointer to scatter list,
+				 * if num_scatter_entries > 0
+				 */
+				void *scatter_list;
+				struct {
+					/* Linear output mode */
+					uint64_t ddr_range_start : 32;
+					uint64_t ddr_range_end : 32;
+				} s;
+			} output;
+		} load;
+
+		struct cnxk_ml_jd_section_unload {
+			uint8_t rsvd[96];
+		} unload;
+
+		struct cnxk_ml_jd_section_run {
+			/* Address of the input for the run
+			 * relative to MLAB_MLR_BASE
+			 */
+			uint64_t input_ddr_addr;
+
+			/* Address of the output for the run
+			 * relative to MLAB_MLR_BASE
+			 */
+			uint64_t output_ddr_addr;
+			uint8_t rsvd[80];
+		} run;
+	};
+};
+
 /* Memory resources */
 struct cnxk_ml_mem {
 	/* Memory for BAR0 */
@@ -591,6 +707,16 @@ struct cnxk_ml_model {
 
 	/* Model state */
 	enum cnxk_ml_model_state state;
+
+	/* Job descriptors pool
+	 * Size of the pool is ML_MODEL_JD_POOL_SIZE.
+	 * JD's  0 to ML_MODEL_JD_POOL_SIZE - 3 are reserved for run
+	 * Last two JD's in the pool are reserved for load and unload
+	 */
+	struct cnxk_ml_jd *jd;
+
+	/* Run Job descriptor index, initial value is 2. */
+	uint8_t jd_index;
 };
 
 /* Configuration object */
