@@ -6403,8 +6403,9 @@ eth_dev_handle_port_info(const char *cmd __rte_unused,
 		const char *params,
 		struct rte_tel_data *d)
 {
+#define ETHER_ADDR_STR_LEN	20
 	struct rte_tel_data *rxq_state, *txq_state;
-	char mac_addr[RTE_ETHER_ADDR_LEN];
+	char mac_addr[ETHER_ADDR_STR_LEN];
 	struct rte_eth_dev *eth_dev;
 	char *end_param;
 	int port_id, i;
@@ -6445,7 +6446,7 @@ eth_dev_handle_port_info(const char *cmd __rte_unused,
 			eth_dev->data->min_rx_buf_size);
 	rte_tel_data_add_dict_int(d, "rx_mbuf_alloc_fail",
 			eth_dev->data->rx_mbuf_alloc_failed);
-	snprintf(mac_addr, RTE_ETHER_ADDR_LEN, "%02x:%02x:%02x:%02x:%02x:%02x",
+	snprintf(mac_addr, ETHER_ADDR_STR_LEN, "%02x:%02x:%02x:%02x:%02x:%02x",
 			 eth_dev->data->mac_addrs->addr_bytes[0],
 			 eth_dev->data->mac_addrs->addr_bytes[1],
 			 eth_dev->data->mac_addrs->addr_bytes[2],
