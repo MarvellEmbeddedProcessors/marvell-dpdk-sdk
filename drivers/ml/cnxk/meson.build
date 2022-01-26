@@ -13,9 +13,4 @@ sources = files(
         'cn10k_mldev_ops.c',
 )
 
-headers = files(
-        'cn10k_mldev.h',
-        'cnxk_mldev.h',
-)
-
 deps += ['eal', 'common_cnxk', 'mldev']
