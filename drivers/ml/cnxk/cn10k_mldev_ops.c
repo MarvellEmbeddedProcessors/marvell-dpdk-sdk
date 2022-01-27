@@ -68,7 +68,98 @@ cn10k_ml_fw_print_info(struct cnxk_ml_fw *ml_fw)
 }
 
 static int
-cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
+cn10k_ml_fw_load_asim(struct cnxk_ml_fw *ml_fw)
+{
+	struct cnxk_ml_dev *ml_dev;
+	uint64_t wait_cycles;
+	uint64_t start_cycle;
+	uint64_t reg_val64;
+	bool timeout;
+	int ret = 0;
+
+	ml_dev = ml_fw->ml_dev;
+
+	/* Set ML_MLR_BASE to base IOVA of the ML region in LLC/DRAM. */
+	reg_val64 = rte_eal_get_baseaddr();
+	roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_MLR_BASE);
+	plt_ml_dbg("ML_MLR_BASE = 0x%016lx",
+		   roc_ml_reg_read64(&ml_dev->roc, ML_MLR_BASE));
+
+	/* Reset scratch registers */
+	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
+	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
+
+	/* Update FW load completion structure */
+	ml_fw->load_fw->hdr.compl_W1.status_ptr =
+		PLT_U64_CAST(&ml_fw->status_ptr);
+	ml_fw->load_fw->hdr.command = CNXK_ML_JOB_CMD_FW_LOAD;
+	ml_fw->load_fw->hdr.job_result =
+		roc_ml_addr_ap2mlip(&ml_dev->roc, &ml_fw->job_result);
+	plt_write64(ML_CN10K_POLL_JOB_START, &ml_fw->status_ptr);
+	plt_wmb();
+
+	/* Enqueue FW load through scratch registers */
+	roc_ml_clk_force_on(&ml_dev->roc);
+	roc_ml_dma_stall_off(&ml_dev->roc);
+	roc_ml_scratch_enqueue(&ml_dev->roc, ml_fw->load_fw);
+
+	/* Wait for notification from firmware that ML is ready for job
+	 * execution.
+	 */
+	timeout = true;
+	wait_cycles = ML_TIMEOUT_FW_LOAD_S * plt_tsc_hz();
+	start_cycle = plt_tsc_cycles();
+	plt_rmb();
+	do {
+		if (roc_ml_scratch_is_done_bit_set(&ml_dev->roc) &&
+		    (plt_read64(&ml_fw->status_ptr) ==
+		     ML_CN10K_POLL_JOB_FINISH)) {
+			timeout = false;
+			break;
+		}
+	} while (plt_tsc_cycles() - start_cycle < wait_cycles);
+
+	roc_ml_dma_stall_on(&ml_dev->roc);
+	roc_ml_clk_force_off(&ml_dev->roc);
+
+	if ((!timeout) && (ml_fw->job_result.status == ML_STATUS_SUCCESS)) {
+		cn10k_ml_fw_print_info(ml_fw);
+	} else {
+		/* Set ML to disable new jobs */
+		reg_val64 = (ROC_ML_CFG_JD_SIZE | ROC_ML_CFG_MLIP_ENA);
+		roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_CFG);
+
+		/* Clear scratch registers */
+		roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
+		roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
+
+		if (timeout) {
+			plt_err("Firmware load timeout");
+			ret = -ETIME;
+		} else {
+			plt_err("Firmware load failed");
+			ret = -1;
+		}
+
+		return ret;
+	}
+
+	/* Reset scratch registers */
+	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
+	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
+
+	/* Disable job execution, to be enabled in start */
+	reg_val64 = roc_ml_reg_read64(&ml_dev->roc, ML_CFG);
+	reg_val64 &= ~ROC_ML_CFG_ENA;
+	roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_CFG);
+	plt_ml_dbg("ML_CFG => 0x%016lx",
+		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
+
+	return ret;
+}
+
+static int
+cn10k_ml_fw_load_cn10ka(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 {
 	struct cnxk_ml_dev *ml_dev;
 	uint64_t wait_cycles;
@@ -1054,18 +1145,25 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	reg_val64 = (ROC_ML_CFG_JD_SIZE | ROC_ML_CFG_MLIP_ENA);
 	roc_ml_reg_write64(&ml_dev->roc, reg_val64, ML_CFG);
 
-	/* Read firmware binary to a local buffer */
-	ret = rte_firmware_read(ml_fw->filepath, &fw_buffer, &fw_size);
-	if (ret < 0) {
-		plt_err("Can't read firmware data: %s\n", ml_fw->filepath);
-		goto err_exit;
-	}
-
 	/* Load firmware */
-	ret = cn10k_ml_fw_load(ml_fw, fw_buffer, fw_size);
-	free(fw_buffer);
-	if (ret != 0)
-		goto err_exit;
+	if (roc_env_is_emulator() || roc_env_is_hw()) {
+		/* Read firmware binary to a local buffer */
+		ret = rte_firmware_read(ml_fw->filepath, &fw_buffer, &fw_size);
+		if (ret < 0) {
+			plt_err("Can't read firmware data: %s\n",
+				ml_fw->filepath);
+			goto err_exit;
+		}
+
+		/* Load firmware */
+		ret = cn10k_ml_fw_load_cn10ka(ml_fw, fw_buffer, fw_size);
+		free(fw_buffer);
+		if (ret != 0)
+			goto err_exit;
+	} else {
+		if (cn10k_ml_fw_load_asim(ml_fw) == -1)
+			goto err_exit;
+	}
 
 	ml_config = &ml_dev->ml_config;
 	ml_config->ml_dev = ml_dev;
