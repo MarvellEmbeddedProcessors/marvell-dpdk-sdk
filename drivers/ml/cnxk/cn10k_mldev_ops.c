@@ -45,6 +45,9 @@
 #define ML_STATUS_SUCCESS 0x0
 #define ML_STATUS_FAILURE 0xFF
 
+#define BYTE_LEN	  8
+#define OCM_MAP_WORD_SIZE (sizeof(uint8_t) * BYTE_LEN)
+
 static void
 cn10k_ml_fw_print_info(struct cnxk_ml_fw *ml_fw)
 {
@@ -314,6 +317,248 @@ cn10k_ml_fw_load(struct cnxk_ml_fw *ml_fw, void *buffer, uint64_t size)
 		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
 
 	return ret;
+}
+
+/* Left shift multi-word mask by 1 bit.
+ *
+ * For example, given a mask of two uint8_t words
+ * Input:  [00110101] [00110111]
+ * Output: [01101010] [01101110]
+ */
+static void
+lshift_mask(uint8_t *mask, int nwords)
+{
+	int i;
+	int word_sz;
+
+	word_sz = sizeof(uint8_t) * BYTE_LEN;
+	for (i = nwords - 1; i >= 0; i--) {
+		mask[i] = mask[i] << 1;
+		if (i != 0)
+			mask[i] = mask[i] | (mask[i - 1] >> (word_sz - 1));
+	}
+}
+
+/* Get the index of the first unused slot in a multi-word mask. An unused slot
+ * is a sequence of slot_sz continuous unset bits in the mult-word mask. For
+ * example given a multi-word mask.
+ *
+ * The program creates a search_mask with slot_sz bits set. Uses a sliding
+ * windows approach to scan the mask to identify the available first slot.
+ * search_mask slides left from start_pos to end.
+ *
+ * [10111000] [01001001]
+ * - WORD 1 --- WORD 0 -
+ *
+ * When start = 0,
+ * Index of the first unused slot of size 4 is 7.
+ * Index of the first unused slot of size 3 is 7.
+ * Index of the first unused slot of size 2 is 1.
+ * Index of the first unused slot of size 1 is 1.
+ *
+ * When start = 2,
+ * Index of the first unused slot of size 4 is 7.
+ * Index of the first unused slot of size 2 is 4.
+ * Index of the first unused slot of size 1 is 2.
+ */
+
+static int
+slot_index(uint8_t *base_mask, int nwords, int slot_sz, int start_pos)
+{
+	uint8_t *search_mask;
+	uint8_t res;
+
+	int word_sz;
+	int end_pos;
+	int i, j;
+	int idx;
+
+	idx = -1;
+	word_sz = sizeof(uint8_t) * BYTE_LEN;
+
+	/* Create a mask with slot_sz bits set */
+	search_mask = plt_zmalloc(nwords * sizeof(uint8_t), 0);
+	if (search_mask == NULL)
+		goto error;
+
+	for (i = 0; i < nwords; i++) {
+		if (i < slot_sz / word_sz)
+			search_mask[i] = 0xFF;
+		else if (i > slot_sz / word_sz)
+			search_mask[i] = 0x00;
+		else
+			search_mask[i] = (1 << (slot_sz % word_sz)) - 1;
+	}
+
+	/* Shift search mask by start_pos bits */
+	for (i = 0; i < start_pos; i++)
+		lshift_mask(search_mask, nwords);
+
+	/* Scan for a slot, left shift search mask after every iteration */
+	end_pos = nwords * word_sz - slot_sz + 1;
+	for (j = start_pos; j < end_pos; j++) {
+		res = 0x0;
+		for (i = 0; i < nwords; i++)
+			res = res | (base_mask[i] & search_mask[i]);
+
+		if (res == 0) {
+			idx = j;
+			goto found_idx;
+		}
+
+		lshift_mask(search_mask, nwords);
+	}
+
+found_idx:
+	plt_free(search_mask);
+
+error:
+	return idx;
+}
+
+/* Count number of bits in a tilemask. Assumes that all set bits are contiguous.
+ */
+__plt_unused static int
+cnxk_ml_ocm_tilecount(uint64_t tilemask, int *start, int *end)
+{
+	uint8_t count;
+
+	PLT_ASSERT(tilemask != 0);
+
+	*start = __builtin_ctzl(tilemask);
+	*end = 64 - __builtin_clzl(tilemask) - 1;
+	count = *end - *start + 1;
+
+	PLT_ASSERT(count == __builtin_popcountl(tilemask));
+	return count;
+}
+
+/* Find a tilemask to load the model on 'num_tiles' tiles with given scratch and
+ * wb pages. Optionally specify the start_tile to search for tilemask.
+ *
+ * When start_tile = -1, search is done with all possible values for start_tile.
+ * When start_tile >= 0, search is restricted to the tiles (start_tile) to
+ * (start_tile + num_tiles -1).
+ *
+ * Examples
+ * 1. With num_tiles = 2 and start_tile = 2, tilemask that would be checked is
+ * 0xC (1100b)
+ * 2. With num_tiles = 2 and start_tile = 0, tilemask that would be checked is
+ * 0x3 (0011b)
+ * 3. With num_tiles = 2 and start_tile = -1, tilemask's that would be checked
+ * are 0x3 (0011b), 0xC (1100b), 0x30 (11_0000b) and 0xC0 (1100_0000b). The
+ * first suitable tilemask would be used.
+ */
+__plt_unused static int
+cnxk_ml_ocm_tilemask_find(struct rte_mldev *dev, uint8_t num_tiles,
+			  uint16_t wb_pages, uint16_t scratch_pages,
+			  int start_tile, uint64_t *tilemask)
+{
+	uint8_t local_ocm_mask[ML_CN10K_OCM_MASKWORDS] = {0};
+	struct cn10k_ml_ocm_tile_info *ocm_tile_info;
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_dev *ml_dev;
+
+	uint16_t used_scratch_pages_max;
+	uint16_t scratch_page_start;
+	int used_last_wb_page_max;
+	uint16_t scratch_page_end;
+	uint8_t search_start_tile;
+	uint8_t search_end_tile;
+	uint8_t tile_start;
+	uint16_t tile_id;
+	uint16_t word_id;
+	int wb_page_start;
+	int page_id;
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ocm_tile_info =
+		(struct cn10k_ml_ocm_tile_info *)(ml_config->ocm_tile_info);
+
+	if (num_tiles > ML_CN10K_OCM_NUMTILES) {
+		plt_err("Invalid num_tiles = %d (> %d)", num_tiles,
+			ML_CN10K_OCM_NUMTILES);
+		return -1;
+	}
+
+	if ((start_tile != -1) && (start_tile % num_tiles != 0)) {
+		plt_err("Invalid start_tile, %d", start_tile);
+		return -1;
+	}
+
+	memset(tilemask, 0, sizeof(uint64_t));
+	wb_page_start = -1;
+	used_scratch_pages_max = 0;
+	used_last_wb_page_max = -1;
+
+	if (start_tile < 0) {
+		search_start_tile = 0;
+		search_end_tile = ml_config->ocm_num_tiles - num_tiles;
+	} else {
+		search_start_tile = start_tile;
+		search_end_tile = start_tile;
+	}
+
+	for (tile_start = search_start_tile; tile_start <= search_end_tile;
+	     tile_start = tile_start + num_tiles) {
+		for (tile_id = tile_start; tile_id < tile_start + num_tiles;
+		     tile_id++) {
+			used_scratch_pages_max =
+				PLT_MAX(ocm_tile_info[tile_id].scratch_pages,
+					used_scratch_pages_max);
+			used_last_wb_page_max =
+				PLT_MAX(ocm_tile_info[tile_id].last_wb_page,
+					used_last_wb_page_max);
+		}
+
+		memset(local_ocm_mask, 0, sizeof(local_ocm_mask));
+		for (tile_id = tile_start; tile_id < tile_start + num_tiles;
+		     tile_id++) {
+			for (word_id = 0; word_id < ml_config->ocm_mask_words;
+			     word_id++)
+				local_ocm_mask[word_id] |=
+					ocm_tile_info[tile_id]
+						.ocm_mask[word_id];
+		}
+
+		if (used_scratch_pages_max <
+		    scratch_pages) { /* Check for extra scratch pages */
+			if (ml_config->ocm_pages - used_last_wb_page_max - 1 >
+			    scratch_pages) { /* Pages available */
+				scratch_page_start =
+					ml_config->ocm_pages - scratch_pages;
+				scratch_page_end = ml_config->ocm_pages - 1;
+				for (page_id = scratch_page_start;
+				     page_id <= scratch_page_end;
+				     page_id++) { /* Mark the extra scratch
+						   * pages as used
+						   */
+					local_ocm_mask[page_id /
+						       OCM_MAP_WORD_SIZE] =
+						SET_BIT(local_ocm_mask
+								[page_id /
+								 OCM_MAP_WORD_SIZE],
+							page_id %
+								OCM_MAP_WORD_SIZE);
+				}
+			} else { /* Pages not available, check for next tileset
+				  */
+				continue;
+			}
+		}
+
+		wb_page_start = slot_index(
+			local_ocm_mask, ml_config->ocm_mask_words, wb_pages, 0);
+		if (wb_page_start !=
+		    -1) { /* Have a valid slot for WB, else next tileset */
+			*tilemask = GENMASK_ULL(tile_start + num_tiles - 1,
+						tile_start);
+			return wb_page_start;
+		}
+	}
+
+	return wb_page_start;
 }
 
 static int
