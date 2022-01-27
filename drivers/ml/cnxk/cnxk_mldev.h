@@ -518,8 +518,8 @@ struct cnxk_ml_job_compl {
 	/* Job status pointer */
 	volatile uint64_t status_ptr;
 
-	/* Job start time */
-	uint64_t start_time;
+	/* Job start cycle */
+	uint64_t start_cycle;
 };
 
 /* Firmware Load completion structure */
@@ -781,6 +781,13 @@ struct cnxk_ml_config {
 
 	/* Internal job pool, for sync and poll mode */
 	struct rte_mempool *job_pool;
+
+	/* Timeouts in cycles */
+	struct {
+		uint64_t load;
+		uint64_t unload;
+		uint64_t run;
+	} timeout;
 };
 
 /* ML Device private data */

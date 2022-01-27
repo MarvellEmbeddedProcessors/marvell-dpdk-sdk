@@ -37,6 +37,9 @@
 
 /* Timeout */
 #define ML_TIMEOUT_FW_LOAD_S 10
+#define ML_TIMEOUT_LOAD_S    20
+#define ML_TIMEOUT_UNLOAD_S  5
+#define ML_TIMEOUT_RUN_S     10
 
 /* Job status */
 #define ML_STATUS_SUCCESS 0x0
@@ -676,6 +679,11 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 
 	rte_spinlock_init(&ml_config->scratch_lock);
 	rte_spinlock_init(&ml_config->run_lock);
+
+	/* Set timeouts */
+	ml_config->timeout.load = ML_TIMEOUT_LOAD_S * plt_tsc_hz();
+	ml_config->timeout.unload = ML_TIMEOUT_UNLOAD_S * plt_tsc_hz();
+	ml_config->timeout.run = ML_TIMEOUT_RUN_S * plt_tsc_hz();
 
 	ml_config->active = true;
 
