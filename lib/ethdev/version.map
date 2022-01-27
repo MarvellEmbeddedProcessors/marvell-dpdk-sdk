@@ -258,7 +258,8 @@ EXPERIMENTAL {
 	rte_flow_pick_transfer_proxy;
 
 	# added in 22.03
-	rte_eth_dev_priority_flow_ctrl_queue_set;
+	rte_eth_dev_priority_flow_ctrl_queue_configure;
+	rte_eth_dev_priority_flow_ctrl_queue_info_get;
 };
 
 INTERNAL {

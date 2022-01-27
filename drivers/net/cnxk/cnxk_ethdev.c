@@ -1575,7 +1575,10 @@ struct eth_dev_ops cnxk_eth_dev_ops = {
 	.tx_burst_mode_get = cnxk_nix_tx_burst_mode_get,
 	.flow_ctrl_get = cnxk_nix_flow_ctrl_get,
 	.flow_ctrl_set = cnxk_nix_flow_ctrl_set,
-	.priority_flow_ctrl_queue_set = cnxk_nix_priority_flow_ctrl_queue_set,
+	.priority_flow_ctrl_queue_config =
+				cnxk_nix_priority_flow_ctrl_queue_config,
+	.priority_flow_ctrl_queue_info_get =
+				cnxk_nix_priority_flow_ctrl_queue_info_get,
 	.dev_set_link_up = cnxk_nix_set_link_up,
 	.dev_set_link_down = cnxk_nix_set_link_down,
 	.get_module_info = cnxk_nix_get_module_info,
@@ -1786,8 +1789,8 @@ cnxk_eth_dev_uninit(struct rte_eth_dev *eth_dev, bool reset)
 			pfc_conf.rx_pause.tc = i;
 			pfc_conf.tx_pause.rx_qid = i;
 			pfc_conf.tx_pause.tc = i;
-			rc = cnxk_nix_priority_flow_ctrl_queue_set(eth_dev,
-								   &pfc_conf);
+			rc = cnxk_nix_priority_flow_ctrl_queue_config(eth_dev,
+				&pfc_conf);
 			if (rc)
 				plt_err("Failed to reset PFC. error code(%d)",
 					rc);

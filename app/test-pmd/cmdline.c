@@ -7742,8 +7742,8 @@ cmd_queue_priority_flow_ctrl_set_parsed(void *parsed_result,
 	pfc_queue_conf.tx_pause.rx_qid  = res->rx_qid;
 	pfc_queue_conf.tx_pause.pause_time = res->pause_time;
 
-	ret = rte_eth_dev_priority_flow_ctrl_queue_set(res->port_id,
-						       &pfc_queue_conf);
+	ret = rte_eth_dev_priority_flow_ctrl_queue_configure(res->port_id,
+							     &pfc_queue_conf);
 	if (ret != 0) {
 		fprintf(stderr,
 			"bad queue priority flow control parameter, rc = %d\n",

@@ -387,7 +387,7 @@ nix_tm_bp_config_set(struct roc_nix *roc_nix, uint16_t sq, uint16_t tc,
 			goto err;
 	}
 
-	parent->rel_chan = tc;
+	parent->rel_chan = enable ? tc : NIX_TM_CHAN_INVALID;
 	return 0;
 err:
 	plt_err("Failed to %s bp on link %u, rc=%d(%s)",

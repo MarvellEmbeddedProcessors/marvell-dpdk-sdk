@@ -70,7 +70,6 @@ cnxk_nix_info_get(struct rte_eth_dev *eth_dev, struct rte_eth_dev_info *devinfo)
 			    RTE_ETH_DEV_CAPA_RUNTIME_TX_QUEUE_SETUP |
 			    RTE_ETH_DEV_CAPA_FLOW_RULE_KEEP;
 
-	devinfo->pfc_queue_tc_max = roc_nix_chan_count_get(&dev->nix);
 	return 0;
 }
 
@@ -328,8 +327,20 @@ cnxk_nix_flow_ctrl_set(struct rte_eth_dev *eth_dev,
 }
 
 int
-cnxk_nix_priority_flow_ctrl_queue_set(struct rte_eth_dev *eth_dev,
-				      struct rte_eth_pfc_queue_conf *pfc_conf)
+cnxk_nix_priority_flow_ctrl_queue_info_get(struct rte_eth_dev *eth_dev,
+					 struct rte_eth_pfc_queue_info *pfc_info)
+{
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+
+	pfc_info->tc_max = roc_nix_chan_count_get(&dev->nix);
+	pfc_info->capa = RTE_ETH_PFC_QUEUE_CAPA_RX_PAUSE |
+			 RTE_ETH_PFC_QUEUE_CAPA_TX_PAUSE;
+	return 0;
+}
+
+int
+cnxk_nix_priority_flow_ctrl_queue_config(struct rte_eth_dev *eth_dev,
+					 struct rte_eth_pfc_queue_conf *pfc_conf)
 {
 	struct cnxk_pfc_cfg conf = {0};
 	int rc;

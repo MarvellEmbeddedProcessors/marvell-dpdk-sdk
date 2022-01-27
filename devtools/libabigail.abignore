@@ -11,8 +11,3 @@
 ; Ignore generated PMD information strings
 [suppress_variable]
         name_regexp = _pmd_info$
-
-; Ignore fields inserted in place of reserved fields of rte_eth_dev_info
-[suppress_type]
-       name = rte_eth_dev_info
-       has_data_member_inserted_between = {offset_after(switch_info), end}

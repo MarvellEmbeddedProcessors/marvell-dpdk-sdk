@@ -488,8 +488,10 @@ int cnxk_nix_flow_ctrl_set(struct rte_eth_dev *eth_dev,
 			   struct rte_eth_fc_conf *fc_conf);
 int cnxk_nix_flow_ctrl_get(struct rte_eth_dev *eth_dev,
 			   struct rte_eth_fc_conf *fc_conf);
-int cnxk_nix_priority_flow_ctrl_queue_set(struct rte_eth_dev *eth_dev,
-					  struct rte_eth_pfc_queue_conf *pfc_conf);
+int cnxk_nix_priority_flow_ctrl_queue_config(struct rte_eth_dev *eth_dev,
+					     struct rte_eth_pfc_queue_conf *pfc_conf);
+int cnxk_nix_priority_flow_ctrl_queue_info_get(struct rte_eth_dev *eth_dev,
+					       struct rte_eth_pfc_queue_info *pfc_info);
 int cnxk_nix_set_link_up(struct rte_eth_dev *eth_dev);
 int cnxk_nix_set_link_down(struct rte_eth_dev *eth_dev);
 int cnxk_nix_get_module_info(struct rte_eth_dev *eth_dev,
