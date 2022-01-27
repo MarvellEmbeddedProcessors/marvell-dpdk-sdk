@@ -29,4 +29,16 @@
 	 (~0ULL >> (BITS_PER_LONG_LONG - 1 - (h))))
 #endif
 
+#ifndef IS_BIT_SET
+#define IS_BIT_SET(num, n) ((num) & (1 << (n)))
+#endif
+
+#ifndef SET_BIT
+#define SET_BIT(num, n) ((num) | (1 << (n)))
+#endif
+
+#ifndef CLEAR_BIT
+#define CLEAR_BIT(num, n) ((num) &= ~((1) << (n)))
+#endif
+
 #endif /* _ROC_BITS_H_ */
