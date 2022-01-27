@@ -449,7 +449,7 @@ cnxk_ml_ocm_tilecount(uint64_t tilemask, int *start, int *end)
  * are 0x3 (0011b), 0xC (1100b), 0x30 (11_0000b) and 0xC0 (1100_0000b). The
  * first suitable tilemask would be used.
  */
-__plt_unused static int
+static int
 cnxk_ml_ocm_tilemask_find(struct rte_mldev *dev, uint8_t num_tiles,
 			  uint16_t wb_pages, uint16_t scratch_pages,
 			  int start_tile, uint64_t *tilemask)
@@ -561,7 +561,7 @@ cnxk_ml_ocm_tilemask_find(struct rte_mldev *dev, uint8_t num_tiles,
 	return wb_page_start;
 }
 
-__plt_unused static void
+static void
 cnxk_ml_ocm_reserve_pages(struct rte_mldev *dev, uint32_t model_id,
 			  uint64_t tilemask, int wb_page_start,
 			  uint16_t wb_pages, uint16_t scratch_pages)
@@ -964,6 +964,47 @@ cnxk_ml_jd_init(struct rte_mldev *dev, struct cnxk_ml_model *ml_model)
 		ml_model->jd[i].hdr.compl_W1.W1 = 0;	 /* Updated at run */
 		ml_model->jd[i].run.input_ddr_addr = 0;	 /* Updated at run */
 		ml_model->jd[i].run.output_ddr_addr = 0; /* Updated at run */
+	}
+}
+
+static void
+cnxk_ml_jd_update(struct rte_mldev *dev, enum cnxk_ml_job_cmd ml_job_cmd,
+		  struct cnxk_ml_model *ml_model,
+		  struct cnxk_ml_job_compl *ml_job_compl)
+{
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_dev *ml_dev;
+	int tile_start;
+	int tile_end;
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+
+	if (ml_job_cmd == CNXK_ML_JOB_CMD_LOAD) {
+		/* Get tile_start and tile_end */
+		cnxk_ml_ocm_tilecount(ml_model->model_mem_map.tilemask,
+				      &tile_start, &tile_end);
+
+		ml_model->jd[JD_LOAD].load.tilemask =
+			GENMASK_ULL(tile_end, tile_start);
+		ml_model->jd[JD_LOAD].load.ocm_wb_base_address =
+			ml_model->model_mem_map.wb_page_start *
+			ml_config->ocm_page_size;
+		ml_model->jd[JD_LOAD].hdr.compl_W1.status_ptr =
+			PLT_U64_CAST(&ml_job_compl->status_ptr);
+		ml_model->jd[JD_LOAD].hdr.job_result = roc_ml_addr_ap2mlip(
+			&ml_dev->roc, &ml_job_compl->job_result);
+
+		ml_model->jd[JD_LOAD].hdr.compl_W1.status_ptr =
+			PLT_U64_CAST(&ml_job_compl->status_ptr);
+		ml_model->jd[JD_LOAD].hdr.job_result = roc_ml_addr_ap2mlip(
+			&ml_dev->roc, &ml_job_compl->job_result);
+
+	} else if (ml_job_cmd == CNXK_ML_JOB_CMD_UNLOAD) {
+		ml_model->jd[JD_UNLOAD].hdr.compl_W1.status_ptr =
+			PLT_U64_CAST(&ml_job_compl->status_ptr);
+		ml_model->jd[JD_UNLOAD].hdr.job_result = roc_ml_addr_ap2mlip(
+			&ml_dev->roc, &ml_job_compl->job_result);
 	}
 }
 
@@ -1440,10 +1481,143 @@ cn10k_ml_dev_model_destroy(struct rte_mldev *dev, uint8_t model_id)
 }
 
 int
-cn10k_ml_dev_model_load(__rte_unused struct rte_mldev *dev,
-			__rte_unused uint8_t model_id)
+cn10k_ml_dev_model_load(struct rte_mldev *dev, uint8_t model_id)
 {
-	return 0;
+	struct cnxk_ml_job_compl *ml_job_compl;
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_model *ml_model;
+	struct cnxk_ml_dev *ml_dev;
+
+	bool scratch_active;
+	uint8_t num_tiles;
+	uint64_t tilemask;
+	int wb_page_start;
+	bool timeout;
+	int ret = 0;
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ml_model = ml_config->ml_models[model_id];
+
+	num_tiles = ml_model->model_metadata.model.tile_end -
+		    ml_model->model_metadata.model.tile_start + 1;
+
+	ret = rte_mempool_get(ml_config->job_pool, (void **)(&ml_job_compl));
+	if (ret != 0)
+		return ret;
+
+	/* Acquire lock and check if scratch is active. This lock protects the
+	 * shared resources like OCM info, used in tilemask_find. tilemask and
+	 * wb_page_start are dynamic, the calculated values are dependent on the
+	 * current state of OCM which is stored in ocm_info. ocm_info is
+	 * shared across all models / threads.
+	 */
+	scratch_active = true;
+	while (scratch_active) {
+		if (rte_spinlock_trylock(&ml_config->scratch_lock) != 0) {
+			bool valid =
+				roc_ml_scratch_is_valid_bit_set(&ml_dev->roc);
+			bool done =
+				roc_ml_scratch_is_done_bit_set(&ml_dev->roc);
+
+			if (valid == done) /* Initial state or a previous job is
+					    * completed
+					    */
+				scratch_active = false;
+			else /* A job is active */
+				rte_spinlock_unlock(&ml_config->scratch_lock);
+		}
+	}
+
+	if (ml_model->state != CNXK_ML_MODEL_STATE_CREATED) {
+		if (ml_model->state == CNXK_ML_MODEL_STATE_LOADED)
+			plt_ml_dbg("Model already loaded, model = 0x%016lx",
+				   PLT_U64_CAST(ml_model));
+
+		if ((ml_model->state == CNXK_ML_MODEL_STATE_LOAD_ACTIVE) ||
+		    (ml_model->state == CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE)) {
+			plt_err("A load / unload is active for the model = 0x%016lx",
+				PLT_U64_CAST(ml_model));
+			ret = -EBUSY;
+		}
+
+		rte_spinlock_unlock(&ml_config->scratch_lock);
+		return ret;
+	}
+
+	/* Get tilemask to load the model */
+	if (!ml_model->model_mem_map.ocm_reserved) {
+		wb_page_start = cnxk_ml_ocm_tilemask_find(
+			dev, num_tiles, ml_model->model_mem_map.wb_pages,
+			ml_model->model_mem_map.scratch_pages, -1, &tilemask);
+
+		if (wb_page_start == -1) {
+			plt_err("Free pages not available on OCM tiles");
+			plt_err("Failed to load model = 0x%016lx, name = %s",
+				(uint64_t)ml_model,
+				ml_model->model_metadata.model.name);
+
+			rte_spinlock_unlock(&ml_config->scratch_lock);
+			return -ENOMEM;
+		}
+
+		ml_model->model_mem_map.tilemask = tilemask;
+		ml_model->model_mem_map.wb_page_start = wb_page_start;
+	}
+
+	cnxk_ml_jd_update(dev, CNXK_ML_JOB_CMD_LOAD, ml_model, ml_job_compl);
+	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
+	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
+	ml_job_compl->job_result.user_ptr = NULL;
+	plt_wmb();
+
+	roc_ml_clk_force_on(&ml_dev->roc);
+	roc_ml_dma_stall_off(&ml_dev->roc);
+	ml_job_compl->start_cycle = plt_tsc_cycles();
+	roc_ml_scratch_enqueue(&ml_dev->roc, &ml_model->jd[JD_LOAD]);
+
+	timeout = true;
+	plt_rmb();
+	while (plt_tsc_cycles() - ml_job_compl->start_cycle <
+	       ml_config->timeout.load) {
+		if (roc_ml_scratch_is_done_bit_set(&ml_dev->roc) &&
+		    (plt_read64(&ml_job_compl->status_ptr) ==
+		     ML_CN10K_POLL_JOB_FINISH)) {
+			timeout = false;
+			break;
+		}
+	}
+	roc_ml_dma_stall_on(&ml_dev->roc);
+	roc_ml_clk_force_off(&ml_dev->roc);
+
+	if (!timeout &&
+	    (ml_job_compl->job_result.status == ML_STATUS_SUCCESS)) {
+		ml_model->state = CNXK_ML_MODEL_STATE_LOADED;
+		if (!ml_model->model_mem_map.ocm_reserved) {
+			cnxk_ml_ocm_reserve_pages(
+				dev, ml_model->model_id,
+				ml_model->model_mem_map.tilemask,
+				ml_model->model_mem_map.wb_page_start,
+				ml_model->model_mem_map.wb_pages,
+				ml_model->model_mem_map.scratch_pages);
+			ml_model->model_mem_map.ocm_reserved = true;
+		}
+	} else { /* Model load failed */
+		if (timeout) {
+			plt_err("Model load timeout, model_id = %d", model_id);
+			ret = -ETIME;
+		} else {
+			plt_err("Model load failed, model_id = %d", model_id);
+			ret = -1;
+		}
+	}
+
+	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
+	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
+	rte_spinlock_unlock(&ml_config->scratch_lock);
+	rte_mempool_put(ml_config->job_pool, ml_job_compl);
+
+	return ret;
 }
 
 int
