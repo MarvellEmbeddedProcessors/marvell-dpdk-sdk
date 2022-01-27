@@ -756,6 +756,7 @@ cn9k_sso_hws_event_tx(uint64_t base, struct rte_event *ev, uint64_t *cmd,
 
 	/* Perform header writes before barrier for TSO */
 	cn9k_nix_xmit_prepare_tso(m, flags);
+
 	/* Lets commit any changes in the packet here in case when
 	 * fast free is set as no further changes will be made to mbuf.
 	 * In case of fast free is not set, both cn9k_nix_prepare_mseg()
@@ -766,7 +767,8 @@ cn9k_sso_hws_event_tx(uint64_t base, struct rte_event *ev, uint64_t *cmd,
 		rte_io_wmb();
 	txq = cn9k_sso_hws_xtract_meta(m, txq_data);
 	cn9k_nix_tx_skeleton(txq, cmd, flags, 0);
-	cn9k_nix_xmit_prepare(m, cmd, flags, txq->lso_tun_fmt);
+	cn9k_nix_xmit_prepare(m, cmd, flags, txq->lso_tun_fmt, txq->mark_flag,
+			      txq->mark_fmt);
 
 	if (flags & NIX_TX_OFFLOAD_SECURITY_F) {
 		uint64_t ol_flags = m->ol_flags;
