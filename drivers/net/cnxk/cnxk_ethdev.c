@@ -306,25 +306,15 @@ static int
 nix_init_flow_ctrl_config(struct rte_eth_dev *eth_dev)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-	struct cnxk_fc_cfg *fc = &dev->fc_cfg;
-	struct rte_eth_fc_conf fc_conf = {0};
-	int rc;
+	enum roc_nix_fc_mode fc_mode = ROC_NIX_FC_FULL;
 
-	/* Both Rx & Tx flow ctrl get enabled(RTE_ETH_FC_FULL) in HW
-	 * by AF driver, update those info in PMD structure.
-	 */
-	rc = cnxk_nix_flow_ctrl_get(eth_dev, &fc_conf);
-	if (rc)
-		goto exit;
+	/* To avoid Link credit deadlock on Ax, disable Tx FC if it's enabled */
+	if (roc_model_is_cn96_ax() &&
+	    dev->npc.switch_header_type != ROC_PRIV_FLAGS_HIGIG)
+		fc_mode = ROC_NIX_FC_TX;
 
-	fc->mode = fc_conf.mode;
-	fc->rx_pause = (fc_conf.mode == RTE_ETH_FC_FULL) ||
-			(fc_conf.mode == RTE_ETH_FC_RX_PAUSE);
-	fc->tx_pause = (fc_conf.mode == RTE_ETH_FC_FULL) ||
-			(fc_conf.mode == RTE_ETH_FC_TX_PAUSE);
-
-exit:
-	return rc;
+	/* By default enable flow control */
+	return roc_nix_fc_mode_set(&dev->nix, fc_mode);
 }
 
 static int
