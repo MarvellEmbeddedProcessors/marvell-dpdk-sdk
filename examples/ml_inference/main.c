@@ -15,6 +15,7 @@
 
 /* ML global variables */
 static uint16_t g_models_counter;
+static bool g_interleave;
 
 /* ML args structure */
 typedef struct {
@@ -43,10 +44,14 @@ parse_args(int argc, char **argv)
 
 	static struct option lgopts[] = {
 		{"model", required_argument, NULL, 'm'},
+		{"interleave", no_argument, NULL, 'I'},
 		{"help", no_argument, NULL, 'h'},
 		{NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "m:h", lgopts, &option_index)) !=
+	/* Set defaults */
+	g_interleave = false;
+
+	while ((opt = getopt_long(argc, argv, "m:Ih", lgopts, &option_index)) !=
 	       EOF)
 		switch (opt) {
 		case 'm':
@@ -58,6 +63,9 @@ parse_args(int argc, char **argv)
 			}
 			strncpy(ml_opts.models[g_models_counter++], optarg,
 				PATH_MAX - 1);
+			break;
+		case 'I':
+			g_interleave = true;
 			break;
 		case '?':
 		case 'h':
@@ -159,19 +167,40 @@ main(int argc, char **argv)
 		}
 	}
 
-	for (idx = 0; idx < g_models_counter; idx++) {
-		if (rte_mldev_model_load(dev_id, ml_models[idx].model_id) !=
-		    0) {
-			fprintf(stderr, "Error loading model : %s\n",
-				ml_model.model_name);
-			goto error_destroy;
+	if (g_interleave) {
+		for (idx = 0; idx < g_models_counter; idx++) {
+			if (rte_mldev_model_load(
+				    dev_id, ml_models[idx].model_id) != 0) {
+				fprintf(stderr, "Error loading model : %s\n",
+					ml_model.model_name);
+				goto error_unload;
+			}
 		}
 
-		if (rte_mldev_model_unload(dev_id, ml_models[idx].model_id) !=
-		    0) {
-			fprintf(stderr, "Error unloading model : %s\n",
-				ml_model.model_name);
-			goto error_destroy;
+error_unload:
+		for (i = 0; i < idx; i++) {
+			if (rte_mldev_model_unload(
+				    dev_id, ml_models[i].model_id) != 0) {
+				fprintf(stderr, "Error unloading model : %s\n",
+					ml_model.model_name);
+				goto error_destroy;
+			}
+		}
+	} else {
+		for (idx = 0; idx < g_models_counter; idx++) {
+			if (rte_mldev_model_load(
+				    dev_id, ml_models[idx].model_id) != 0) {
+				fprintf(stderr, "Error loading model : %s\n",
+					ml_model.model_name);
+				goto error_destroy;
+			}
+
+			if (rte_mldev_model_unload(
+				    dev_id, ml_models[idx].model_id) != 0) {
+				fprintf(stderr, "Error unloading model : %s\n",
+					ml_model.model_name);
+				goto error_destroy;
+			}
 		}
 	}
 
