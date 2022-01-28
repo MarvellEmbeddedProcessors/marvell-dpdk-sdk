@@ -36,10 +36,11 @@
 #define ML_FLAGS_CMPC_COMPL BIT(2)
 
 /* Timeout */
-#define ML_TIMEOUT_FW_LOAD_S 10
-#define ML_TIMEOUT_LOAD_S    20
-#define ML_TIMEOUT_UNLOAD_S  5
-#define ML_TIMEOUT_RUN_S     10
+#define ML_TIMEOUT_FW_LOAD_S  10
+#define ML_TIMEOUT_LOAD_S     20
+#define ML_TIMEOUT_UNLOAD_S   5
+#define ML_TIMEOUT_RUN_S      10
+#define ML_TIMEOUT_MULTIPLIER 150
 
 /* Job status */
 #define ML_STATUS_SUCCESS 0x0
@@ -107,7 +108,8 @@ cn10k_ml_fw_load_asim(struct cnxk_ml_fw *ml_fw)
 	 * execution.
 	 */
 	timeout = true;
-	wait_cycles = ML_TIMEOUT_FW_LOAD_S * plt_tsc_hz();
+	wait_cycles =
+		ML_TIMEOUT_FW_LOAD_S * ML_TIMEOUT_MULTIPLIER * plt_tsc_hz();
 	start_cycle = plt_tsc_cycles();
 	plt_rmb();
 	do {
@@ -1109,6 +1111,7 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	struct cnxk_ml_dev *ml_dev;
 	struct cnxk_ml_fw *ml_fw;
 	uint64_t ml_models_size;
+	uint64_t scale_factor;
 	uint64_t reg_val64;
 	uint32_t model_id;
 	uint16_t tile_id;
@@ -1219,9 +1222,14 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	rte_spinlock_init(&ml_config->run_lock);
 
 	/* Set timeouts */
-	ml_config->timeout.load = ML_TIMEOUT_LOAD_S * plt_tsc_hz();
-	ml_config->timeout.unload = ML_TIMEOUT_UNLOAD_S * plt_tsc_hz();
-	ml_config->timeout.run = ML_TIMEOUT_RUN_S * plt_tsc_hz();
+	if (roc_env_is_asim())
+		scale_factor = ML_TIMEOUT_MULTIPLIER * plt_tsc_hz();
+	else
+		scale_factor = plt_tsc_hz();
+
+	ml_config->timeout.load = ML_TIMEOUT_LOAD_S * scale_factor;
+	ml_config->timeout.unload = ML_TIMEOUT_UNLOAD_S * scale_factor;
+	ml_config->timeout.run = ML_TIMEOUT_RUN_S * scale_factor;
 
 	ml_config->active = true;
 
