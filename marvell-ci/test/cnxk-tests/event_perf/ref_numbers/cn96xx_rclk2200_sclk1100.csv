@@ -1,30 +1,10 @@
-L2FWD_EVENT (parallel queue) output in packets per second
-cores, RESULT
-1, 6892875
-8, 40562344
-16, 45012509
 L2FWD_EVENT (atomic queue) output in packets per second
 cores, RESULT
-1, 6847713
+1, 6545441
 8, 40638571
 16, 45062840
-L2FWD_EVENT (ordered queue) output in packets per second
-cores, RESULT
-1, 6653115
-8, 40753491
-16, 45027227
 
 ------------------------------------------------------------------------
-L3FWD_EVENT (parallel queue) output in packets per second
-cores, RESULT
-1, 8382764
-8, 63369018
-16, 88777922
-L3FWD_EVENT (atomic queue) output in packets per second
-cores, RESULT
-1, 8456620
-8, 63274124
-16, 88617301
 L3FWD_EVENT (ordered queue) output in packets per second
 cores, RESULT
 1, 8368757
@@ -37,28 +17,8 @@ cores, RESULT
 1, 7.751
 8, 54.022
 16, 81.992
-PERF_ATQ (atomic queue) output in packets per second
-cores, RESULT
-1, 7.616
-8, 53.597
-16, 81.382
-PERF_ATQ (ordered queue) output in packets per second
-cores, RESULT
-1, 7.634
-8, 54.442
-16, 81.383
 
 ------------------------------------------------------------------------
-PIPELINE_ATQ_TX_FIRST (parallel queue) output in packets per second
-cores, RESULT
-1, 9.771
-8, 72.165
-16, 110.001
-PIPELINE_ATQ_TX_FIRST (atomic queue) output in packets per second
-cores, RESULT
-1, 9.774
-8, 71.971
-16, 110.001
 PIPELINE_ATQ_TX_FIRST (ordered queue) output in packets per second
 cores, RESULT
 1, 9.767
