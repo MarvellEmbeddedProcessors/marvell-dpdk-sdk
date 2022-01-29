@@ -35,6 +35,9 @@ signal_handler(int signum)
 			if (test->ops.ethdev_destroy)
 				test->ops.ethdev_destroy(test, &opt);
 
+			if (test->ops.cryptodev_destroy)
+				test->ops.cryptodev_destroy(test, &opt);
+
 			rte_eal_mp_wait_lcore();
 
 			if (test->ops.test_result)
