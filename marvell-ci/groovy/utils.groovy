@@ -55,7 +55,7 @@ def message_slack(Object s, message, broadcast = false) {
 	try {
 		sh script : """#!/bin/bash
 			export BROADCAST=${b}
-			${s.SCRIPTS_CACHE_DIR}/message_slack.sh '${message}'
+			${s.SCRIPTS_CACHE_DIR}/message_slack.sh 'DPDK CI: ${message}'
 		"""
 	} catch (err) {
 		print "Failed to message slack [Err: $err]"
