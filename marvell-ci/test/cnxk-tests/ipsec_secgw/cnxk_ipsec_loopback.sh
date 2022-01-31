@@ -107,15 +107,29 @@ function start_ping_test()
 	        ip netns exec vm0 ip xfrm policy list
 		for pkt_size in $PKT_LIST
 		do
+			local itr=0
 			echo -e "ping_pkts :-------" "$pkt_size" "$Y"
-			ip netns exec vm0 ping 192.168.$Y.2 -i $PKT_GAP -c $PING_PKTS -s $pkt_size $PING_ARGS | tee -a $PING_LOG
-			RESULT=`tail -n 3 $PING_LOG | grep -o "\w*\.\w*%\|\w*%"`
+
+			while [ $itr -le $PING_RETRY ]; do
+				ip netns exec vm0 ping 192.168.$Y.2 \
+					-i $PKT_GAP -c $PING_PKTS -s \
+					$pkt_size $PING_ARGS | tee -a $PING_LOG
+
+				RESULT=`tail -n 3 $PING_LOG | \
+					grep -o "\w*\.\w*%\|\w*%"`
+
+				print_result "$RESULT" "$Y" "$pkt_size"
+				errp=$(echo $RESULT | cut -c 1)
+
+				# Break if success
+				check=$(echo "$errp <= $PKTLOSS_ALLOWED_P" | bc)
+				if [ $check -eq 1 ]; then break; fi
+				((++itr))
+			done
 			# Wait until the process is killed
 #			while (ps -ef | grep ping); do
 #				continue
 #			done
-			print_result "$RESULT" "$Y" "$pkt_size"
-			errp=$(echo $RESULT | cut -c 1)
 
 			if (( $(echo "$errp > $PKTLOSS_ALLOWED_P" | bc) )); then
 				echo -e "Test Failed as packets loss $RESULT > $PKTLOSS_ALLOWED_P%"
@@ -361,6 +375,7 @@ CASE=(
 	"aead  rfc4106(gcm(aes))       0xa0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0 128"
 )
 
+PING_RETRY=1
 PING_PKTS=320
 PKT_LIST="64 380 1410"
 PKT_GAP="0.001"
@@ -386,6 +401,7 @@ then
 	PKT_GAP=1
 	# Wait for more time in case of ASIM
 	PING_ARGS="-W 3"
+	PING_RETRY=5
 fi
 
 CDEV_PF=$(lspci -d :a0fd | head -1 | awk -e '{ print $1 }')
