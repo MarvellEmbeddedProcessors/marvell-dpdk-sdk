@@ -10008,19 +10008,19 @@ test_ipsec_proto_pkt_esn_antireplay(const void *test_data, uint64_t winsz)
 	/* Set the initial sequence number */
 	esn[0] = (uint64_t)(0xFFFFFFFF - winsz);
 	/* 1. Advance the TOP of the window to (1<<32 + WS/2) */
-	esn[1] = (uint64_t)((1UL << 32) + (winsz / 2));
+	esn[1] = (uint64_t)((1ULL << 32) + (winsz / 2));
 	/* 2. Test sequence number within new window (1<<32 + WS/2 + 1) */
-	esn[2] = (uint64_t)((1UL << 32) - (winsz / 2) + 1);
+	esn[2] = (uint64_t)((1ULL << 32) - (winsz / 2) + 1);
 	/* 3. Test with sequence number within window (1<<32 - 1) */
-	esn[3] = (uint64_t)((1UL << 32) - 1);
+	esn[3] = (uint64_t)((1ULL << 32) - 1);
 	/* 4. Test with sequence number within window (1<<32 - 1) */
-	esn[4] = (uint64_t)(1UL << 32);
+	esn[4] = (uint64_t)(1ULL << 32);
 	/* 5. Test with duplicate sequence number within
 	 * new window (1<<32 - 1)
 	 */
-	esn[5] = (uint64_t)((1UL << 32) - 1);
+	esn[5] = (uint64_t)((1ULL << 32) - 1);
 	/* 6. Test with duplicate sequence number within new window (1<<32) */
-	esn[6] = (uint64_t)(1UL << 32);
+	esn[6] = (uint64_t)(1ULL << 32);
 
 	replayed_pkt[0] = false;
 	replayed_pkt[1] = false;
