@@ -332,7 +332,7 @@ npc_parse_actions(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 			break;
 
 		case ROC_NPC_ACTION_TYPE_FLAG:
-			mark = NPC_FLOW_FLAG_VAL - 1;
+			mark = NPC_FLOW_FLAG_VAL;
 			req_act |= ROC_NPC_ACTION_TYPE_FLAG;
 			break;
 

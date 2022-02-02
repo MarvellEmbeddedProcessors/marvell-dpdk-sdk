@@ -138,17 +138,34 @@ function check_pkt_count()
 	return 0
 }
 
+function testpmd_check_mark_flag()
+{
+	local prefix=$1
+	local out=testpmd.out.$prefix
+
+	COUNT=`cat $out | grep "RTE_MBUF_F_RX_FDIR" | wc -l`
+
+	echo "MARK Flag occurrence count:" $COUNT
+
+	if [[ "$COUNT" -gt "0" ]]; then
+		return 0
+	fi
+
+	return -1
+}
+
 function testpmd_check_mark_id()
 {
 	local prefix=$1
 	local out=testpmd.out.$prefix
 	local markid=$2
 
-	COUNT=`cat $out | grep "FDIR matched ID=$markid" | wc -l`
+	ID_COUNT=`cat $out | grep "FDIR matched ID=$markid" | wc -l`
+	COUNT=`cat $out | grep "RTE_MBUF_F_RX_FDIR_ID" | wc -l`
 
 	echo "MARKID occurrence count:" $COUNT
 
-	if [[ "$COUNT" -gt "0" ]]; then
+	if [[ "$COUNT" -gt "0" && "$COUNT" -eq "$ID_COUNT" ]]; then
 		return 0
 	fi
 
@@ -271,6 +288,17 @@ fi
 
 echo "FLOW_ACTION_VLAN_STRIP passed"
 
+#---------------------------FLOW_ACTION_FLAG-----------------------------------
+testpmd_test_flow $PRFX FLOW_FLAG "flow create 0 ingress pattern ipv4 src is \
+ 10.11.12.13 / end actions flag / queue index 0 / count / end" \
+ "pcap/eth_ipv4_tcp.pcap"
+
+if ! testpmd_check_mark_flag $PRFX; then
+	echo "FAILED: mark not set in ol_flags"
+	exit 1
+fi
+echo "FLOW_ACTION_FLAG passed"
+
 #---------------------------FLOW_ACTION_MARK-----------------------------------
 MARKID=0xdead
 
@@ -284,18 +312,6 @@ if ! testpmd_check_mark_id $PRFX $MARKID; then
 fi
 
 echo "FLOW_ACTION_MARK passed"
-#---------------------------FLOW_ACTION_FLAG-----------------------------------
-MARKID=0xfffd
-
-testpmd_test_flow $PRFX FLOW_FLAG "flow create 0 ingress pattern ipv4 src is \
- 10.11.12.13 / end actions flag / queue index 0 / count / end" \
- "pcap/eth_ipv4_tcp.pcap"
-
-if ! testpmd_check_mark_id $PRFX $MARKID; then
-	echo "FAILED: mark not set in ol_flags"
-	exit 1
-fi
-echo "FLOW_ACTION_FLAG passed"
 
 testpmd_quit  $PRFX
 echo "SUCCESS: flow regression tests completed"
