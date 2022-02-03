@@ -268,7 +268,6 @@ INTERNAL {
 	roc_nix_tm_free_resources;
 	roc_nix_tm_lvl_cnt_get;
 	roc_nix_tm_tree_type_get;
-	roc_nix_tm_get_mark_format;
 	roc_nix_tm_hierarchy_disable;
 	roc_nix_tm_hierarchy_enable;
 	roc_nix_tm_init;
@@ -277,6 +276,7 @@ INTERNAL {
 	roc_nix_tm_lvl_have_link_access;
 	roc_nix_tm_lvl_is_leaf;
 	roc_nix_tm_mark_config;
+	roc_nix_tm_mark_format_get;
 	roc_nix_tm_max_prio;
 	roc_nix_tm_node_add;
 	roc_nix_tm_node_delete;

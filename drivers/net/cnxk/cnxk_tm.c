@@ -627,8 +627,8 @@ cnxk_nix_tm_mark_vlan_dei(struct rte_eth_dev *eth_dev, int mark_green,
 		return -EBUSY;
 	}
 
-	rc = roc_nix_tm_mark_config(roc_nix, NIX_TM_MARK_VLAN_DEI, mark_yellow,
-				    mark_red);
+	rc = roc_nix_tm_mark_config(roc_nix, ROC_NIX_TM_MARK_VLAN_DEI,
+				    mark_yellow, mark_red);
 	if (rc) {
 		error->type = roc_nix_tm_err_to_rte_err(rc);
 		error->message = roc_error_msg_get(rc);
@@ -658,13 +658,13 @@ cnxk_nix_tm_mark_ip_ecn(struct rte_eth_dev *eth_dev, int mark_green,
 		return -EBUSY;
 	}
 
-	rc = roc_nix_tm_mark_config(roc_nix, NIX_TM_MARK_IPV4_ECN, mark_yellow,
-				    mark_red);
+	rc = roc_nix_tm_mark_config(roc_nix, ROC_NIX_TM_MARK_IPV4_ECN,
+				    mark_yellow, mark_red);
 	if (rc < 0)
 		goto exit;
 
-	rc = roc_nix_tm_mark_config(roc_nix, NIX_TM_MARK_IPV6_ECN, mark_yellow,
-				    mark_red);
+	rc = roc_nix_tm_mark_config(roc_nix, ROC_NIX_TM_MARK_IPV6_ECN,
+				    mark_yellow, mark_red);
 exit:
 	if (rc < 0) {
 		error->type = roc_nix_tm_err_to_rte_err(rc);
@@ -695,13 +695,13 @@ cnxk_nix_tm_mark_ip_dscp(struct rte_eth_dev *eth_dev, int mark_green,
 		return -EBUSY;
 	}
 
-	rc = roc_nix_tm_mark_config(roc_nix, NIX_TM_MARK_IPV4_DSCP, mark_yellow,
-				    mark_red);
+	rc = roc_nix_tm_mark_config(roc_nix, ROC_NIX_TM_MARK_IPV4_DSCP,
+				    mark_yellow, mark_red);
 	if (rc < 0)
 		goto exit;
 
-	rc = roc_nix_tm_mark_config(roc_nix, NIX_TM_MARK_IPV6_DSCP, mark_yellow,
-				    mark_red);
+	rc = roc_nix_tm_mark_config(roc_nix, ROC_NIX_TM_MARK_IPV6_DSCP,
+				    mark_yellow, mark_red);
 exit:
 	if (rc < 0) {
 		error->type = roc_nix_tm_err_to_rte_err(rc);

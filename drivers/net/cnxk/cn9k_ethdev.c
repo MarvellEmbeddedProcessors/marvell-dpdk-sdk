@@ -208,7 +208,7 @@ cn9k_nix_tx_queue_setup(struct rte_eth_dev *eth_dev, uint16_t qid,
 		PLT_STATIC_ASSERT(BIT_ULL(16) == ROC_NIX_INL_SA_BASE_ALIGN);
 	}
 
-	mark_fmt = roc_nix_tm_get_mark_format(&dev->nix, &mark_flag);
+	mark_fmt = roc_nix_tm_mark_format_get(&dev->nix, &mark_flag);
 	txq->mark_flag = mark_flag & CNXK_TM_MARK_MASK;
 	txq->mark_fmt = mark_fmt & CNXK_TX_MARK_FMT_MASK;
 
@@ -514,7 +514,7 @@ cn9k_nix_tm_mark_vlan_dei(struct rte_eth_dev *eth_dev, int mark_green,
 	if (rc)
 		goto exit;
 
-	mark_fmt = roc_nix_tm_get_mark_format(roc_nix, &mark_flag);
+	mark_fmt = roc_nix_tm_mark_format_get(roc_nix, &mark_flag);
 	if (mark_flag) {
 		dev->tx_offload_flags |= NIX_TX_OFFLOAD_VLAN_QINQ_F;
 		dev->tx_mark = true;
@@ -551,7 +551,7 @@ cn9k_nix_tm_mark_ip_ecn(struct rte_eth_dev *eth_dev, int mark_green,
 	if (rc)
 		goto exit;
 
-	mark_fmt = roc_nix_tm_get_mark_format(roc_nix, &mark_flag);
+	mark_fmt = roc_nix_tm_mark_format_get(roc_nix, &mark_flag);
 	if (mark_flag) {
 		dev->tx_offload_flags |= NIX_TX_OFFLOAD_VLAN_QINQ_F;
 		dev->tx_mark = true;
@@ -588,7 +588,7 @@ cn9k_nix_tm_mark_ip_dscp(struct rte_eth_dev *eth_dev, int mark_green,
 	if (rc)
 		goto exit;
 
-	mark_fmt = roc_nix_tm_get_mark_format(roc_nix, &mark_flag);
+	mark_fmt = roc_nix_tm_mark_format_get(roc_nix, &mark_flag);
 	if (mark_flag) {
 		dev->tx_offload_flags |= NIX_TX_OFFLOAD_VLAN_QINQ_F;
 		dev->tx_mark = true;

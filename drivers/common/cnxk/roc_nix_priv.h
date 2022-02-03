@@ -185,7 +185,7 @@ struct nix {
 	uint16_t discontig_rsvd[NIX_TXSCH_LVL_CNT];
 	uint64_t tm_markfmt_en;
 	uint8_t tm_markfmt_null;
-	uint8_t tm_markfmt[NIX_TM_MARK_MAX][NIX_TM_MARK_COLOR_MAX];
+	uint8_t tm_markfmt[ROC_NIX_TM_MARK_MAX][ROC_NIX_TM_MARK_COLOR_MAX];
 
 	/* Ipsec info */
 	uint16_t cpt_msixoff[MAX_RVU_BLKLF_CNT];
@@ -399,6 +399,7 @@ int nix_tm_bp_config_get(struct roc_nix *roc_nix, bool *is_enabled);
 int nix_tm_bp_config_set(struct roc_nix *roc_nix, uint16_t sq, uint16_t tc,
 			 bool enable);
 void nix_rq_vwqe_flush(struct roc_nix_rq *rq, uint16_t vwqe_interval);
+int nix_tm_mark_init(struct nix *nix);
 
 /*
  * TM priv utils.
