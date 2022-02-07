@@ -214,7 +214,7 @@ def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinko
 				export CFLAGS="${copt}"
 				export LDFLAGS="${clinkopt}"
 				MAKE_J=\$(nproc --all)
-				MAKE_J=\$((MAKE_J / 2))
+				MAKE_J=\$((MAKE_J / 4))
 				./marvell-ci/build/build.sh \
 					-b ./marvell-ci/build/env/${arch}-${compiler}.env \
 					-r ${build_dir} \
