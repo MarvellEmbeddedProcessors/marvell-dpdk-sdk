@@ -307,6 +307,8 @@ nix_init_flow_ctrl_config(struct rte_eth_dev *eth_dev)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 	enum roc_nix_fc_mode fc_mode = ROC_NIX_FC_FULL;
+	struct cnxk_fc_cfg *fc = &dev->fc_cfg;
+	int rc;
 
 	/* To avoid Link credit deadlock on Ax, disable Tx FC if it's enabled */
 	if (roc_model_is_cn96_ax() &&
@@ -314,7 +316,13 @@ nix_init_flow_ctrl_config(struct rte_eth_dev *eth_dev)
 		fc_mode = ROC_NIX_FC_TX;
 
 	/* By default enable flow control */
-	return roc_nix_fc_mode_set(&dev->nix, fc_mode);
+	rc = roc_nix_fc_mode_set(&dev->nix, fc_mode);
+	if (rc)
+		return rc;
+
+	fc->mode = (fc_mode == ROC_NIX_FC_FULL) ? RTE_ETH_FC_FULL :
+						  RTE_ETH_FC_TX_PAUSE;
+	return rc;
 }
 
 static int
