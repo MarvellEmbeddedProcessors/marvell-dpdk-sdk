@@ -333,8 +333,7 @@ cnxk_nix_priority_flow_ctrl_queue_info_get(struct rte_eth_dev *eth_dev,
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 
 	pfc_info->tc_max = roc_nix_chan_count_get(&dev->nix);
-	pfc_info->capa = RTE_ETH_PFC_QUEUE_CAPA_RX_PAUSE |
-			 RTE_ETH_PFC_QUEUE_CAPA_TX_PAUSE;
+	pfc_info->mode_capa = RTE_ETH_FC_FULL;
 	return 0;
 }
 

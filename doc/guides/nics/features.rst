@@ -384,7 +384,8 @@ Supports configuring link flow control.
 * **[related]    API**: ``rte_eth_dev_flow_ctrl_get()``, ``rte_eth_dev_flow_ctrl_set()``,
   ``rte_eth_dev_priority_flow_ctrl_set()``,
   ``rte_eth_dev_priority_flow_ctrl_queue_info_get()``,
-  ``rte_eth_dev_priority_flow_ctrl_queue_configure()``
+  ``rte_eth_dev_priority_flow_ctrl_queue_configure()``.
+
 
 .. _nic_features_rate_limitation:
 

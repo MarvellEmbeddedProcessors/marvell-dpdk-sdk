@@ -1395,11 +1395,6 @@ struct rte_eth_pfc_conf {
 	uint8_t priority;          /**< VLAN User Priority. */
 };
 
-/** Device supports Rx pause for queue based PFC. */
-#define RTE_ETH_PFC_QUEUE_CAPA_RX_PAUSE RTE_BIT64(0)
-/** Device supports Tx pause for queue based PFC. */
-#define RTE_ETH_PFC_QUEUE_CAPA_TX_PAUSE RTE_BIT64(1)
-
 /**
  * @warning
  * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
@@ -1411,29 +1406,45 @@ struct rte_eth_pfc_queue_info {
 	 * Maximum supported traffic class as per PFC (802.1Qbb) specification.
 	 */
 	uint8_t tc_max;
-	/** PFC queue capabilities (RTE_ETH_PFC_QUEUE_CAPA_). */
-	uint64_t capa;
+	/** PFC queue mode capabilities. */
+	enum rte_eth_fc_mode mode_capa;
 };
 
 /**
  * @warning
  * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
  *
- * A structure used to configure Ethernet priority flow control parameter for
+ * A structure used to configure Ethernet priority flow control parameters for
  * ethdev queues.
+ *
+ * rte_eth_pfc_queue_conf::rx_pause structure shall be used to configure given
+ * tx_qid with corresponding tc. When ethdev device receives PFC frame with
+ * rte_eth_pfc_queue_conf::rx_pause::tc, traffic will be paused on
+ * rte_eth_pfc_queue_conf::rx_pause::tx_qid for that tc.
+ *
+ * rte_eth_pfc_queue_conf::tx_pause structure shall be used to configure given
+ * rx_qid. When rx_qid is congested, PFC frames are generated with
+ * rte_eth_pfc_queue_conf::rx_pause::tc and
+ * rte_eth_pfc_queue_conf::rx_pause::pause_time to the peer.
  */
 struct rte_eth_pfc_queue_conf {
 	enum rte_eth_fc_mode mode; /**< Link flow control mode */
 
 	struct {
 		uint16_t tx_qid; /**< Tx queue ID */
-		uint8_t tc; /**< Traffic class as per PFC (802.1Qbb) spec */
+		/** Traffic class as per PFC (802.1Qbb) spec. The value must be
+		 * in the range [0, rte_eth_pfc_queue_info::tx_max - 1]
+		 */
+		uint8_t tc;
 	} rx_pause; /* Valid when (mode == FC_RX_PAUSE || mode == FC_FULL) */
 
 	struct {
 		uint16_t pause_time; /**< Pause quota in the Pause frame */
 		uint16_t rx_qid;     /**< Rx queue ID */
-		uint8_t tc; /**< Traffic class as per PFC (802.1Qbb) spec */
+		/** Traffic class as per PFC (802.1Qbb) spec. The value must be
+		 * in the range [0, rte_eth_pfc_queue_info::tx_max - 1]
+		 */
+		uint8_t tc;
 	} tx_pause; /* Valid when (mode == FC_TX_PAUSE || mode == FC_FULL) */
 };
 
@@ -4205,7 +4216,8 @@ int rte_eth_dev_mac_addr_add(uint16_t port_id, struct rte_ether_addr *mac_addr,
  */
 __rte_experimental
 int rte_eth_dev_priority_flow_ctrl_queue_info_get(uint16_t port_id,
-				   struct rte_eth_pfc_queue_info *pfc_queue_info);
+		struct rte_eth_pfc_queue_info *pfc_queue_info);
+
 /**
  * @warning
  * @b EXPERIMENTAL: this API may change without prior notice.
@@ -4231,7 +4243,8 @@ int rte_eth_dev_priority_flow_ctrl_queue_info_get(uint16_t port_id,
  */
 __rte_experimental
 int rte_eth_dev_priority_flow_ctrl_queue_configure(uint16_t port_id,
-			      struct rte_eth_pfc_queue_conf *pfc_queue_conf);
+		struct rte_eth_pfc_queue_conf *pfc_queue_conf);
+
 
 /**
  * Remove a MAC address from the internal array of addresses.
