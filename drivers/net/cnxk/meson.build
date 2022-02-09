@@ -19,7 +19,7 @@ sources = files(
         'cnxk_link.c',
         'cnxk_lookup.c',
         'cnxk_ptp.c',
-        'cnxk_rte_flow.c',
+        'cnxk_flow.c',
         'cnxk_stats.c',
         'cnxk_tm.c',
 )
