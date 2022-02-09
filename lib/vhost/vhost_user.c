@@ -489,8 +489,7 @@ vhost_user_set_vring_num(struct virtio_net **pdev,
 	}
 
 	if (vq_is_packed(dev)) {
-		if (vq->shadow_used_packed)
-			rte_free(vq->shadow_used_packed);
+		rte_free(vq->shadow_used_packed);
 		vq->shadow_used_packed = rte_malloc_socket(NULL,
 				vq->size *
 				sizeof(struct vring_used_elem_packed),
@@ -502,8 +501,7 @@ vhost_user_set_vring_num(struct virtio_net **pdev,
 		}
 
 	} else {
-		if (vq->shadow_used_split)
-			rte_free(vq->shadow_used_split);
+		rte_free(vq->shadow_used_split);
 
 		vq->shadow_used_split = rte_malloc_socket(NULL,
 				vq->size * sizeof(struct vring_used_elem),
@@ -516,8 +514,7 @@ vhost_user_set_vring_num(struct virtio_net **pdev,
 		}
 	}
 
-	if (vq->batch_copy_elems)
-		rte_free(vq->batch_copy_elems);
+	rte_free(vq->batch_copy_elems);
 	vq->batch_copy_elems = rte_malloc_socket(NULL,
 				vq->size * sizeof(struct batch_copy_elem),
 				RTE_CACHE_LINE_SIZE, vq->numa_node);

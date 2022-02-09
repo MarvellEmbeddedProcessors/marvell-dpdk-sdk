@@ -6179,8 +6179,7 @@ rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_da)
 	}
 
 parse_cleanup:
-	if (args.str)
-		free(args.str);
+	free(args.str);
 
 	return result;
 }

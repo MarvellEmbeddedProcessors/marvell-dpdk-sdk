@@ -730,8 +730,7 @@ eal_parse_args(int argc, char **argv)
 				RTE_LOG(ERR, EAL, "Could not store hugepage directory\n");
 			else {
 				/* free old hugepage dir */
-				if (internal_conf->hugepage_dir != NULL)
-					free(internal_conf->hugepage_dir);
+				free(internal_conf->hugepage_dir);
 				internal_conf->hugepage_dir = hdir;
 			}
 			break;
@@ -743,8 +742,7 @@ eal_parse_args(int argc, char **argv)
 				RTE_LOG(ERR, EAL, "Could not store file prefix\n");
 			else {
 				/* free old prefix */
-				if (internal_conf->hugefile_prefix != NULL)
-					free(internal_conf->hugefile_prefix);
+				free(internal_conf->hugefile_prefix);
 				internal_conf->hugefile_prefix = prefix;
 			}
 			break;
@@ -804,9 +802,7 @@ eal_parse_args(int argc, char **argv)
 				RTE_LOG(ERR, EAL, "Could not store mbuf pool ops name\n");
 			else {
 				/* free old ops name */
-				if (internal_conf->user_mbuf_pool_ops_name !=
-						NULL)
-					free(internal_conf->user_mbuf_pool_ops_name);
+				free(internal_conf->user_mbuf_pool_ops_name);
 
 				internal_conf->user_mbuf_pool_ops_name =
 						ops_name;

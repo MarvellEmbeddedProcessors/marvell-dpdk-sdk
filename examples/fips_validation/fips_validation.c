@@ -364,8 +364,7 @@ fips_test_clear(void)
 		fclose(info.fp_rd);
 	if (info.fp_wr)
 		fclose(info.fp_wr);
-	if (info.one_line_text)
-		free(info.one_line_text);
+	free(info.one_line_text);
 	if (info.nb_vec_lines) {
 		uint32_t i;
 
