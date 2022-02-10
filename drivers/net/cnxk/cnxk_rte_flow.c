@@ -315,13 +315,6 @@ cnxk_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 	int errcode = 0;
 	int rc;
 
-	if (eth_dev->data->dev_started == 0) {
-		rte_flow_error_set(error, ENODEV,
-				   RTE_FLOW_ERROR_TYPE_UNSPECIFIED, NULL,
-				   "port not started");
-		return NULL;
-	}
-
 	rc = cnxk_map_flow_data(eth_dev, attr, pattern, actions, &in_attr,
 				in_pattern, in_actions,
 				&npc->flowkey_cfg_state);
