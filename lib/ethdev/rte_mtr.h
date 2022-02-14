@@ -214,6 +214,80 @@ struct rte_mtr_meter_policy_params {
 };
 
 /**
+ * Input color method
+ */
+enum rte_mtr_input_color_method {
+	/**
+	 * The input color is always green.
+	 * The default_input_color is ignored for this method.
+	 * @see struct rte_mtr_params::default_input_color
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_COLOR_BLIND  = RTE_BIT64(0),
+	/**
+	 * If the input packet has at least one VLAN label, its input color is
+	 * detected by the outermost VLAN DEI(1bit), PCP(3 bits)
+	 * indexing into the struct rte_mtr_params::vlan_table.
+	 * Otherwise, the default_input_color is applied.
+	 * @see struct rte_mtr_params::default_input_color
+	 * @see struct rte_mtr_params::vlan_table
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_VLAN = RTE_BIT64(1),
+	/**
+	 * If the input packet is IPv4 or IPv6, its input color is detected by
+	 * the outermost DSCP field indexing into the
+	 * struct rte_mtr_params::dscp_table.
+	 * Otherwise, the default_input_color is applied.
+	 * @see struct rte_mtr_params::default_input_color
+	 * @see struct rte_mtr_params::dscp_table
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_DSCP = RTE_BIT64(2),
+	/**
+	 * If the input packet has at least one VLAN label, its input color is
+	 * detected by the outermost VLAN DEI(1bit), PCP(3 bits)
+	 * indexing into the struct rte_mtr_params::vlan_table.
+	 * If the input packet is IPv4 or IPv6, its input color is detected by
+	 * the outermost DSCP field indexing into the
+	 * struct rte_mtr_params::dscp_table.
+	 * Otherwise, the default_input_color is applied.
+	 * @see struct rte_mtr_params::default_input_color
+	 * @see struct rte_mtr_params::vlan_table
+	 * @see struct rte_mtr_params::dscp_table
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP = RTE_BIT64(3),
+	/**
+	 * If the input packet has at least one VLAN label, its input color is
+	 * detected by the innermost VLAN DEI(1bit), PCP(3 bits)
+	 * indexing into the struct rte_mtr_params::vlan_table.
+	 * Otherwise, the default_input_color is applied.
+	 * @see struct rte_mtr_params::default_input_color
+	 * @see struct rte_mtr_params::vlan_table
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN = RTE_BIT64(4),
+	/**
+	 * If the input packet is IPv4 or IPv6, its input color is detected by
+	 * the innermost DSCP field indexing into the
+	 * struct rte_mtr_params::dscp_table.
+	 * Otherwise, the default_input_color is applied.
+	 * @see struct rte_mtr_params::default_input_color
+	 * @see struct rte_mtr_params::dscp_table
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_INNER_DSCP = RTE_BIT64(5),
+	/**
+	 * If the input packet has at least one VLAN label, its input color is
+	 * detected by the innermost VLAN DEI(1bit), PCP(3 bits)
+	 * indexing into the struct rte_mtr_params::vlan_table.
+	 * If the input packet is IPv4 or IPv6, its input color is detected by
+	 * the innermost DSCP field indexing into the
+	 * struct rte_mtr_params::dscp_table.
+	 * Otherwise, the default_input_color is applied.
+	 * @see struct rte_mtr_params::default_input_color
+	 * @see struct rte_mtr_params::vlan_table
+	 * @see struct rte_mtr_params::dscp_table
+	 */
+	RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP = RTE_BIT64(6),
+};
+
+/**
  * Parameters for each traffic metering & policing object
  *
  * @see enum rte_mtr_stats_type
@@ -233,7 +307,15 @@ struct rte_mtr_params {
 	 */
 	int use_prev_mtr_color;
 
-	/** Meter input color. When non-NULL: it points to a pre-allocated and
+	/** Meter input color based on IP DSCP field.
+	 *
+	 * Valid when input_color_method set to any of the following
+	 * RTE_MTR_INPUT_COLOR_METHOD_DSCP,
+	 * RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP,
+	 * RTE_MTR_INPUT_COLOR_METHOD_INNER_DSCP,
+	 * RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP
+	 *
+	 * When non-NULL: it points to a pre-allocated and
 	 * pre-populated table with exactly 64 elements providing the input
 	 * color for each value of the IPv4/IPv6 Differentiated Services Code
 	 * Point (DSCP) input packet field. When NULL: it is equivalent to
@@ -244,9 +326,39 @@ struct rte_mtr_params {
 	 * *use_prev_mtr_color* is non-zero value or when *dscp_table* contains
 	 * at least one yellow or red color element, then the color aware mode
 	 * is configured.
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_DSCP
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_INNER_DSCP
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP
+	 * @see struct rte_mtr_params::input_color_method
 	 */
 	enum rte_color *dscp_table;
-
+	/** Meter input color based on VLAN DEI(1bit), PCP(3 bits) fields.
+	 *
+	 * Valid when input_color_method set to any of the following
+	 * RTE_MTR_INPUT_COLOR_METHOD_VLAN,
+	 * RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP,
+	 * RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN,
+	 * RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP
+	 *
+	 * When non-NULL: it points to a pre-allocated and pre-populated
+	 * table with exactly 16 elements providing the input color for
+	 * each value of the DEI(1bit), PCP(3 bits) input packet field.
+	 * When NULL: it is equivalent to setting this parameter to an
+	 * all-green populated table (i.e. table with
+	 * all the 16 elements set to green color). The color blind mode
+	 * is configured by setting *use_prev_mtr_color* to 0 and
+	 * *vlan_table* to either NULL or to an all-green
+	 * populated table. When *use_prev_mtr_color* is non-zero value
+	 * or when *vlan_table* contains at least one yellow or
+	 * red color element, then the color aware mode is configured.
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_VLAN
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN
+	 * @see enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP
+	 * @see struct rte_mtr_params::input_color_method
+	 */
+	enum rte_color *vlan_table;
 	/** Non-zero to enable the meter, zero to disable the meter at the time
 	 * of MTR object creation. Ignored when the meter profile indicated by
 	 * *meter_profile_id* is set to NONE.
@@ -261,6 +373,20 @@ struct rte_mtr_params {
 
 	/** Meter policy ID. @see rte_mtr_meter_policy_add() */
 	uint32_t meter_policy_id;
+
+	/** Input color method to select.
+	 * @see struct rte_mtr_params::dscp_table
+	 * @see struct rte_mtr_params::vlan_table
+	 */
+	enum rte_mtr_input_color_method input_color_method;
+
+	/** Input color to be set for the input packet when none of the
+	 * enabled input color methods is applicable to the input packet.
+	 * Ignored when this method is set to the
+	 * enum rte_mtr_input_color_method::RTE_MTR_INPUT_COLOR_METHOD_COLOR_BLIND
+	 * method.
+	 */
+	enum rte_color default_input_color;
 };
 
 /**
@@ -417,6 +543,16 @@ struct rte_mtr_capabilities {
 	 * @see enum rte_mtr_stats_type
 	 */
 	uint64_t stats_mask;
+
+	/** Set of supported input color methods.
+	 * @see enum rte_mtr_input_color_method
+	 */
+	uint64_t methods_mask;
+
+	/** When non-zero, it indicates that driver supports separate
+	 * input color table for given ethdev port.
+	 */
+	int separate_input_color_table_per_port;
 };
 
 /**
@@ -832,6 +968,30 @@ rte_mtr_meter_dscp_table_update(uint16_t port_id,
 	enum rte_color *dscp_table,
 	struct rte_mtr_error *error);
 
+/**
+ * MTR object VLAN table update
+ *
+ * @param[in] port_id
+ *   The port identifier of the Ethernet device.
+ * @param[in] mtr_id
+ *   MTR object ID. Needs to be valid.
+ * @param[in] vlan_table
+ *   When non-NULL: it points to a pre-allocated and pre-populated table with
+ *   exactly 16 elements providing the input color for each value of the
+ *   each value of the DEI(1bit), PCP(3 bits) input packet field.
+ *   When NULL: it is equivalent to setting this parameter to an "all-green"
+ *   populated table (i.e. table with all the 16 elements set to green color).
+ * @param[out] error
+ *   Error details. Filled in only on error, when not NULL.
+ * @return
+ *   0 on success, non-zero error code otherwise.
+ */
+__rte_experimental
+int
+rte_mtr_meter_vlan_table_update(uint16_t port_id,
+	uint32_t mtr_id,
+	enum rte_color *vlan_table,
+	struct rte_mtr_error *error);
 /**
  * MTR object enabled statistics counters update
  *

@@ -21,6 +21,7 @@ The main features are:
 * Policer actions (per meter output color): recolor, drop
 * Statistics (per policer output color)
 * Chaining multiple meter objects
+* Packet content based input color selection
 
 Configuration steps
 -------------------
@@ -105,3 +106,30 @@ traffic meter and policing library.
    * Adding one (or multiple) actions of the type ``RTE_FLOW_ACTION_TYPE_METER``
      to the list of meter actions (``struct rte_mtr_meter_policy_params::actions``)
      specified per color as show in :numref:`figure_rte_mtr_chaining`.
+
+Packet content based input color selection
+------------------------------------------
+
+The API supports selecting the input color based on the packet content.
+Following is the API usage model for the same.
+
+#. Probe the input color selection device capabilities using following
+   parameter using ``rte_mtr_capabilities_get()`` API
+   ``struct rte_mtr_capabilities::methods_mask`` and
+   ``struct rte_mtr_capabilitie::separate_input_color_table_per_port``
+
+#. When creating the meter object using ``rte_mtr_create()``, configure
+   relevant input color selection parameters such as
+
+   * Select the input color method ``struct rte_mtr_params::input_color_method``
+
+   * Fill the tables ``struct rte_mtr_params::dscp_table``,
+     ``struct rte_mtr_params::dscp_table`` based on input color selected
+
+   * Update the ``struct rte_mtr_params::default_input_color`` to determine
+     the default input color in case the input packet does not match
+     the input color method
+
+   * If needed, update the input color table at runtime using
+     ``rte_mtr_meter_vlan_table_update()`` and ``rte_mtr_meter_dscp_table_update()``
+     APIs.

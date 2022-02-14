@@ -207,6 +207,18 @@ rte_mtr_meter_dscp_table_update(uint16_t port_id,
 		mtr_id, dscp_table, error);
 }
 
+/** MTR object meter VLAN table update */
+int
+rte_mtr_meter_vlan_table_update(uint16_t port_id,
+	uint32_t mtr_id,
+	enum rte_color *vlan_table,
+	struct rte_mtr_error *error)
+{
+	struct rte_eth_dev *dev = &rte_eth_devices[port_id];
+	return RTE_MTR_FUNC(port_id, meter_vlan_table_update)(dev,
+		mtr_id, vlan_table, error);
+}
+
 /** MTR object enabled stats update */
 int
 rte_mtr_stats_update(uint16_t port_id,

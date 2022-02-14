@@ -263,6 +263,9 @@ EXPERIMENTAL {
 	rte_eth_ip_reassembly_capability_get;
 	rte_eth_ip_reassembly_conf_get;
 	rte_eth_ip_reassembly_conf_set;
+
+	# added in 22.07
+	rte_mtr_meter_vlan_table_update;
 };
 
 INTERNAL {
