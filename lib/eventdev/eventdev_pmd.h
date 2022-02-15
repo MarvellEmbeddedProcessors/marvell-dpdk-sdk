@@ -338,6 +338,26 @@ typedef void (*eventdev_queue_release_t)(struct rte_eventdev *dev,
 		uint8_t queue_id);
 
 /**
+ * Set an event queue attribute at runtime.
+ *
+ * @param dev
+ *   Event device pointer
+ * @param queue_id
+ *   Event queue index
+ * @param attr_id
+ *   Event queue attribute id
+ * @param attr_value
+ *   Event queue attribute value
+ *
+ * @return
+ *  - 0: Success.
+ *  - <0: Error code on failure.
+ */
+typedef int (*eventdev_queue_attr_set_t)(struct rte_eventdev *dev,
+					 uint8_t queue_id, uint32_t attr_id,
+					 uint32_t attr_value);
+
+/**
  * Retrieve the default event port configuration.
  *
  * @param dev
@@ -1207,6 +1227,8 @@ struct eventdev_ops {
 	/**< Set up an event queue. */
 	eventdev_queue_release_t queue_release;
 	/**< Release an event queue. */
+	eventdev_queue_attr_set_t queue_attr_set;
+	/**< Set an event queue attribute. */
 
 	eventdev_port_default_conf_get_t port_def_conf;
 	/**< Get default port configuration. */

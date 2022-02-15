@@ -227,7 +227,7 @@ struct rte_event;
 /**< Event scheduling prioritization is based on the priority associated with
  *  each event queue.
  *
- *  @see rte_event_queue_setup()
+ *  @see rte_event_queue_setup(), rte_event_queue_attr_set()
  */
 #define RTE_EVENT_DEV_CAP_EVENT_QOS           (1ULL << 1)
 /**< Event scheduling prioritization is based on the priority associated with
@@ -307,6 +307,13 @@ struct rte_event;
  * on a port. This will allow the event device to perform internal
  * processing, such as flushing buffered events, return credits to a
  * global pool, or process signaling related to load balancing.
+ */
+
+#define RTE_EVENT_DEV_CAP_RUNTIME_QUEUE_ATTR (1ULL << 11)
+/**< Event device is capable of changing the queue attributes at runtime i.e after
+ * rte_event_queue_setup() or rte_event_start() call sequence. If this flag is
+ * not set, eventdev queue attributes can only be configured during
+ * rte_event_queue_setup().
  */
 
 /* Event device priority levels */
@@ -681,6 +688,11 @@ rte_event_queue_setup(uint8_t dev_id, uint8_t queue_id,
 #define RTE_EVENT_QUEUE_ATTR_SCHEDULE_TYPE 4
 
 /**
+ * Maximum supported attribute ID.
+ */
+#define RTE_EVENT_QUEUE_ATTR_MAX RTE_EVENT_QUEUE_ATTR_SCHEDULE_TYPE
+
+/**
  * Get an attribute from a queue.
  *
  * @param dev_id
@@ -703,6 +715,30 @@ rte_event_queue_setup(uint8_t dev_id, uint8_t queue_id,
 int
 rte_event_queue_attr_get(uint8_t dev_id, uint8_t queue_id, uint32_t attr_id,
 			uint32_t *attr_value);
+
+/**
+ * Set an event queue attribute.
+ *
+ * @param dev_id
+ *   Eventdev id
+ * @param queue_id
+ *   Eventdev queue id
+ * @param attr_id
+ *   The attribute ID to set
+ * @param attr_value
+ *   The attribute value to set
+ *
+ * @return
+ *   - 0: Successfully set attribute.
+ *   - -EINVAL: invalid device, queue or attr_id.
+ *   - -ENOTSUP: device does not support setting event attribute.
+ *   - -EBUSY: device is in running state
+ *   - <0: failed to set event queue attribute
+ */
+__rte_experimental
+int
+rte_event_queue_attr_set(uint8_t dev_id, uint8_t queue_id, uint32_t attr_id,
+			 uint32_t attr_value);
 
 /* Event port specific APIs */
 
