@@ -224,8 +224,14 @@ struct rte_event;
 
 /* Event device capability bitmap flags */
 #define RTE_EVENT_DEV_CAP_QUEUE_QOS           (1ULL << 0)
-/**< Event scheduling prioritization is based on the priority associated with
- *  each event queue.
+/**< Event scheduling prioritization is based on the priority and weight
+ * associated with each event queue. Events from a queue with highest priority
+ * is scheduled first. If the queues are of same priority, a queue with highest
+ * weight is selected. Subsequent schedules from an event port could see events
+ * from the same event queue if the queue is configured with an affinity count.
+ * Affinity count of a queue indicates the number of times, the subsequent
+ * schedule calls from an event port should use the same queue if the queue is
+ * non-empty.
  *
  *  @see rte_event_queue_setup(), rte_event_queue_attr_set()
  */
@@ -331,6 +337,26 @@ struct rte_event;
 /**< Lowest priority expressed across eventdev subsystem
  * @see rte_event_queue_setup(), rte_event_enqueue_burst()
  * @see rte_event_port_link()
+ */
+
+/* Event queue scheduling weights */
+#define RTE_EVENT_QUEUE_WEIGHT_HIGHEST   255
+/**< Highest weight of an event queue
+ * @see rte_event_queue_attr_get(), rte_event_queue_attr_set()
+ */
+#define RTE_EVENT_QUEUE_WEIGHT_LOWEST    0
+/**< Lowest weight of an event queue
+ * @see rte_event_queue_attr_get(), rte_event_queue_attr_set()
+ */
+
+/* Event queue scheduling affinity */
+#define RTE_EVENT_QUEUE_AFFINITY_HIGHEST   255
+/**< Highest scheduling affinity of an event queue
+ * @see rte_event_queue_attr_get(), rte_event_queue_attr_set()
+ */
+#define RTE_EVENT_QUEUE_AFFINITY_LOWEST    0
+/**< Lowest scheduling affinity of an event queue
+ * @see rte_event_queue_attr_get(), rte_event_queue_attr_set()
  */
 
 /**
@@ -686,11 +712,18 @@ rte_event_queue_setup(uint8_t dev_id, uint8_t queue_id,
  * The schedule type of the queue.
  */
 #define RTE_EVENT_QUEUE_ATTR_SCHEDULE_TYPE 4
-
+/**
+ * The weight of the queue.
+ */
+#define RTE_EVENT_QUEUE_ATTR_WEIGHT 5
+/**
+ * Affinity of the queue.
+ */
+#define RTE_EVENT_QUEUE_ATTR_AFFINITY 6
 /**
  * Maximum supported attribute ID.
  */
-#define RTE_EVENT_QUEUE_ATTR_MAX RTE_EVENT_QUEUE_ATTR_SCHEDULE_TYPE
+#define RTE_EVENT_QUEUE_ATTR_MAX RTE_EVENT_QUEUE_ATTR_AFFINITY
 
 /**
  * Get an attribute from a queue.
