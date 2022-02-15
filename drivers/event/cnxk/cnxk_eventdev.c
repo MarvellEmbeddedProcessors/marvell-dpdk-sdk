@@ -120,7 +120,8 @@ cnxk_sso_info_get(struct cnxk_sso_evdev *dev,
 				  RTE_EVENT_DEV_CAP_MULTIPLE_QUEUE_PORT |
 				  RTE_EVENT_DEV_CAP_NONSEQ_MODE |
 				  RTE_EVENT_DEV_CAP_CARRY_FLOW_ID |
-				  RTE_EVENT_DEV_CAP_MAINTENANCE_FREE;
+				  RTE_EVENT_DEV_CAP_MAINTENANCE_FREE |
+				  RTE_EVENT_DEV_CAP_RUNTIME_QUEUE_ATTR;
 }
 
 int
@@ -300,11 +301,28 @@ cnxk_sso_queue_setup(struct rte_eventdev *event_dev, uint8_t queue_id,
 		     const struct rte_event_queue_conf *queue_conf)
 {
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+	uint8_t priority, weight, affinity;
 
-	plt_sso_dbg("Queue=%d prio=%d", queue_id, queue_conf->priority);
-	/* Normalize <0-255> to <0-7> */
-	return roc_sso_hwgrp_set_priority(&dev->sso, queue_id, 0xFF, 0xFF,
-					  queue_conf->priority / 32);
+	/* Default weight and affinity */
+	dev->mlt_prio[queue_id].weight = RTE_EVENT_QUEUE_WEIGHT_HIGHEST;
+	dev->mlt_prio[queue_id].affinity = RTE_EVENT_QUEUE_AFFINITY_HIGHEST;
+
+	/* Normalize <0-255> */
+	priority = CNXK_QOS_NORMALIZE(queue_conf->priority,
+				      RTE_EVENT_DEV_PRIORITY_LOWEST,
+				      CNXK_SSO_PRIORITY_CNT);
+	weight = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].weight,
+				    RTE_EVENT_QUEUE_WEIGHT_HIGHEST,
+				    CNXK_SSO_WEIGHT_CNT);
+	affinity = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].affinity,
+				      RTE_EVENT_QUEUE_AFFINITY_HIGHEST,
+				      CNXK_SSO_AFFINITY_CNT);
+
+	plt_sso_dbg("Queue=%u prio=%u weight=%u affinity=%u", queue_id,
+		    priority, weight, affinity);
+
+	return roc_sso_hwgrp_set_priority(&dev->sso, queue_id, weight, affinity,
+					  priority);
 }
 
 void
@@ -312,6 +330,58 @@ cnxk_sso_queue_release(struct rte_eventdev *event_dev, uint8_t queue_id)
 {
 	RTE_SET_USED(event_dev);
 	RTE_SET_USED(queue_id);
+}
+
+int
+cnxk_sso_queue_attribute_get(struct rte_eventdev *event_dev, uint8_t queue_id,
+			     uint32_t attr_id, uint32_t *attr_value)
+{
+	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+
+	*attr_value = attr_id == RTE_EVENT_QUEUE_ATTR_WEIGHT ?
+			      dev->mlt_prio[queue_id].weight :
+			      dev->mlt_prio[queue_id].affinity;
+
+	return 0;
+}
+
+int
+cnxk_sso_queue_attribute_set(struct rte_eventdev *event_dev, uint8_t queue_id,
+			     uint32_t attr_id, uint32_t attr_value)
+{
+	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+	uint8_t priority, weight, affinity;
+	struct rte_event_queue_conf *conf;
+
+	conf = &event_dev->data->queues_cfg[queue_id];
+
+	switch (attr_id) {
+	case RTE_EVENT_QUEUE_ATTR_PRIORITY:
+		conf->priority = attr_value;
+		break;
+	case RTE_EVENT_QUEUE_ATTR_WEIGHT:
+		dev->mlt_prio[queue_id].weight = attr_value;
+		break;
+	case RTE_EVENT_QUEUE_ATTR_AFFINITY:
+		dev->mlt_prio[queue_id].affinity = attr_value;
+		break;
+	default:
+		plt_sso_dbg("Ignore setting attribute id %u", attr_id);
+		return 0;
+	}
+
+	priority = CNXK_QOS_NORMALIZE(conf->priority,
+				      RTE_EVENT_DEV_PRIORITY_LOWEST,
+				      CNXK_SSO_PRIORITY_CNT);
+	weight = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].weight,
+				    RTE_EVENT_QUEUE_WEIGHT_HIGHEST,
+				    CNXK_SSO_WEIGHT_CNT);
+	affinity = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].affinity,
+				      RTE_EVENT_QUEUE_AFFINITY_HIGHEST,
+				      CNXK_SSO_AFFINITY_CNT);
+
+	return roc_sso_hwgrp_set_priority(&dev->sso, queue_id, weight, affinity,
+					  priority);
 }
 
 void
