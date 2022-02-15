@@ -259,7 +259,7 @@ function configure_vm0()
 	ip netns exec vm0 ip addr add 192.168.$X.2/24 dev $LBK1
 	ip netns exec vm0 ip addr add 1.1.$Y.1/24 dev $LBK1:1
 	ip netns exec vm0 ip link set $LBK1 up
-	ip netns exec vm0 ifconfig $LBK1 hw ether $VM0_MAC
+	ip netns exec vm0 ip link set $LBK1 address $VM0_MAC
 	ip netns exec vm0 ip route add 192.168.$Y.0/24 via 192.168.$X.1
 	ip netns exec vm0 arp -s 192.168.$X.1 $VM0_MAC
 	ip netns exec vm0 arp -s 1.1.$Y.2 $VM0_MAC
@@ -275,7 +275,7 @@ function configure_vm2()
 	ip netns exec vm2 ip addr add 192.168.$Y.2/24 dev $LBK3
 	ip netns exec vm2 ip link set $LBK3 up
 	ip netns exec vm2 ip link set lo up
-	ip netns exec vm2 ifconfig $LBK3 hw ether $VM2_MAC
+	ip netns exec vm2 ip link set $LBK3 address $VM2_MAC
 	ip netns exec vm2 ip route add 192.168.$X.0/24 via 192.168.$Y.1
 	ip netns exec vm2 arp -s 192.168.$Y.1 $VM2_MAC
 }
