@@ -375,6 +375,146 @@ test_eventdev_queue_attr_priority(void)
 }
 
 static int
+test_eventdev_queue_attr_priority_runtime(void)
+{
+	struct rte_event_queue_conf qconf;
+	struct rte_event_dev_info info;
+	uint32_t queue_count;
+	int i, ret;
+
+	ret = rte_event_dev_info_get(TEST_DEV_ID, &info);
+	TEST_ASSERT_SUCCESS(ret, "Failed to get event dev info");
+
+	if (!(info.event_dev_cap & RTE_EVENT_DEV_CAP_RUNTIME_QUEUE_ATTR))
+		return TEST_SKIPPED;
+
+	TEST_ASSERT_SUCCESS(rte_event_dev_attr_get(
+				    TEST_DEV_ID, RTE_EVENT_DEV_ATTR_QUEUE_COUNT,
+				    &queue_count),
+			    "Queue count get failed");
+
+	for (i = 0; i < (int)queue_count; i++) {
+		ret = rte_event_queue_default_conf_get(TEST_DEV_ID, i, &qconf);
+		TEST_ASSERT_SUCCESS(ret, "Failed to get queue%d def conf", i);
+		ret = rte_event_queue_setup(TEST_DEV_ID, i, &qconf);
+		TEST_ASSERT_SUCCESS(ret, "Failed to setup queue%d", i);
+	}
+
+	for (i = 0; i < (int)queue_count; i++) {
+		uint32_t attr_val, tmp;
+
+		attr_val = i % RTE_EVENT_DEV_PRIORITY_LOWEST;
+		TEST_ASSERT_SUCCESS(
+			rte_event_queue_attr_set(TEST_DEV_ID, i,
+						 RTE_EVENT_QUEUE_ATTR_PRIORITY,
+						 attr_val),
+			"Queue priority set failed");
+		TEST_ASSERT_SUCCESS(
+			rte_event_queue_attr_get(TEST_DEV_ID, i,
+						 RTE_EVENT_QUEUE_ATTR_PRIORITY,
+						 &tmp),
+			"Queue priority get failed");
+		TEST_ASSERT_EQUAL(tmp, attr_val,
+				  "Wrong priority value for queue%d", i);
+	}
+
+	return TEST_SUCCESS;
+}
+
+static int
+test_eventdev_queue_attr_weight_runtime(void)
+{
+	struct rte_event_queue_conf qconf;
+	struct rte_event_dev_info info;
+	uint32_t queue_count;
+	int i, ret;
+
+	ret = rte_event_dev_info_get(TEST_DEV_ID, &info);
+	TEST_ASSERT_SUCCESS(ret, "Failed to get event dev info");
+
+	if (!(info.event_dev_cap & RTE_EVENT_DEV_CAP_RUNTIME_QUEUE_ATTR))
+		return TEST_SKIPPED;
+
+	TEST_ASSERT_SUCCESS(rte_event_dev_attr_get(
+				    TEST_DEV_ID, RTE_EVENT_DEV_ATTR_QUEUE_COUNT,
+				    &queue_count),
+			    "Queue count get failed");
+
+	for (i = 0; i < (int)queue_count; i++) {
+		ret = rte_event_queue_default_conf_get(TEST_DEV_ID, i, &qconf);
+		TEST_ASSERT_SUCCESS(ret, "Failed to get queue%d def conf", i);
+		ret = rte_event_queue_setup(TEST_DEV_ID, i, &qconf);
+		TEST_ASSERT_SUCCESS(ret, "Failed to setup queue%d", i);
+	}
+
+	for (i = 0; i < (int)queue_count; i++) {
+		uint32_t attr_val, tmp;
+
+		attr_val = i % RTE_EVENT_QUEUE_WEIGHT_HIGHEST;
+		TEST_ASSERT_SUCCESS(
+			rte_event_queue_attr_set(TEST_DEV_ID, i,
+						 RTE_EVENT_QUEUE_ATTR_WEIGHT,
+						 attr_val),
+			"Queue weight set failed");
+		TEST_ASSERT_SUCCESS(rte_event_queue_attr_get(
+					    TEST_DEV_ID, i,
+					    RTE_EVENT_QUEUE_ATTR_WEIGHT, &tmp),
+				    "Queue weight get failed");
+		TEST_ASSERT_EQUAL(tmp, attr_val,
+				  "Wrong weight value for queue%d", i);
+	}
+
+	return TEST_SUCCESS;
+}
+
+static int
+test_eventdev_queue_attr_affinity_runtime(void)
+{
+	struct rte_event_queue_conf qconf;
+	struct rte_event_dev_info info;
+	uint32_t queue_count;
+	int i, ret;
+
+	ret = rte_event_dev_info_get(TEST_DEV_ID, &info);
+	TEST_ASSERT_SUCCESS(ret, "Failed to get event dev info");
+
+	if (!(info.event_dev_cap & RTE_EVENT_DEV_CAP_RUNTIME_QUEUE_ATTR))
+		return TEST_SKIPPED;
+
+	TEST_ASSERT_SUCCESS(rte_event_dev_attr_get(
+				    TEST_DEV_ID, RTE_EVENT_DEV_ATTR_QUEUE_COUNT,
+				    &queue_count),
+			    "Queue count get failed");
+
+	for (i = 0; i < (int)queue_count; i++) {
+		ret = rte_event_queue_default_conf_get(TEST_DEV_ID, i, &qconf);
+		TEST_ASSERT_SUCCESS(ret, "Failed to get queue%d def conf", i);
+		ret = rte_event_queue_setup(TEST_DEV_ID, i, &qconf);
+		TEST_ASSERT_SUCCESS(ret, "Failed to setup queue%d", i);
+	}
+
+	for (i = 0; i < (int)queue_count; i++) {
+		uint32_t attr_val, tmp;
+
+		attr_val = i % RTE_EVENT_QUEUE_AFFINITY_HIGHEST;
+		TEST_ASSERT_SUCCESS(
+			rte_event_queue_attr_set(TEST_DEV_ID, i,
+						 RTE_EVENT_QUEUE_ATTR_AFFINITY,
+						 attr_val),
+			"Queue affinity set failed");
+		TEST_ASSERT_SUCCESS(
+			rte_event_queue_attr_get(TEST_DEV_ID, i,
+						 RTE_EVENT_QUEUE_ATTR_AFFINITY,
+						 &tmp),
+			"Queue affinity get failed");
+		TEST_ASSERT_EQUAL(tmp, attr_val,
+				  "Wrong affinity value for queue%d", i);
+	}
+
+	return TEST_SUCCESS;
+}
+
+static int
 test_eventdev_queue_attr_nb_atomic_flows(void)
 {
 	int i, ret;
@@ -953,6 +1093,12 @@ static struct unit_test_suite eventdev_common_testsuite  = {
 			test_eventdev_queue_count),
 		TEST_CASE_ST(eventdev_configure_setup, NULL,
 			test_eventdev_queue_attr_priority),
+		TEST_CASE_ST(eventdev_configure_setup, NULL,
+			test_eventdev_queue_attr_priority_runtime),
+		TEST_CASE_ST(eventdev_configure_setup, NULL,
+			test_eventdev_queue_attr_weight_runtime),
+		TEST_CASE_ST(eventdev_configure_setup, NULL,
+			test_eventdev_queue_attr_affinity_runtime),
 		TEST_CASE_ST(eventdev_configure_setup, NULL,
 			test_eventdev_queue_attr_nb_atomic_flows),
 		TEST_CASE_ST(eventdev_configure_setup, NULL,
