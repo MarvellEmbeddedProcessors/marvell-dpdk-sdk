@@ -125,3 +125,6 @@ Deprecation Notices
   applications should be updated to use the ``dmadev`` library instead,
   with the underlying HW-functionality being provided by the ``ioat`` or
   ``idxd`` dma drivers
+
+* eventdev: New fields to represent event queue weight and affinity will be
+  added to ``rte_event_queue_conf`` structure in DPDK 22.11.
