@@ -14,6 +14,7 @@
 #include <rte_ether.h>
 #include <rte_interrupts.h>
 #include <rte_io.h>
+#include <rte_lcore.h>
 #include <rte_log.h>
 #include <rte_malloc.h>
 #include <rte_memzone.h>
@@ -57,6 +58,7 @@
 #define BITMASK_ULL		 GENMASK_ULL
 #define PLT_ALIGN_CEIL		 RTE_ALIGN_CEIL
 #define PLT_INIT		 RTE_INIT
+#define PLT_MAX_ETHPORTS	 RTE_MAX_ETHPORTS
 #ifndef PLT_ETHER_ADDR_LEN
 #define PLT_ETHER_ADDR_LEN RTE_ETHER_ADDR_LEN
 #endif
@@ -125,6 +127,7 @@
 #define plt_intr_disable	     rte_intr_disable
 #define plt_thread_is_intr	     rte_thread_is_intr
 #define plt_intr_callback_fn	     rte_intr_callback_fn
+#define plt_ctrl_thread_create	     rte_ctrl_thread_create
 
 #define plt_intr_efd_counter_size_get	rte_intr_efd_counter_size_get
 #define plt_intr_efd_counter_size_set	rte_intr_efd_counter_size_set
