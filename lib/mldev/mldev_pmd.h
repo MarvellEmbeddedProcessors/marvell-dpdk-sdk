@@ -33,10 +33,9 @@ struct rte_mldev_pmd_init_params {
 
 /**
  * @internal
- * The data part, with no function pointers, associated with each device.
- *
- * This structure is safe to place in shared memory to be common among
- * different processes in a multi-process configuration.
+ * The data part, with no function pointers, associated with each device. This
+ * structure is safe to place in shared memory to be common among different
+ * processes in a multi-process configuration.
  */
 struct rte_mldev_data {
 	/** Device ID for this instance */
@@ -72,7 +71,9 @@ struct rte_mldev {
 	uint8_t attached : 1;
 } __rte_cache_aligned;
 
-/** Global structure used for maintaining state of allocated ML devices */
+/** @internal
+ * Global structure used for maintaining state of allocated ML devices
+ */
 struct rte_mldev_global {
 	/**< Device information array */
 	struct rte_mldev *devs;
@@ -85,77 +86,97 @@ struct rte_mldev_global {
 };
 
 /**
- * Get the rte_mldev structure device pointer for the device. Assumes a
- * valid device index.
+ * Get the rte_mldev structure device pointer for the device. Assumes a valid
+ * device index.
  *
- * @param dev_id	Device ID value to select the device structure.
+ * @param dev_id
+ *   Device ID value to select the device structure.
  *
- * @return		The rte_mldev pointer for the given device ID.
+ * @return
+ *   The rte_mldev pointer for the given device ID.
  */
 __rte_internal
-struct rte_mldev *rte_mldev_pmd_get_dev(uint8_t dev_id);
+struct rte_mldev *
+rte_mldev_pmd_get_dev(uint8_t dev_id);
 
 /**
  * Get the rte_mldev structure device pointer for the named device.
  *
- * @param name	Device name to select the device structure.
+ * @param name
+ *   Device name to select the device structure.
  *
- * @return	The rte_mldev pointer for the given device ID.
+ * @return
+ *   The rte_mldev pointer for the given device ID.
  */
 __rte_internal
-struct rte_mldev *rte_mldev_pmd_get_named_dev(const char *name);
+struct rte_mldev *
+rte_mldev_pmd_get_named_dev(const char *name);
 
 /**
- * Definitions of all functions exported by a driver through the
- * generic structure of type *ml_dev_ops* supplied in the
- * *rte_mldev* structure associated with a device.
+ * Definitions of all functions exported by a driver through the generic
+ * structure of type *ml_dev_ops* supplied in the *rte_mldev* structure
+ * associated with a device.
  */
 
 /**
  * Function used to configure device.
  *
- * @param dev		ML device pointer
- * @param config	ML device configurations
+ * @param dev
+ *   ML device pointer
+ * @param config
+ *   ML device configurations
  *
- * @return	Returns 0 on success
+ * @return
+ *   Returns 0 on success
  */
 typedef int (*mldev_configure_t)(struct rte_mldev *dev,
-		struct rte_mldev_config *config);
+				 struct rte_mldev_config *config);
 
 /**
  * Function used to close a configured device.
  *
- * @param dev	ML device pointer
+ * @param dev
+ *   ML device pointer
+ *
  * @return
- * - 0 on success.
- * - EAGAIN if can't close as device is busy
+ *   - 0 on success.
+ *   - EAGAIN if can't close as device is busy
  */
 typedef int (*mldev_close_t)(struct rte_mldev *dev);
 
 /**
  * Function used to start a configured device.
  *
- * @param dev	ML device pointer
+ * @param dev
+ *   ML device pointer
  *
- * @return	Returns 0 on success
+ * @return
+ *   Returns 0 on success
  */
 typedef int (*mldev_start_t)(struct rte_mldev *dev);
 
 /**
  * Function used to stop a configured device.
  *
- * @param dev	ML device pointer
+ * @param dev
+ *   ML device pointer
  */
 typedef void (*mldev_stop_t)(struct rte_mldev *dev);
 
 /**
  * Function used to create an ML model.
  *
- * @param dev		ML device pointer
- * @param model		Pointer to model structure
- * @param model_id	Model ID returned by the library
+ * @param dev
+ *   ML device pointer
+ * @param model
+ *   Pointer to model structure
+ * @param model_id
+ *   Model ID returned by the library
+ *
  * @return
- * - 0 on success.
+ *   - 0 on success.
+ *   - < 0 on failure.
+ *
  */
 typedef int (*mldev_model_create_t)(struct rte_mldev *dev,
 				    struct rte_mldev_model *model,
@@ -164,28 +185,38 @@ typedef int (*mldev_model_create_t)(struct rte_mldev *dev,
 /**
  * Function used to destroy an ML model.
  *
- * @param dev		ML device pointer
- * @param model_id	Model ID to use
+ * @param dev
+ *   ML device pointer
+ * @param model_id
+ *   Model ID to use
+ *
+ * @return
+ *   - 0 on success
+ *   - < 0 on failure
  */
 typedef int (*mldev_model_destroy_t)(struct rte_mldev *dev, uint8_t model_id);
 
 /**
  * Function used to load an ML model.
  *
- * @param dev		ML device pointer
- * @param model_id	Model ID to use
+ * @param dev
+ *   ML device pointer
+ * @param model_id
+ *   Model ID to use
  */
 typedef int (*mldev_model_load_t)(struct rte_mldev *dev, uint8_t model_id);
 
 /**
  * Function used to unload an ML model.
  *
- * @param dev		ML device pointer
- * @param model_id	Model ID to use
+ * @param dev
+ *   ML device pointer
+ * @param model_id
+ *   Model ID to use
  */
 typedef int (*mldev_model_unload_t)(struct rte_mldev *dev, uint8_t model_id);
 
-/** ML device operations function pointer table */
+/** @internal ML device operations function pointer table */
 struct rte_mldev_ops {
 	/**< Configure device. */
 	mldev_configure_t dev_configure;
@@ -213,45 +244,52 @@ struct rte_mldev_ops {
 };
 
 /**
- * Function for internal use by dummy drivers primarily, e.g. ring-based
- * driver.
- * Allocates a new mldev slot for an ml device and returns the pointer
- * to that slot for the driver to use.
+ * Function for internal use by dummy drivers primarily, e.g. ring-based driver.
+ * Allocates a new mldev slot for an ml device and returns the pointer to that
+ * slot for the driver to use.
  *
- * @param name		Unique identifier name for each device
- * @param socket_id	Socket to allocate resources on.
+ * @param name
+ *   Unique identifier name for each device
+ * @param socket_id
+ *   Socket to allocate resources on.
+ *
  * @return
  *   - Slot in the rte_dev_devices array for a new device;
  */
 __rte_internal
-struct rte_mldev *rte_mldev_pmd_allocate(const char *name, int socket_id);
+struct rte_mldev *
+rte_mldev_pmd_allocate(const char *name, int socket_id);
 
 /**
- * Function for internal use by dummy drivers primarily, e.g. ring-based
- * driver.
+ * Function for internal use by dummy drivers primarily, e.g. ring-based driver.
  * Release the specified mldev device.
  *
  * @param mldev
- * The *mldev* pointer is the address of the *rte_mldev* structure.
+ *   The *mldev* pointer is the address of the *rte_mldev* structure.
+ *
  * @return
  *   - 0 on success, negative on error
  */
 __rte_internal
-extern int rte_mldev_pmd_release_device(struct rte_mldev *mldev);
+extern int
+rte_mldev_pmd_release_device(struct rte_mldev *mldev);
 
 /**
  * @internal
  *
- * PMD assist function to provide boiler plate code for ml driver to create
- * and allocate resources for a new ml PMD device instance.
+ * PMD assist function to provide boiler plate code for ml driver to create and
+ * allocate resources for a new ml PMD device instance.
  *
- * @param name		ML device name.
- * @param device	Base device instance
- * @param params	PMD initialisation parameters
+ * @param name
+ *   ML device name.
+ * @param device
+ *   Base device instance
+ * @param params
+ *   PMD initialisation parameters
  *
  * @return
- *  - ml device instance on success
- *  - NULL on creation failure
+ *   - ML device instance on success
+ *   - NULL on creation failure
  */
 __rte_internal
 struct rte_mldev *
@@ -261,30 +299,31 @@ rte_mldev_pmd_create(const char *name, struct rte_device *device,
 /**
  * @internal
  *
- * PMD assist function to provide boiler plate code for ml driver to
- * destroy and free resources associated with a ml PMD device instance.
+ * PMD assist function to provide boiler plate code for ml driver to destroy and
+ * free resources associated with a ml PMD device instance.
  *
- * @param mldev	ML device handle.
+ * @param mldev
+ *   ML device handle.
  *
  * @return
- *  - 0 on success
- *  - errno on failure
+ *   - 0 on success
+ *   - errno on failure
  */
 __rte_internal
-int rte_mldev_pmd_destroy(struct rte_mldev *mldev);
+int
+rte_mldev_pmd_destroy(struct rte_mldev *mldev);
 
 /**
  * @internal
- * This is the last step of device probing. It must be called after a
- * mldev is allocated and initialized successfully.
+ * This is the last step of device probing. It must be called after a mldev is
+ * allocated and initialized successfully.
  *
- * @param dev	Pointer to mldev struct
- *
- * @return
- *  void
+ * @param dev
+ *   Pointer to mldev struct
  */
 __rte_internal
-void rte_mldev_pmd_probing_finish(struct rte_mldev *dev);
+void
+rte_mldev_pmd_probing_finish(struct rte_mldev *dev);
 
 #ifdef __cplusplus
 }
