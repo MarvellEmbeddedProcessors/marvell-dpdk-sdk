@@ -4,10 +4,12 @@
 sources = files(
         'mldev_pmd.c',
         'rte_mldev.c',
+        'rte_ml.c',
 )
 
 headers = files(
         'rte_mldev.h',
+        'rte_ml.h',
 )
 
 driver_sdk_headers += files(

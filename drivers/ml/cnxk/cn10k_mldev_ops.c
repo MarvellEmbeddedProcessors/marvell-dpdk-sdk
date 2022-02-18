@@ -809,21 +809,21 @@ cnxk_ml_ocm_free_pages(struct rte_mldev *dev, uint32_t model_id)
 }
 
 static int
-cnxk_ml_io_type_get_size(enum rte_mldev_io_type type)
+cnxk_ml_io_type_get_size(enum rte_ml_io_type type)
 {
 	switch (type) {
-	case RTE_MLDEV_IO_TYPE_INT8:
-	case RTE_MLDEV_IO_TYPE_UINT8:
+	case RTE_ML_IO_TYPE_INT8:
+	case RTE_ML_IO_TYPE_UINT8:
 		return sizeof(uint8_t);
-	case RTE_MLDEV_IO_TYPE_INT16:
-	case RTE_MLDEV_IO_TYPE_UINT16:
+	case RTE_ML_IO_TYPE_INT16:
+	case RTE_ML_IO_TYPE_UINT16:
 		return sizeof(uint16_t);
-	case RTE_MLDEV_IO_TYPE_INT32:
-	case RTE_MLDEV_IO_TYPE_UINT32:
+	case RTE_ML_IO_TYPE_INT32:
+	case RTE_ML_IO_TYPE_UINT32:
 		return sizeof(uint32_t);
-	case RTE_MLDEV_IO_TYPE_FP16:
+	case RTE_ML_IO_TYPE_FP16:
 		return sizeof(float) / 2;
-	case RTE_MLDEV_IO_TYPE_FP32:
+	case RTE_ML_IO_TYPE_FP32:
 		return sizeof(float);
 	default:
 		return -EINVAL;
@@ -1336,8 +1336,8 @@ cn10k_ml_dev_stop(struct rte_mldev *dev)
 }
 
 int
-cn10k_ml_dev_model_create(struct rte_mldev *dev, struct rte_mldev_model *model,
-			  uint8_t *model_id)
+cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
+		      uint8_t *model_id)
 {
 	struct cnxk_ml_model_metadata *model_metadata;
 	struct cnxk_ml_model_metadata metadata;
@@ -1564,7 +1564,7 @@ err_exit:
 }
 
 int
-cn10k_ml_dev_model_destroy(struct rte_mldev *dev, uint8_t model_id)
+cn10k_ml_model_destroy(struct rte_mldev *dev, uint8_t model_id)
 {
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_dev *ml_dev;
@@ -1587,7 +1587,7 @@ cn10k_ml_dev_model_destroy(struct rte_mldev *dev, uint8_t model_id)
 }
 
 int
-cn10k_ml_dev_model_load(struct rte_mldev *dev, uint8_t model_id)
+cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 {
 	struct cnxk_ml_job_compl *ml_job_compl;
 	struct cnxk_ml_config *ml_config;
@@ -1724,14 +1724,14 @@ cn10k_ml_dev_model_load(struct rte_mldev *dev, uint8_t model_id)
 	rte_mempool_put(ml_config->job_pool, ml_job_compl);
 
 	if (ret != 0) { /* Call unload, ignore error */
-		cn10k_ml_dev_model_unload(dev, model_id);
+		cn10k_ml_model_unload(dev, model_id);
 	}
 
 	return ret;
 }
 
 int
-cn10k_ml_dev_model_unload(struct rte_mldev *dev, uint8_t model_id)
+cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 {
 	struct cnxk_ml_job_compl *ml_job_compl;
 	struct cnxk_ml_config *ml_config;
@@ -1834,8 +1834,10 @@ struct rte_mldev_ops cn10k_ml_ops = {
 	.dev_close = cn10k_ml_dev_close,
 	.dev_start = cn10k_ml_dev_start,
 	.dev_stop = cn10k_ml_dev_stop,
-	.dev_model_create = cn10k_ml_dev_model_create,
-	.dev_model_destroy = cn10k_ml_dev_model_destroy,
-	.dev_model_load = cn10k_ml_dev_model_load,
-	.dev_model_unload = cn10k_ml_dev_model_unload,
+
+	/* ML model handling ops */
+	.ml_model_create = cn10k_ml_model_create,
+	.ml_model_destroy = cn10k_ml_model_destroy,
+	.ml_model_load = cn10k_ml_model_load,
+	.ml_model_unload = cn10k_ml_model_unload,
 };

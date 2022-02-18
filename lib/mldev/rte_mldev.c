@@ -12,10 +12,7 @@
 static struct rte_mldev rte_ml_devices[RTE_ML_MAX_DEVS];
 
 static struct rte_mldev_global mldev_globals = {
-	.devs = rte_ml_devices,
-	.data = {NULL},
-	.nb_devs = 0
-};
+	.devs = rte_ml_devices, .data = {NULL}, .nb_devs = 0};
 
 struct rte_mldev *
 rte_mldev_pmd_get_dev(uint8_t dev_id)
@@ -46,8 +43,7 @@ rte_mldev_pmd_get_named_dev(const char *name)
 static inline uint8_t
 rte_mldev_is_valid_device_data(uint8_t dev_id)
 {
-	if (dev_id >= RTE_ML_MAX_DEVS ||
-			rte_ml_devices[dev_id].data == NULL)
+	if (dev_id >= RTE_ML_MAX_DEVS || rte_ml_devices[dev_id].data == NULL)
 		return 0;
 
 	return 1;
@@ -79,10 +75,8 @@ rte_mldev_get_dev_id(const char *name)
 	for (i = 0; i < RTE_ML_MAX_DEVS; i++) {
 		if (!rte_mldev_is_valid_device_data(i))
 			continue;
-		if ((strcmp(mldev_globals.devs[i].data->name, name)
-				== 0) &&
-				(mldev_globals.devs[i].attached ==
-						RTE_MLDEV_ATTACHED))
+		if ((strcmp(mldev_globals.devs[i].data->name, name) == 0) &&
+		    (mldev_globals.devs[i].attached == RTE_MLDEV_ATTACHED))
 			return i;
 	}
 
@@ -124,8 +118,8 @@ rte_mldev_data_alloc(uint8_t dev_id, struct rte_mldev_data **data,
 	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
 		mz = rte_memzone_reserve(mz_name, sizeof(struct rte_mldev_data),
 					 socket_id, 0);
-		MLDEV_LOG_DEBUG("PRIMARY: reserved memzone for %s (%p)", mz_name,
-				mz);
+		MLDEV_LOG_DEBUG("PRIMARY: reserved memzone for %s (%p)",
+				mz_name, mz);
 	} else {
 		mz = rte_memzone_lookup(mz_name);
 		MLDEV_LOG_DEBUG("SECONDARY: looked up memzone for %s (%p)",
@@ -162,7 +156,8 @@ rte_mldev_data_free(uint8_t dev_id, struct rte_mldev_data **data)
 	*data = NULL;
 
 	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
-		MLDEV_LOG_DEBUG("PRIMARY: free memzone of %s (%p)", mz_name, mz);
+		MLDEV_LOG_DEBUG("PRIMARY: free memzone of %s (%p)", mz_name,
+				mz);
 		return rte_memzone_free(mz);
 	} else {
 		MLDEV_LOG_DEBUG("SECONDARY: don't free memzone of %s (%p)",
@@ -191,7 +186,8 @@ rte_mldev_pmd_allocate(const char *name, int socket_id)
 	uint8_t dev_id;
 
 	if (rte_mldev_pmd_get_named_dev(name) != NULL) {
-		MLDEV_LOG_ERR("ML device with name %s already allocated!", name);
+		MLDEV_LOG_ERR("ML device with name %s already allocated!",
+			      name);
 		return NULL;
 	}
 
@@ -285,7 +281,9 @@ rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config)
 	dev = &rte_ml_devices[dev_id];
 
 	if (dev->data->dev_started) {
-		MLDEV_LOG_ERR("device %d must be stopped to allow configuration", dev_id);
+		MLDEV_LOG_ERR(
+			"device %d must be stopped to allow configuration",
+			dev_id);
 		return -EBUSY;
 	}
 
@@ -310,7 +308,7 @@ rte_mldev_close(uint8_t dev_id)
 	/* Device must be stopped before it can be closed */
 	if (dev->data->dev_started == 1) {
 		MLDEV_LOG_ERR("Device %u must be stopped before closing",
-				dev_id);
+			      dev_id);
 		return -EBUSY;
 	}
 
@@ -323,7 +321,8 @@ rte_mldev_close(uint8_t dev_id)
 	return 0;
 }
 
-int rte_mldev_start(uint8_t dev_id)
+int
+rte_mldev_start(uint8_t dev_id)
 {
 	struct rte_mldev *dev;
 	int retval;
@@ -352,7 +351,8 @@ int rte_mldev_start(uint8_t dev_id)
 	return 0;
 }
 
-void rte_mldev_stop(uint8_t dev_id)
+void
+rte_mldev_stop(uint8_t dev_id)
 {
 	struct rte_mldev *dev;
 
@@ -371,64 +371,4 @@ void rte_mldev_stop(uint8_t dev_id)
 
 	(*dev->dev_ops->dev_stop)(dev);
 	dev->data->dev_started = 0;
-}
-
-int
-rte_mldev_model_create(uint8_t dev_id, struct rte_mldev_model *model, uint8_t *model_id)
-{
-	struct rte_mldev *dev;
-
-	if (!rte_mldev_is_valid_dev(dev_id)) {
-		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
-		return -EINVAL;
-	}
-
-	dev = rte_mldev_pmd_get_dev(dev_id);
-
-	return (*dev->dev_ops->dev_model_create)(dev, model, model_id);
-}
-
-int
-rte_mldev_model_destroy(uint8_t dev_id, uint8_t model_id)
-{
-	struct rte_mldev *dev;
-
-	if (!rte_mldev_is_valid_dev(dev_id)) {
-		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
-		return -EINVAL;
-	}
-
-	dev = rte_mldev_pmd_get_dev(dev_id);
-
-	return (*dev->dev_ops->dev_model_destroy)(dev, model_id);
-}
-
-int
-rte_mldev_model_load(uint8_t dev_id, uint8_t model_id)
-{
-	struct rte_mldev *dev;
-
-	if (!rte_mldev_is_valid_dev(dev_id)) {
-		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
-		return -EINVAL;
-	}
-
-	dev = rte_mldev_pmd_get_dev(dev_id);
-
-	return (*dev->dev_ops->dev_model_load)(dev, model_id);
-}
-
-int
-rte_mldev_model_unload(uint8_t dev_id, uint8_t model_id)
-{
-	struct rte_mldev *dev;
-
-	if (!rte_mldev_is_valid_dev(dev_id)) {
-		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
-		return -EINVAL;
-	}
-
-	dev = rte_mldev_pmd_get_dev(dev_id);
-
-	return (*dev->dev_ops->dev_model_unload)(dev, model_id);
 }

@@ -16,6 +16,7 @@
 
 #include "rte_dev.h"
 #include "rte_mldev.h"
+#include "rte_ml.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -178,9 +179,9 @@ typedef void (*mldev_stop_t)(struct rte_mldev *dev);
  *   - < 0 on failure.
  *
  */
-typedef int (*mldev_model_create_t)(struct rte_mldev *dev,
-				    struct rte_mldev_model *model,
-				    uint8_t *model_id);
+typedef int (*ml_model_create_t)(struct rte_mldev *dev,
+				 struct rte_ml_model *model,
+				 uint8_t *model_id);
 
 /**
  * Function used to destroy an ML model.
@@ -194,7 +195,7 @@ typedef int (*mldev_model_create_t)(struct rte_mldev *dev,
  *   - 0 on success
  *   - < 0 on failure
  */
-typedef int (*mldev_model_destroy_t)(struct rte_mldev *dev, uint8_t model_id);
+typedef int (*ml_model_destroy_t)(struct rte_mldev *dev, uint8_t model_id);
 
 /**
  * Function used to load an ML model.
@@ -204,7 +205,7 @@ typedef int (*mldev_model_destroy_t)(struct rte_mldev *dev, uint8_t model_id);
  * @param model_id
  *   Model ID to use
  */
-typedef int (*mldev_model_load_t)(struct rte_mldev *dev, uint8_t model_id);
+typedef int (*ml_model_load_t)(struct rte_mldev *dev, uint8_t model_id);
 
 /**
  * Function used to unload an ML model.
@@ -214,7 +215,7 @@ typedef int (*mldev_model_load_t)(struct rte_mldev *dev, uint8_t model_id);
  * @param model_id
  *   Model ID to use
  */
-typedef int (*mldev_model_unload_t)(struct rte_mldev *dev, uint8_t model_id);
+typedef int (*ml_model_unload_t)(struct rte_mldev *dev, uint8_t model_id);
 
 /** @internal ML device operations function pointer table */
 struct rte_mldev_ops {
@@ -231,16 +232,16 @@ struct rte_mldev_ops {
 	mldev_stop_t dev_stop;
 
 	/**< Create model. */
-	mldev_model_create_t dev_model_create;
+	ml_model_create_t ml_model_create;
 
 	/**< Destroy model. */
-	mldev_model_destroy_t dev_model_destroy;
+	ml_model_destroy_t ml_model_destroy;
 
 	/**< Load model. */
-	mldev_model_load_t dev_model_load;
+	ml_model_load_t ml_model_load;
 
-	/**< Unoad model. */
-	mldev_model_load_t dev_model_unload;
+	/**< Unload model. */
+	ml_model_unload_t ml_model_unload;
 };
 
 /**

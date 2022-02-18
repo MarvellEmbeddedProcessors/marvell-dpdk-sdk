@@ -7,6 +7,7 @@
 
 #include <rte_eal.h>
 #include <rte_memzone.h>
+#include <rte_ml.h>
 #include <rte_mldev.h>
 
 /* ML constants */
@@ -83,7 +84,7 @@ int
 main(int argc, char **argv)
 {
 	struct rte_mldev_config ml_config;
-	struct rte_mldev_model ml_model;
+	struct rte_ml_model ml_model;
 	const struct rte_memzone *mz;
 	char str[PATH_MAX] = {0};
 	uint8_t dev_count;
@@ -159,8 +160,8 @@ main(int argc, char **argv)
 		fread(ml_model.model_buffer, 1, ml_model.model_size, fp);
 		fclose(fp);
 
-		if (rte_mldev_model_create(dev_id, &ml_model,
-					   &ml_models[idx].model_id) != 0) {
+		if (rte_ml_model_create(dev_id, &ml_model,
+					&ml_models[idx].model_id) != 0) {
 			fprintf(stderr, "Error creating model : %s\n",
 				ml_model.model_name);
 			goto error_destroy;
@@ -169,8 +170,8 @@ main(int argc, char **argv)
 
 	if (g_interleave) {
 		for (idx = 0; idx < g_models_counter; idx++) {
-			if (rte_mldev_model_load(
-				    dev_id, ml_models[idx].model_id) != 0) {
+			if (rte_ml_model_load(dev_id,
+					      ml_models[idx].model_id) != 0) {
 				fprintf(stderr, "Error loading model : %s\n",
 					ml_model.model_name);
 				goto error_unload;
@@ -179,8 +180,8 @@ main(int argc, char **argv)
 
 error_unload:
 		for (i = 0; i < idx; i++) {
-			if (rte_mldev_model_unload(
-				    dev_id, ml_models[i].model_id) != 0) {
+			if (rte_ml_model_unload(dev_id,
+						ml_models[i].model_id) != 0) {
 				fprintf(stderr, "Error unloading model : %s\n",
 					ml_model.model_name);
 				goto error_destroy;
@@ -188,15 +189,15 @@ error_unload:
 		}
 	} else {
 		for (idx = 0; idx < g_models_counter; idx++) {
-			if (rte_mldev_model_load(
-				    dev_id, ml_models[idx].model_id) != 0) {
+			if (rte_ml_model_load(dev_id,
+					      ml_models[idx].model_id) != 0) {
 				fprintf(stderr, "Error loading model : %s\n",
 					ml_model.model_name);
 				goto error_destroy;
 			}
 
-			if (rte_mldev_model_unload(
-				    dev_id, ml_models[idx].model_id) != 0) {
+			if (rte_ml_model_unload(dev_id,
+						ml_models[idx].model_id) != 0) {
 				fprintf(stderr, "Error unloading model : %s\n",
 					ml_model.model_name);
 				goto error_destroy;
@@ -206,7 +207,7 @@ error_unload:
 
 error_destroy:
 	for (i = 0; i < idx; i++)
-		rte_mldev_model_destroy(dev_id, ml_models[i].model_id);
+		rte_ml_model_destroy(dev_id, ml_models[i].model_id);
 
 	/* Stop device */
 	rte_mldev_stop(dev_id);
