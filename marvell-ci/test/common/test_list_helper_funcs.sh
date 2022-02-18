@@ -76,6 +76,8 @@ function get_test_extra_args()
 	local tst=$1
 	local args=
 
+	tst="${tst%% }"
+	IFS=$'\n'
 	for t in ${CMD_EXTRA_ARGS:-}; do
 		if [ "${t%,*}" == "$tst" ]; then
 			args=${t#*,}
@@ -83,6 +85,7 @@ function get_test_extra_args()
 		fi
 	done
 	echo $args
+	IFS=' '
 }
 
 function get_test_env()
