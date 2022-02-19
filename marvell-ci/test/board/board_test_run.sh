@@ -71,6 +71,7 @@ function target_setup()
 	export TARGET_SSH_CMD
 	export REMOTE_DIR
 	export PERF_STAGE
+	export TM_SETUP
 	if [[ -n $SKIP_TARGET_SETUP ]]; then
 		return
 	fi
