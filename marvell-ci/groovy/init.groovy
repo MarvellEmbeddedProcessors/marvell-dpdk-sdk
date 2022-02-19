@@ -49,6 +49,7 @@ def init_env_vars(Object s) {
 
 	s.base_tests = [
 		'test-cn9k',
+		'test-cn10k',
 	]
 
 	s.flags = [
@@ -65,6 +66,8 @@ def init_env_vars(Object s) {
 		'run_test-cn9k-debug' : [ 'Run CN9k Debug tests', false],
 		'run_test-cn96-perf' : [ 'Run CN96 Perf tests', false],
 		'run_test-cn98-perf' : [ 'Run CN98 Perf tests', false],
+		'run_test-cn10k' : [ 'Run CN10k tests', false],
+		'run_test-cn10k-debug' : [ 'Run CN10k Debug tests', false],
 		'run_test-asim-cn10ka' : [ 'Run CN10ka tests', false],
 		'run_test-asim-cn10ka-debug' : [ 'Run CN10ka Debug tests', false],
 		'disable_failfast' : [ 'Disable failFast for parallel stages', false ],

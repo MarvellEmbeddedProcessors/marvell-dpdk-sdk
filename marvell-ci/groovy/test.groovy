@@ -53,7 +53,7 @@ def lock_dual_board_and_test(s, board_rsrc, test_name, test_def) {
 	}
 }
 
-def prepare_cn9k_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc) {
+def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc) {
 	if (!s.utils.get_flag(s, "run_${test_name}"))
 		return
 
@@ -229,29 +229,37 @@ def prepare_tests(Object s, tests) {
 		return 0
 
 	/* CN9K Test */
-	prepare_cn9k_test_stage(s, tests, "test-cn9k", "cn9k.env", "test-cn9k-build",
+	prepare_test_stage(s, tests, "test-cn9k", "cn9k.env", "test-cn9k-build",
 				"DEV_CI_DATAPLANE_9xxx")
 
 	/* CN9K Debug Test */
-	prepare_cn9k_test_stage(s, tests, "test-cn9k-debug", "cn9k.env", "test-cn9k-debug-build",
+	prepare_test_stage(s, tests, "test-cn9k-debug", "cn9k.env", "test-cn9k-debug-build",
 				"DEV_CI_DATAPLANE_9xxx")
 
 	/* CN96 Perf Stage */
-	prepare_cn9k_test_stage(s, tests, "test-cn96-perf", "cn96-perf.env", "test-cn9k-build",
+	prepare_test_stage(s, tests, "test-cn96-perf", "cn96-perf.env", "test-cn9k-build",
 				"DEV_CI_DATAPLANE_96xx_PERF_SETUP")
 
 	/* CN98 Perf Stage */
-	prepare_cn9k_test_stage(s, tests, "test-cn98-perf", "cn98-perf.env", "test-cn9k-build",
+	prepare_test_stage(s, tests, "test-cn98-perf", "cn98-perf.env", "test-cn9k-build",
 				"DEV_CI_DATAPLANE_98xx_PERF_SETUP")
 
 	if (s.ENABLE_CN10K) {
+		/* CN10K Test */
+		prepare_test_stage(s, tests, "test-cn10k", "cn10k.env", "test-cn10k-build",
+					"DEV_CI_DATAPLANE_106xx")
+
+		/* CN10K Debug Test */
+		prepare_test_stage(s, tests, "test-cn10k-debug", "cn10k.env", "test-cn10k-debug-build",
+					"DEV_CI_DATAPLANE_106xx")
+
 		/* ASIM Test Stage */
 		prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka.env",
-					"test-asim-cn10ka-build", "DEV_CI_DATAPLANE_ASIM")
+					"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM")
 
 		/* ASIM Debug Test Stage */
 		prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka.env",
-					"test-asim-cn10ka-debug-build", "DEV_CI_DATAPLANE_ASIM")
+					"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM")
 	}
 
 	num_tests = tests.size()

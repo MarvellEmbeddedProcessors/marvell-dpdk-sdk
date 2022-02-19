@@ -278,18 +278,22 @@ def prepare_build_stages(Object s, nodes, compilers, libtypes, copts, clinkopts,
 def prepare_builds(Object s, nodes) {
 	/* Builds used in test stages */
 	if (!s.utils.get_flag(s, "skip_test")) {
+		/* CN9k Test builds */
 		if (s.utils.get_flag(s, "run_test-cn9k") ||
 		    s.utils.get_flag(s, "run_test-cn96-perf") ||
 		    s.utils.get_flag(s, "run_test-cn98-perf"))
 			add_build_stage(s, nodes, "test-cn9k-build", 'gcc-marvell', 'static',
 					'-O3', '-lto', 'cn9k', '-Dexamples=all', '', true)
+	}
 
-		if (s.ENABLE_CN10K) {
-			if (s.utils.get_flag(s, "run_test-asim-cn10ka"))
-				add_build_stage(s, nodes, "test-asim-cn10ka-build", 'gcc-marvell',
-						'static', '-O3', '-lto', 'cn10k', '-Dexamples=all',
-						'', true)
-		}
+	if (s.ENABLE_CN10K) {
+		/* cn10k test builds */
+		if (s.utils.get_flag(s, "run_test-cn10k") ||
+		    s.utils.get_flag(s, "run_test-asim-cn10ka") ||
+		    !s.utils.get_flag(s, "skip_build"))
+			add_build_stage(s, nodes, "test-cn10k-build", 'gcc-marvell',
+					'static', '-O3', '-lto', 'cn10k', '-Dexamples=all',
+					'', true)
 	}
 
 	if (!s.utils.get_flag(s, "skip_build")) {
@@ -342,15 +346,16 @@ def prepare_builds(Object s, nodes) {
 		add_build_stage(s, nodes, "test-cn9k-debug-build", 'gcc-marvell', 'static', '-O0',
 			'', 'cn9k',
 			"-Dexamples=all --buildtype=debug --werror -Dc_args='-DRTE_ENABLE_ASSERT'",
-			'', false, true, false)
+			'', true, true, false)
 
 	/* CN10k Debug Build */
 	if (s.ENABLE_CN10K && (!s.utils.get_flag(s, "skip_build") ||
-	    (!s.utils.get_flag(s, "skip_test") && s.utils.get_flag(s, "run_test-cn10k-debug"))))
-		add_build_stage(s, nodes, "test-asim-cn10ka-debug-build", 'gcc-marvell',
+	    (!s.utils.get_flag(s, "skip_test") && (s.utils.get_flag(s, "run_test-cn10k-debug") ||
+		(s.utils.get_flag(s, "run_test-asim-cn10ka-debug"))))))
+		add_build_stage(s, nodes, "test-cn10k-debug-build", 'gcc-marvell',
 			'static', '-O0', '', 'cn10k',
 			"-Dexamples=all --buildtype=debug --werror -Dc_args='-DRTE_ENABLE_ASSERT'",
-			'', false, true, false)
+			'', true, true, false)
 
 }
 
