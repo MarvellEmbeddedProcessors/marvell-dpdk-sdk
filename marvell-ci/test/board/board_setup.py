@@ -62,9 +62,12 @@ class SSH:
 
 
 class Board:
-	def __init__(self, ssh_ip, mcu_telnet_ip, mcu_telnet_port, mcu_board_telnet_port,
-		     pdu_ssh_ip, pdu_ssh_username, pdu_ssh_password, pdu_outlet):
+	def __init__(self, ssh_ip, ssh_username, ssh_password, mcu_telnet_ip, mcu_telnet_port,
+		     mcu_board_telnet_port, pdu_ssh_ip, pdu_ssh_username, pdu_ssh_password,
+		     pdu_outlet, bmc_ssh_ip, bmc_ssh_username, bmc_ssh_password):
 		self.ssh_ip = ssh_ip
+		self.ssh_username = ssh_username
+		self.ssh_password = ssh_password
 		self.mcu_telnet_ip = mcu_telnet_ip
 		self.mcu_telnet_port = mcu_telnet_port
 		self.mcu_board_telnet_port = mcu_board_telnet_port
@@ -72,6 +75,9 @@ class Board:
 		self.pdu_ssh_username = pdu_ssh_username
 		self.pdu_ssh_password = pdu_ssh_password
 		self.pdu_outlet = pdu_outlet
+		self.bmc_ssh_ip = bmc_ssh_ip
+		self.bmc_ssh_username = bmc_ssh_username
+		self.bmc_ssh_password = bmc_ssh_password
 		self.board_log = "board.log"
 
 	def setup(self):
@@ -117,6 +123,18 @@ class Board:
 	def pdu_send(self, string):
 		self.pdu_console.send(string)
 
+	def bmc_connect(self):
+		self.bmc_console = SSH(self.bmc_ssh_ip, self.bmc_ssh_username, self.bmc_ssh_password)
+
+	def bmc_disconnect(self):
+		self.bmc_console.close()
+
+	def bmc_expect(self, string, timeout = None):
+		self.bmc_console.expect(string, timeout)
+
+	def bmc_send(self, string):
+		self.bmc_console.send(string)
+
 	def msg(self, msg):
 		print(msg)
 
@@ -158,34 +176,58 @@ class Board:
 			if self.test_connection() == 0:
 				return 0
 		else:
-			waittime = 600
-			self.msg("Waiting for Board to boot !!!")
-			while waittime > 0:
-				time.sleep(30)
-				if self.test_connection() == 0:
-					return 0
-				waittime = waittime - 30
+			# If BMC is available issue board reset via REST API
+			if self.bmc_ssh_ip != "":
+				self.test_connection(120, True)
+				self.msg("BMC is alive")
+				ep = "https://%s:%s@%s/xyz/openbmc_project/state/host0/attr/RequestedHostTransition" % (self.bmc_ssh_username, self.bmc_ssh_password, self.bmc_ssh_ip)
+				state = "xyz.openbmc_project.State.Host.Transition.Off"
+				os.system('curl -k -H "Content-Type: application/json" -d \'{"data": "%s"}\' -X PUT %s' % (state, ep))
+				time.sleep(5)
+				state = "xyz.openbmc_project.State.Host.Transition.On"
+				os.system('curl -k -H "Content-Type: application/json" -d \'{"data": "%s"}\' -X PUT %s' % (state, ep))
+				self.msg("Issued Host Reset via REST API")
+
+			if self.test_connection(600) == 0:
+				return 0
+
 		return 1
 
-	def test_connection(self):
-		waittime = 30
+	def test_connection(self, waittime = 30, bmc = False):
+		ip = self.ssh_ip
+		usr = self.ssh_username
+		pwd = self.ssh_password
+		tgt = "Board"
+
+		if bmc:
+			tgt = "BMC"
+			ip = self.bmc_ssh_ip
+			usr = self.bmc_ssh_username
+			pwd = self.bmc_ssh_password
+
+		self.msg("Waiting Max %d seconds for %s to boot" % (waittime, tgt))
+
 		while waittime > 0:
-			if self.test_ping() == 0 and self.test_ssh() == 0:
+			if self.test_ping(ip) == 0 and self.test_ssh(ip, usr, pwd) == 0:
+				self.msg("%s:%s is Alive" % (tgt, ip))
 				return 0
 			time.sleep(10)
 			waittime = waittime - 10
 		return 1
 
-	def test_ping(self):
-		if os.system("ping -c 1 " + self.ssh_ip) == 0:
+	def test_ping(self, ip):
+		if os.system("ping -c 1 " + ip) == 0:
 			return 0
 		return 1
 
-	def test_ssh(self):
-		conn = pexpect.spawn("%s ci@%s" % (os.environ.get('TARGET_SSH_CMD', 'ssh'), self.ssh_ip))
+	def test_ssh(self, ip, usr, pwd):
+		conn = pexpect.spawn("%s %s@%s" % (os.environ.get('TARGET_SSH_CMD', 'ssh'), usr, ip))
 		try:
 			# Wait for prompt for 10 seconds
-			conn.expect("Last login:", 10)
+			if pwd:
+				conn.expect("password:", 10)
+			else:
+				conn.expect("Last login:", 10)
 		except:
 			conn.close()
 			return 1
@@ -193,12 +235,16 @@ class Board:
 		return 0
 
 board_config = {
-	#SSH IP           MCU_IP          PDU_IP         USER     PASS        OUTLET NAME
-	"10.28.34.128" : ["10.28.34.127", "10.28.6.169", "admin", "raritan0", "13",  "b7"],
-	"10.28.34.130" : ["10.28.34.129", "10.28.6.169", "admin", "raritan0", "12",  "b8"],
-	"10.28.34.132" : ["10.28.34.131", "10.28.6.169", "admin", "raritan0", "11",  "b9"],
-	"10.28.34.134" : [""            , "10.28.6.173", "admin", "raritan0", "18",  "b19"],
-	"10.28.34.136" : [""            , "10.28.6.173", "admin", "raritan0", "19",  "b20"],
+	#       SSH IP            MCU_IP         PDU_IP          BMC_IP  PDU_OUTLET   NAME
+	"10.28.34.128" : ["10.28.34.127", "10.28.6.169",             "",       "13",  "b7"],
+	"10.28.34.130" : ["10.28.34.129", "10.28.6.169",             "",       "12",  "b8"],
+	"10.28.34.132" : ["10.28.34.131", "10.28.6.169",             "",       "11",  "b9"],
+	"10.28.34.134" : [            "", "10.28.6.173",             "",       "18", "b19"],
+	"10.28.34.136" : [            "", "10.28.6.173",             "",       "19", "b20"],
+	"10.28.34.137" : [            "", "10.28.6.174",   "10.28.35.5",        "3", "b27"],
+	"10.28.34.138" : [            "", "10.28.6.174",   "10.28.35.4",        "4", "b28"],
+	"10.28.34.139" : [            "", "10.28.6.175",  "10.28.35.21",       "11", "b32"],
+	"10.28.34.140" : [            "", "10.28.6.175",  "10.28.35.19",        "9", "b33"],
 }
 
 if __name__ == "__main__":
@@ -209,7 +255,8 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 
 	conf = board_config[args.ssh_ip]
-	board = Board(args.ssh_ip, conf[0], "9760", "9761", conf[1], conf[2], conf[3], conf[4])
+	board = Board(args.ssh_ip, "ci", None, conf[0], "9760", "9761", conf[1], "admin",
+		      "raritan0", conf[3], conf[2], "root", "0penBmc")
 
 	if args.force_reboot:
 		print("Force rebooting board")
