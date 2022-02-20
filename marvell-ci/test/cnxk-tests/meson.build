@@ -57,6 +57,7 @@ test_subdirs = [
         'mac_test',
         'extbuf',
         'gpio_test',
+        'ipsec_msns',
 ]
 
 foreach dir:test_subdirs
