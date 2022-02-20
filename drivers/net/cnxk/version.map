@@ -6,3 +6,9 @@ INTERNAL {
 	global:
 	cnxk_nix_inb_mode_set;
 };
+
+EXPERIMENTAL {
+	global:
+	rte_pmd_cnxk_hw_sa_read;
+	rte_pmd_cnxk_hw_sa_write;
+};

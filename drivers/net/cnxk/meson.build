@@ -193,3 +193,5 @@ foreach flag: extra_flags
         cflags += flag
     endif
 endforeach
+
+headers = files('rte_pmd_cnxk.h')
