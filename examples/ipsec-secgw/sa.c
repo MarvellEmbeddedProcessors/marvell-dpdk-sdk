@@ -1790,15 +1790,6 @@ sa_check_offloads(uint16_t port_id, uint64_t *rx_offloads,
 				RTE_SECURITY_ACTION_TYPE_INLINE_PROTOCOL)
 				&& rule->portid == port_id) {
 			*tx_offloads |= RTE_ETH_TX_OFFLOAD_SECURITY;
-
-			/* Checksum offload is not needed for inline protocol as
-			 * all processing for Outbound IPSec packets will be
-			 * implicitly taken care and for non-IPSec packets,
-			 * there is no need of IPv4 Checksum offload.
-			 */
-			if (rule_type == RTE_SECURITY_ACTION_TYPE_INLINE_CRYPTO)
-				*tx_offloads |= RTE_ETH_TX_OFFLOAD_IPV4_CKSUM;
-
 			if (rule->mss)
 				*tx_offloads |= RTE_ETH_TX_OFFLOAD_TCP_TSO;
 		}
