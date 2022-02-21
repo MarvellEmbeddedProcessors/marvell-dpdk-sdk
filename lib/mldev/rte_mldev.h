@@ -204,6 +204,35 @@ __rte_experimental
 extern void
 rte_mldev_stop(uint8_t dev_id);
 
+/**  ML device information */
+struct rte_mldev_info {
+	/**< Generic device information. */
+	struct rte_device *device;
+
+	/**< Maximum number of queues pairs supported by device. */
+	uint32_t max_nb_queue_pairs;
+};
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Retrieve the information of a device.
+ *
+ * @param dev_id
+ *   The identifier of the device.
+ * @param dev_info
+ *   A pointer to a structure of type *rte_mldev_info* to be filled with the
+ * information of the device.
+ *
+ * @return
+ *   - 0: Success, driver updates the information of the ML device
+ *   - <0: Error code returned by the driver info get function.
+ */
+__rte_experimental
+extern int
+rte_mldev_info_get(uint8_t dev_id, struct rte_mldev_info *dev_info);
+
 #ifdef __cplusplus
 }
 #endif

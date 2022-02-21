@@ -165,6 +165,17 @@ typedef int (*mldev_start_t)(struct rte_mldev *dev);
 typedef void (*mldev_stop_t)(struct rte_mldev *dev);
 
 /**
+ * Function used to get specific information of a device.
+ *
+ * @param dev
+ *   ML device pointer
+ * @param dev_info
+ *   Pointer to infos structure to populate
+ */
+typedef int (*mldev_info_get_t)(struct rte_mldev *dev,
+				struct rte_mldev_info *dev_info);
+
+/**
  * Function used to create an ML model.
  *
  * @param dev
@@ -230,6 +241,9 @@ struct rte_mldev_ops {
 
 	/**< Stop device. */
 	mldev_stop_t dev_stop;
+
+	/**< Get device information. */
+	mldev_info_get_t dev_info_get;
 
 	/**< Create model. */
 	ml_model_create_t ml_model_create;

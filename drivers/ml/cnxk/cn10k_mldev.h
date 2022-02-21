@@ -30,6 +30,9 @@
 /* Maximum OCM mask words, per tile, 8 bit words. */
 #define ML_CN10K_OCM_MASKWORDS (ML_CN10K_OCM_NUMPAGES / 8)
 
+/* Number of Queue-Pairs per device */
+#define ML_CN10K_QP_PER_DEVICE 1
+
 /* ML OCM and Tile information structure */
 struct cn10k_ml_ocm_tile_info {
 	/* Mask of used / allotted pages on tile's OCM */

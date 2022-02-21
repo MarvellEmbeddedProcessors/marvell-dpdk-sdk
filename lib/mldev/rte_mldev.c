@@ -372,3 +372,27 @@ rte_mldev_stop(uint8_t dev_id)
 	(*dev->dev_ops->dev_stop)(dev);
 	dev->data->dev_started = 0;
 }
+
+int
+rte_mldev_info_get(uint8_t dev_id, struct rte_mldev_info *dev_info)
+{
+	struct rte_mldev *dev;
+
+	if (!rte_mldev_is_valid_dev(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id=%d", dev_id);
+		return -EINVAL;
+	}
+
+	if (dev_info == NULL)
+		return -EINVAL;
+
+	dev = &rte_ml_devices[dev_id];
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_info_get, -ENOTSUP);
+
+	memset(dev_info, 0, sizeof(struct rte_mldev_info));
+	(*dev->dev_ops->dev_info_get)(dev, dev_info);
+
+	dev_info->device = dev->device;
+
+	return 0;
+}

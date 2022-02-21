@@ -1335,6 +1335,20 @@ cn10k_ml_dev_stop(struct rte_mldev *dev)
 		   roc_ml_reg_read64(&ml_dev->roc, ML_CFG));
 }
 
+static int
+cn10k_ml_dev_info_get(struct rte_mldev *dev, struct rte_mldev_info *info)
+{
+	PLT_SET_USED(dev);
+
+	if (info == NULL)
+		return -EINVAL;
+
+	info->max_nb_queue_pairs = ML_CN10K_QP_PER_DEVICE;
+	plt_ml_dbg("max_nb_queue_pairs %u", info->max_nb_queue_pairs);
+
+	return 0;
+}
+
 int
 cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 		      uint8_t *model_id)
@@ -1834,6 +1848,7 @@ struct rte_mldev_ops cn10k_ml_ops = {
 	.dev_close = cn10k_ml_dev_close,
 	.dev_start = cn10k_ml_dev_start,
 	.dev_stop = cn10k_ml_dev_stop,
+	.dev_info_get = cn10k_ml_dev_info_get,
 
 	/* ML model handling ops */
 	.ml_model_create = cn10k_ml_model_create,
