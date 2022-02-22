@@ -13,21 +13,37 @@ BUFFERSZ="64,384,1504"
 PREFIX="cpt"
 IN="cryptoperf.in.$PREFIX"
 OUT="cryptoperf.out.$PREFIX"
-DEVTYPE="crypto_cn9k"
 BURSTSZ=32
 POOLSZ=16384
 NUMOPS=10000000
 DL=","
 MAX_TRY_CNT=5
-CRYPTO_DEVICE="0002:10:00.1"
 PARTNUM_98XX=0x0b1
-# Get CPU PART NUMBER
-PARTNUM=$(grep -m 1 'CPU part' /proc/cpuinfo | grep -o '0x0[a-b][0-3]$')
-if [[ $PARTNUM == $PARTNUM_98XX ]]; then
-	FEXT="98xx"
+! $(cat /proc/device-tree/compatible | grep -q "cn10k")
+IS_CN10K=$?
+
+if [[ $IS_CN10K -ne 0 ]]; then
+	DEVTYPE="crypto_cn10k"
+	CRYPTO_DEVICE=$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')
+	FEXT="106xx"
 else
-	FEXT="96xx"
+	DEVTYPE="crypto_cn9k"
+	CRYPTO_DEVICE=$(lspci -d :a0fe | head -1 | awk -e '{ print $1 }')
+	# Get CPU PART NUMBER
+	PARTNUM=$(grep -m 1 'CPU part' /proc/cpuinfo | grep -o '0x0[a-b][0-3]$')
+	if [[ $PARTNUM == $PARTNUM_98XX ]]; then
+		FEXT="98xx"
+	else
+		FEXT="96xx"
+	fi
 fi
+
+if [ -z "$CRYPTO_DEVICE" ]
+then
+	echo "Crypto device not found"
+	exit 1
+fi
+
 EAL_ARGS="-c $COREMASK -a $CRYPTO_DEVICE"
 
 declare -i SCLK
@@ -52,9 +68,13 @@ function get_system_info()
 	local div=1000000
 
 	sysclk_dir="/sys/kernel/debug/clk"
+if [[ $IS_CN10K -ne 0 ]]; then
+	fp_rclk="$sysclk_dir/coreclk/clk_rate"
+else
 	fp_rclk="$sysclk_dir/rclk/clk_rate"
-	fp_sclk="$sysclk_dir/sclk/clk_rate"
 	fp_cptclk="$sysclk_dir/cptclk/clk_rate"
+fi
+	fp_sclk="$sysclk_dir/sclk/clk_rate"
 
 	if $SUDO test -f "$fp_rclk"; then
 		RCLK=$(echo "`$SUDO cat $fp_rclk` / $div" | bc)
@@ -70,6 +90,11 @@ function get_system_info()
 		exit 1
 	fi
 
+if [[ $IS_CN10K -ne 0 ]]; then
+	echo "CORECLK:   $RCLK Mhz"
+	echo "SCLK:      $SCLK Mhz"
+	return
+fi
 	if $SUDO test -f "$fp_cptclk"; then
 		CPTCLK=$(echo "`$SUDO cat $fp_cptclk` / $div" | bc)
 	else
@@ -351,8 +376,37 @@ function zuc_eea3_perf()
 	write_mops $cipher
 }
 
+function ae_modex_perf()
+{
+	local optype="modex"
+	local try_cnt=1
+
+	echo "Perf Test: $optype"
+
+	if [[ $IS_CN10K -ne 0 ]]; then
+		MAX_TRY_CNT=1
+	fi
+	while [ $try_cnt -le $MAX_TRY_CNT ]; do
+	echo "Run $try_cnt"
+	cryptoperf_run "$EAL_ARGS" \
+		"--devtype $DEVTYPE --ptest throughput --optype $optype \
+		--pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
+		--burst-sz $BURSTSZ --silent --csv-friendly"
+
+	populate_act_mops $((try_cnt-1))
+	let try_cnt=try_cnt+1
+	done
+
+	write_mops $optype
+}
+
 get_system_info
-FNAME="rclk"${RCLK}"_sclk"${SCLK}"_cptclk"${CPTCLK}"."${FEXT}
+if [[ $IS_CN10K -ne 0 ]]; then
+	FNAME="rclk"${RCLK}"_sclk"${SCLK}"."${FEXT}
+else
+	FNAME="rclk"${RCLK}"_sclk"${SCLK}"_cptclk"${CPTCLK}"."${FEXT}
+fi
+
 FPATH="$SCRIPTPATH/$FNAME"
 rm -f "$FPATH"
 
@@ -363,4 +417,5 @@ aes_sha1_hmac_ipsec_perf
 aead_ipsec_perf
 zuc_eia3_perf
 zuc_eea3_perf
+ae_modex_perf
 remove_files

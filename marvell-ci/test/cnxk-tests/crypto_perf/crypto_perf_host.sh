@@ -12,6 +12,9 @@ PROJROOT=${PROJROOT:-$PWD}
 BUILD_DIR=${BUILD_DIR:-$PWD/build}
 TMO=10m
 
+$REMOTE "cat /proc/device-tree/compatible | grep -q 'cn10k'"
+IS_CN10K=$?
+
 function test_init()
 {
 	$REMOTE 'sudo dmesg -c' 2>&1 > /dev/null
@@ -27,7 +30,7 @@ function copy_files()
 
 	echo "Copying files to $TARGET_BOARD"
 	scp $BUILD_DIR/app/dpdk-test-crypto-perf $TARGET_BOARD:$REMOTE_DIR
-	scp $perf_dir/crypto_perf_standalone.sh $TARGET_BOARD:$REMOTE_DIR
+	scp $perf_dir/crypto_perf_target.sh $TARGET_BOARD:$REMOTE_DIR
 	$REMOTE "mkdir -p $REMOTE_DIR/marvell-ci/test/board"
 	scp $PROJROOT/marvell-ci/test/board/oxk-devbind-basic.sh \
 		$TARGET_BOARD:$REMOTE_DIR/marvell-ci/test/board
@@ -39,6 +42,7 @@ function target_setup()
 	if [ $SKIP_TARGET_SETUP == "y" ]; then
 		return
 	fi
+
 	$PROJROOT/marvell-ci/test/board/cnxk-target-setup.sh
 }
 
@@ -50,7 +54,7 @@ function run_test()
 	local res
 
 	echo "Start $name"
-	cmd="cd $REMOTE_DIR && $REMOTE_DIR/crypto_perf_standalone.sh $REMOTE_DIR"
+	cmd="cd $REMOTE_DIR && $REMOTE_DIR/crypto_perf_target.sh $REMOTE_DIR"
 	echo "$cmd"
 
 	curtime=$SECONDS
