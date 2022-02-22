@@ -53,8 +53,7 @@ def lock_dual_board_and_test(s, board_rsrc, test_name, test_def) {
 	}
 }
 
-def prepare_cn9k_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc,
-			    alert_slack = false) {
+def prepare_cn9k_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc) {
 	if (!s.utils.get_flag(s, "run_${test_name}"))
 		return
 
@@ -64,7 +63,6 @@ def prepare_cn9k_test_stage(Object s, tests, test_name, test_env, build_name, bo
 		def build_dir = "${s.BUILD_DIR}/build/${build_name}"
 		def src_dir = "${s.BUILD_DIR}/src/${build_name}"
 		def run_dir = "${WORKSPACE}/${test_name}"
-		def link = s.utils.blueocean_link(s)
 
 		def test_def = { board_ip, gen_board_ip ->
 			def gen_board = ""
@@ -112,19 +110,10 @@ def prepare_cn9k_test_stage(Object s, tests, test_name, test_env, build_name, bo
 					label: "Test ${test_name}"
 				)
 				s.utils.post_artifacts(test_name)
-				if (alert_slack)
-					s.utils.message_slack(s,
-						"Nightly Regression ${test_name} Passed (${link})")
-
 			} catch (err) {
 				if (s.FAILING_FAST) {
 					unstable ("Aborting as a parallel stage failed")
 				} else {
-					if (alert_slack)
-						s.utils.message_slack(s,
-							"Nightly Regression ${test_name} Failed (${link})",
-							true)
-
 					if (!s.utils.get_flag(s, "disable_failfast"))
 						s.FAILING_FAST = true
 					s.utils.post_artifacts(test_name)
@@ -249,13 +238,11 @@ def prepare_tests(Object s, tests) {
 
 	/* CN96 Perf Stage */
 	prepare_cn9k_test_stage(s, tests, "test-cn96-perf", "cn96-perf.env", "test-cn9k-build",
-				"DEV_CI_DATAPLANE_96xx_PERF_SETUP",
-				s.utils.get_flag(s, "nightly_regression"))
+				"DEV_CI_DATAPLANE_96xx_PERF_SETUP")
 
 	/* CN98 Perf Stage */
 	prepare_cn9k_test_stage(s, tests, "test-cn98-perf", "cn98-perf.env", "test-cn9k-build",
-				"DEV_CI_DATAPLANE_98xx_PERF_SETUP",
-				s.utils.get_flag(s, "nightly_regression"))
+				"DEV_CI_DATAPLANE_98xx_PERF_SETUP")
 
 	if (s.ENABLE_CN10K) {
 		/* ASIM Test Stage */
@@ -288,13 +275,24 @@ def run(Object s) {
 			lock(env.NODE_NAME) {
 				s.utils.print_env(s)
 				stage ("Test") {
+					def link = s.utils.blueocean_link(s)
+					def nightly_name = s.utils.get_nightly_name(s)
+
 					/* Initialisations for tests */
 					sh script: """#!/bin/bash -x
 					set -euo pipefail
 					sudo mkdir -p ${s.BUILD_DIR}
 					sudo chown -R jenkins:jenkins ${s.BUILD_DIR}
 					"""
-					parallel(tests)
+					try {
+						parallel(tests)
+						if (nightly_name)
+							s.utils.message_slack(s, "Nightly Test ${nightly_name} Passed (${link})")
+					} catch (err) {
+						if (nightly_name)
+							s.utils.message_slack(s, "Nightly Test ${nightly_name} Failed (${link})", true)
+						error "-E- Test stages failed"
+					}
 				}
 			}
 		}

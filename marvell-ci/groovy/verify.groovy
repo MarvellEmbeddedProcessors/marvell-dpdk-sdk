@@ -5,10 +5,7 @@
 def run(Object s)
 {
 	stage ('Verification') {
-		if (s.utils.get_flag(s, "nightly_regression")) {
-			if (!s.utils.get_flag(s, "run_test-cn96-perf"))
-				error "-E- Didn't verify all regression tests"
-		} else {
+		if (!s.utils.get_nightly_name(s)) {
 			if (s.utils.get_flag(s, "skip_build"))
 				error "-E- Didn't verify all mandatory builds"
 
