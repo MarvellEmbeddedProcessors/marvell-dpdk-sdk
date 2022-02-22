@@ -49,6 +49,8 @@
 #define BYTE_LEN	  8
 #define OCM_MAP_WORD_SIZE (sizeof(uint8_t) * BYTE_LEN)
 
+#define ML_MOD_INC(i, l) ((i) == (l - 1) ? (i) = 0 : (i)++)
+
 static void
 cn10k_ml_fw_print_info(struct cnxk_ml_fw *ml_fw)
 {
@@ -1295,6 +1297,9 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	}
 	dev->data->nb_queue_pairs = conf->nb_queue_pairs;
 
+	dev->enqueue_burst = cn10k_ml_enqueue_burst;
+	dev->dequeue_burst = cn10k_ml_dequeue_burst;
+
 	ml_config->active = true;
 
 	return 0;
@@ -2058,6 +2063,95 @@ cn10k_ml_queue_pair_release(struct rte_mldev *dev, uint16_t qp_id)
 	dev->data->queue_pairs[qp_id] = NULL;
 
 	return 0;
+}
+
+static int
+ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
+	   struct cn10k_ml_pending_queue *pend_q)
+{
+	PLT_SET_USED(dev);
+	PLT_SET_USED(qp);
+	PLT_SET_USED(op);
+	PLT_SET_USED(pend_q);
+
+	return 0;
+}
+
+uint16_t
+cn10k_ml_enqueue_burst(struct rte_mldev *dev, uint16_t qp_id,
+		       struct rte_ml_op **ops, uint16_t nb_ops)
+{
+	struct cn10k_ml_pending_queue *pend_q;
+	struct cn10k_ml_qp *qp;
+	struct rte_ml_op *op;
+	uint16_t nb_allowed;
+	uint16_t count;
+	int ret;
+
+	qp = dev->data->queue_pairs[qp_id];
+	pend_q = &qp->pend_q;
+
+	nb_allowed = qp->nb_desc - pend_q->pending_count;
+	if (nb_ops > nb_allowed)
+		nb_ops = nb_allowed;
+
+	/*  Queue jobs */
+	for (count = 0; count < nb_ops; count++) {
+		op = ops[count];
+		ret = ml_enqueue(dev, qp, op, pend_q);
+
+		if (ret != 0)
+			break;
+	}
+
+	return count;
+}
+
+static int
+ml_dequeue(struct rte_mldev *dev, struct rte_ml_op *op,
+	   struct cn10k_ml_req *req)
+{
+	PLT_SET_USED(dev);
+	PLT_SET_USED(op);
+	PLT_SET_USED(req);
+
+	return 0;
+}
+
+uint16_t
+cn10k_ml_dequeue_burst(struct rte_mldev *dev, uint16_t qp_id,
+		       struct rte_ml_op **ops, uint16_t nb_ops)
+{
+	struct cnxk_ml_job_compl *ml_job_compl;
+	struct cn10k_ml_pending_queue *pend_q;
+	struct cn10k_ml_req *req;
+	struct cn10k_ml_qp *qp;
+	uint16_t nb_completed;
+	uint16_t nb_pending;
+
+	qp = dev->data->queue_pairs[qp_id];
+	pend_q = &qp->pend_q;
+	nb_pending = pend_q->pending_count;
+
+	if (nb_ops > nb_pending)
+		nb_ops = nb_pending;
+
+	for (nb_completed = 0; nb_completed < nb_ops; nb_completed++) {
+		req = &pend_q->req_queue[pend_q->deq_head];
+		ml_job_compl = (struct cnxk_ml_job_compl *)(req->job_handle);
+
+		if (plt_read64(&ml_job_compl->status_ptr) !=
+		    ML_CN10K_POLL_JOB_FINISH)
+			break;
+
+		ops[nb_completed] = (struct rte_ml_op *)(req->op_handle);
+		ml_dequeue(dev, ops[nb_completed], req);
+
+		ML_MOD_INC(pend_q->deq_head, qp->nb_desc);
+		pend_q->pending_count -= 1;
+	}
+
+	return nb_completed;
 }
 
 struct rte_mldev_ops cn10k_ml_ops = {

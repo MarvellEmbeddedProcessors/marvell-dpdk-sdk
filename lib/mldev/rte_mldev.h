@@ -273,6 +273,88 @@ rte_mldev_queue_pair_setup(uint8_t dev_id, uint16_t queue_pair_id,
 			   const struct rte_mldev_qp_conf *qp_conf,
 			   int socket_id);
 
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Enqueue a burst of ML inferences for processing on an ML device.
+ *
+ * The rte_mldev_enqueue_burst() function is invoked to place ML inference
+ * operations on the queue *qp_id* of the device designated by its *dev_id*.
+ *
+ * The *nb_ops* parameter is the number of inferences to process which are
+ * supplied in the *ops* array of *rte_ml_op* structures.
+ *
+ * The rte_mldev_enqueue_burst() function returns the number of inferences it
+ * actually enqueued for processing. A return value equal to *nb_ops* means that
+ * all packets have been enqueued.
+ *
+ * @param dev_id
+ *   The identifier of the device.
+ * @param qp_id
+ *   The index of the queue pair which inferences are to be enqueued for
+ * processing. The value must be in the range [0, nb_queue_pairs - 1] previously
+ * supplied to *rte_mldev_configure*.
+ * @param ops
+ *   The address of an array of *nb_ops* pointers to *rte_ml_op* structures
+ * which contain the ml inferences to be processed.
+ * @param nb_ops
+ *   The number of operations to process.
+ *
+ * @return
+ *   The number of inference operations actually enqueued to the ML device. The
+ * return value can be less than the value of the *nb_ops* parameter when the ML
+ * devices queue is full or if invalid parameters are specified in a
+ * *rte_ml_op*.
+ */
+__rte_experimental
+uint16_t
+rte_mldev_enqueue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
+			uint16_t nb_ops);
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Dequeue a burst of processed ML inferences operations from a queue on the ML
+ * device. The dequeued operations are stored in *rte_crypto_op* structures
+ * whose pointers are supplied in the *ops* array.
+ *
+ * The rte_mldev_dequeue_burst() function returns the number of inferences
+ * actually dequeued, which is the number of *rte_ml_op* data structures
+ * effectively supplied into the *ops* array.
+ *
+ * A return value equal to *nb_ops* indicates that the queue contained at least
+ * *nb_ops* operations, and this is likely to signify that other processed
+ * operations remain in the devices output queue. Applications implementing a
+ * "retrieve as many processed operations as possible" policy can check this
+ * specific case and keep invoking the rte_mldev_dequeue_burst() function until
+ * a value less than *nb_ops* is returned.
+ *
+ * The rte_mldev_dequeue_burst() function does not provide any error
+ * notification to avoid the corresponding overhead.
+ *
+ * @param dev_id
+ *   The symmetric ML device identifier
+ * @param qp_id
+ *   The index of the queue pair from which to retrieve processed packets. The
+ * value must be in the range [0, nb_queue_pair - 1] previously supplied to
+ * rte_mldev_configure().
+ * @param ops
+ *   The address of an array of pointers to *rte_ml_op* structures that must be
+ * large enough to store *nb_ops* pointers in it.
+ * @param nb_ops
+ *   The maximum number of inferences to dequeue.
+ *
+ * @return
+ *   The number of operations actually dequeued, which is the number of pointers
+ * to *rte_ml_op* structures effectively supplied to the *ops* array.
+ */
+__rte_experimental
+uint16_t
+rte_mldev_dequeue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
+			uint16_t nb_ops);
+
 #ifdef __cplusplus
 }
 #endif

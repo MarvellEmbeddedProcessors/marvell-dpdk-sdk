@@ -438,3 +438,23 @@ rte_mldev_queue_pair_setup(uint8_t dev_id, uint16_t queue_pair_id,
 	return (*dev->dev_ops->queue_pair_setup)(dev, queue_pair_id, qp_conf,
 						 socket_id);
 }
+
+uint16_t
+rte_mldev_enqueue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
+			uint16_t nb_ops)
+{
+	struct rte_mldev *dev = &rte_ml_devices[dev_id];
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->enqueue_burst, -ENOTSUP);
+	return (*dev->enqueue_burst)(dev, qp_id, ops, nb_ops);
+}
+
+uint16_t
+rte_mldev_dequeue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
+			uint16_t nb_ops)
+{
+	struct rte_mldev *dev = &rte_ml_devices[dev_id];
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dequeue_burst, -ENOTSUP);
+	return (*dev->dequeue_burst)(dev, qp_id, ops, nb_ops);
+}

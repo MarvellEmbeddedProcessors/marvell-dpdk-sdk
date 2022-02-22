@@ -32,6 +32,16 @@ struct rte_mldev_pmd_init_params {
 	int socket_id;
 };
 
+struct rte_mldev;
+
+/**< @internal Enqueue a burst of inference jobs to a queue on ML device. */
+typedef uint16_t (*mldev_enqueue_t)(struct rte_mldev *dev, uint16_t qp_id,
+				    struct rte_ml_op **ops, uint16_t nb_ops);
+
+/**< @internal Dequeue a burst of inference jobs fromn a queue on ML device. */
+typedef uint16_t (*mldev_dequeue_t)(struct rte_mldev *dev, uint16_t qp_id,
+				    struct rte_ml_op **ops, uint16_t nb_ops);
+
 /**
  * @internal
  * The data part, with no function pointers, associated with each device. This
@@ -64,6 +74,12 @@ struct rte_mldev_data {
 
 /** @internal The data structure associated with each ML device. */
 struct rte_mldev {
+	/** Pointer to PMD enqueue function. */
+	mldev_enqueue_t dequeue_burst;
+
+	/** Pointer to PMD dequeue function. */
+	mldev_dequeue_t enqueue_burst;
+
 	/** Pointer to device data */
 	struct rte_mldev_data *data;
 
@@ -199,7 +215,6 @@ typedef int (*mldev_info_get_t)(struct rte_mldev *dev,
 typedef int (*mldev_queue_pair_setup_t)(struct rte_mldev *dev, uint16_t qp_id,
 					const struct rte_mldev_qp_conf *qp_conf,
 					int socket_id);
-
 
 /**
  * Release memory resources allocated by given queue pair.

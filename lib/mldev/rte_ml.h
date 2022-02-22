@@ -184,6 +184,54 @@ __rte_experimental
 int
 rte_ml_model_info_get(uint8_t dev_id, uint8_t model_id, struct rte_ml_model_info *model_info);
 
+/** ML job statistics. */
+struct rte_ml_op_stats {
+	/** Firmware latency. */
+	uint64_t fw_latency_ns;
+
+	/** Hardware latency. */
+	uint64_t hw_latency_ns;
+};
+
+/** ML job result structure. */
+struct rte_ml_op_result {
+	/** Job status, when true the job is completed successfully. */
+	bool success;
+
+	/** Job error code, if unsuccessful. */
+	uint64_t error_code;
+
+	/** Job stats. */
+	struct rte_ml_op_stats stats;
+};
+
+/**
+ * The generic *rte_ml_op* structure to hold the ML attributes
+ * for enqueue and dequeue operation.
+ */
+struct rte_ml_op {
+	/** Model ID */
+	int model_id;
+
+	/** Input size */
+	uint64_t isize;
+
+	/** Input buffer */
+	void *ibuffer;
+
+	/** Output size */
+	uint64_t osize;
+
+	/** Output buffer */
+	void *obuffer;
+
+	/** Result structure */
+	struct rte_ml_op_result result;
+
+	/** User context pointer value from job parameters. */
+	void *user_ptr;
+};
+
 #ifdef __cplusplus
 }
 #endif

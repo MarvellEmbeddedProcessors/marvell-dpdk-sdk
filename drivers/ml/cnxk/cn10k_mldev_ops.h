@@ -67,4 +67,10 @@ int cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id);
 
 int cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id);
 
+uint16_t cn10k_ml_enqueue_burst(struct rte_mldev *dev, uint16_t qp_id,
+				struct rte_ml_op **op, uint16_t nb_ops);
+
+uint16_t cn10k_ml_dequeue_burst(struct rte_mldev *dev, uint16_t qp_id,
+				struct rte_ml_op **op, uint16_t nb_ops);
+
 #endif /* _CNXK_MLDEV_OPS_H_ */
