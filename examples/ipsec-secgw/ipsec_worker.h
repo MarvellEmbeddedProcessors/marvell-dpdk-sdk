@@ -114,7 +114,8 @@ adjust_ipv6_pktlen(struct rte_mbuf *m, const struct rte_ipv6_hdr *iph,
 }
 
 static __rte_always_inline void
-prepare_one_packet(struct rte_mbuf *pkt, struct ipsec_traffic *t)
+prepare_one_packet(struct rte_security_ctx *ctx, struct rte_mbuf *pkt,
+		   struct ipsec_traffic *t)
 {
 	uint32_t ptype = pkt->packet_type;
 	const struct rte_ether_hdr *eth;
@@ -200,13 +201,9 @@ prepare_one_packet(struct rte_mbuf *pkt, struct ipsec_traffic *t)
 	 * with the security session.
 	 */
 
-	if (pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD &&
-			rte_security_dynfield_is_registered()) {
+	if (ctx && pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD) {
 		struct ipsec_sa *sa;
 		struct ipsec_mbuf_metadata *priv;
-		struct rte_security_ctx *ctx = (struct rte_security_ctx *)
-						rte_eth_dev_get_sec_ctx(
-						pkt->port);
 
 		/* Retrieve the userdata registered. Here, the userdata
 		 * registered is the SA pointer.
@@ -228,8 +225,8 @@ prepare_one_packet(struct rte_mbuf *pkt, struct ipsec_traffic *t)
 }
 
 static __rte_always_inline void
-prepare_traffic(struct rte_mbuf **pkts, struct ipsec_traffic *t,
-		uint16_t nb_pkts)
+prepare_traffic(struct rte_security_ctx *ctx, struct rte_mbuf **pkts,
+		struct ipsec_traffic *t, uint16_t nb_pkts)
 {
 	int32_t i;
 
@@ -240,11 +237,11 @@ prepare_traffic(struct rte_mbuf **pkts, struct ipsec_traffic *t,
 	for (i = 0; i < (nb_pkts - PREFETCH_OFFSET); i++) {
 		rte_prefetch0(rte_pktmbuf_mtod(pkts[i + PREFETCH_OFFSET],
 					void *));
-		prepare_one_packet(pkts[i], t);
+		prepare_one_packet(ctx, pkts[i], t);
 	}
 	/* Process left packets */
 	for (; i < nb_pkts; i++)
-		prepare_one_packet(pkts[i], t);
+		prepare_one_packet(ctx, pkts[i], t);
 }
 
 static __rte_always_inline void
