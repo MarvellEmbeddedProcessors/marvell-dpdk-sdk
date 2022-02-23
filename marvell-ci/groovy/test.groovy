@@ -208,10 +208,19 @@ def prepare_asim_test_substage(Object s, tests, test_name, test_env, build_name,
 	tests.put(test_name, stg)
 }
 
-def prepare_asim_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc) {
+def prepare_asim_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc,
+			    substage_name = null) {
 	if (!s.utils.get_flag(s, "run_${test_name}"))
 		return
 
+	/* If substage name is given, run all the tests under that substage */
+	if (substage_name) {
+		prepare_asim_test_substage(s, tests, "${test_name}-SUBSTAGE-${substage_name}",
+					   test_env, build_name, board_rsrc, 0, 999)
+		return
+	}
+
+	/* If substage name is not given, split the tests into different substages */
 	prepare_asim_test_substage(s, tests, "${test_name}-SUBSTAGE-1", test_env, build_name,
 				   board_rsrc, 0, 34)
 	prepare_asim_test_substage(s, tests, "${test_name}-SUBSTAGE-2", test_env, build_name,
@@ -219,7 +228,9 @@ def prepare_asim_test_stage(Object s, tests, test_name, test_env, build_name, bo
 	prepare_asim_test_substage(s, tests, "${test_name}-SUBSTAGE-3", test_env, build_name,
 				   board_rsrc, 71, 105)
 	prepare_asim_test_substage(s, tests, "${test_name}-SUBSTAGE-4", test_env, build_name,
-				   board_rsrc, 106, 999)
+				   board_rsrc, 106, 140)
+	prepare_asim_test_substage(s, tests, "${test_name}-SUBSTAGE-5", test_env, build_name,
+				   board_rsrc, 141, 999)
 }
 
 def prepare_tests(Object s, tests) {
@@ -256,10 +267,14 @@ def prepare_tests(Object s, tests) {
 		/* ASIM Test Stage */
 		prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka.env",
 					"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM")
+		prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka-crypto.env",
+					"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM", "crypto")
 
 		/* ASIM Debug Test Stage */
 		prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka.env",
 					"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM")
+		prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka-crypto.env",
+					"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM", "crypto")
 	}
 
 	num_tests = tests.size()
