@@ -179,27 +179,6 @@ function target_sync()
 		$PROJECT_ROOT/marvell-ci $TARGET_ASIM:$REMOTE_DIR
 }
 
-function check_known_issues()
-{
-	local issue
-	local res=0
-
-	rm -f ${TMP_DIR}/asim_cmd_uart.log.check && touch ${TMP_DIR}/asim_cmd_uart.log.check
-	$REMOTE sudo cat /tmp/asim_cmd_uart.log > ${TMP_DIR}/asim_cmd_uart.log.check 2>/dev/null || true
-	for issue in "${KNOWN_ISSUES[@]}"; do
-		grep "$issue" ${TMP_DIR}/asim_cmd_uart.log.check 2>/dev/null 1>/dev/null
-		if [[ $? -ne 1 ]]; then
-			echo "Found a known issue: $issue"
-			res=1
-			break
-		fi
-	done
-
-	rm -f ${TMP_DIR}/asim_cmd_uart.log.check
-
-	return $res
-}
-
 function check_asim_errors()
 {
 	local pattern
@@ -275,7 +254,6 @@ function run_test()
 	local curtime
 	local run_status
 	local int_err_status
-	local known_issue_status
 	local ret
 
 	# Backup current logs so that logs specific to this test can be extracted
@@ -300,8 +278,6 @@ function run_test()
 	# Check for errors and known issues
 	check_asim_errors
 	int_err_status=$?
-	check_known_issues
-	known_issue_status=$?
 
 	ret=0
 	if [[ $run_status -eq 0 ]]; then
@@ -316,12 +292,6 @@ function run_test()
 	# ASIM errors should cause a test re-run, irrespective of test result
 	if [[ $int_err_status -ne 0 ]]; then
 		echo "ASIM Error Found [$int_err_status], Retrying !!"
-		ret=2
-	fi
-
-	# If test has failed, check for known issues.
-	if [[ $ret -eq 1 ]] && [[ $known_issue_status -ne 0 ]]; then
-		echo "Known Issue Found, Retrying !!"
 		ret=2
 	fi
 
@@ -354,9 +324,11 @@ function run_all_tests()
 		test_num=$((test_num + 1))
 		test_enabled $test_num
 		res=$?
+		# Test is skipped, goto next test
 		if [[ $res == 77 ]]; then
 			continue
 		fi
+		# All tests have been completed, break out
 		if [[ $res -ne 0 ]]; then
 			break
 		fi
@@ -368,23 +340,18 @@ function run_all_tests()
 			run_test $iter $tst
 			res=$?
 
-			# Success / Skipped
+			# Test was success / Skipped, break out
 			if [[ $res -eq 0 ]]; then
 				break
 			fi
 
-			# Failure
-			if [[ $res -eq 1 ]]; then
-				save_asim_cmd_logs last_run ${tst}
-				test_exit -1 yes "FAILURE: Test $tst failed"
-			fi
-
-			# Retry
+			# Failed and max retries hit
 			if [[ $iter -ge $ASIM_MAX_REBOOTS ]]; then
 				save_asim_cmd_logs last_run ${tst}
 				test_exit -1 yes "FAILURE: Not retrying $tst as max reboots hit"
 			fi
 
+			# Failed, but attempt retry
 			save_asim_complete_logs iter.$((iter))
 			launch_asim
 			if [[ $? -ne 0 ]]; then
