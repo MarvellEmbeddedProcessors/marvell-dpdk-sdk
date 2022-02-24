@@ -52,7 +52,7 @@ def get_boards(board_rsrc) {
 
 def get_nightly_name(Object s) {
 	def test_name = null
-	def tests = ['cn96-perf', 'asim-cn10ka']
+	def tests = ['cn96-perf', 'cn106-perf', 'asim-cn10ka']
 
 	/* Ensure that at max only one nightly flag is set */
 	for (t in tests) {

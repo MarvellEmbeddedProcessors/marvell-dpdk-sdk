@@ -123,7 +123,8 @@ def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_r
 		}
 
 		if ("${board_rsrc}" == "DEV_CI_DATAPLANE_96xx_PERF_SETUP" ||
-		    "${board_rsrc}" == "DEV_CI_DATAPLANE_98xx_PERF_SETUP")
+		    "${board_rsrc}" == "DEV_CI_DATAPLANE_98xx_PERF_SETUP" ||
+		    "${board_rsrc}" == "DEV_CI_DATAPLANE_106xx_PERF_SETUP")
 			lock_dual_board_and_test(s, "${board_rsrc}", test_name, test_def)
 		else
 			lock_board_and_test(s, "${board_rsrc}", test_name, test_def)
@@ -263,6 +264,10 @@ def prepare_tests(Object s, tests) {
 		/* CN10K Debug Test */
 		prepare_test_stage(s, tests, "test-cn10k-debug", "cn10k.env", "test-cn10k-debug-build",
 					"DEV_CI_DATAPLANE_106xx")
+
+		/* CN10K Perf Stage */
+		prepare_test_stage(s, tests, "test-cn106-perf", "cn106-perf.env", "test-cn10k-build",
+					"DEV_CI_DATAPLANE_106xx_PERF_SETUP")
 
 		/* ASIM Test Stage */
 		prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka.env",

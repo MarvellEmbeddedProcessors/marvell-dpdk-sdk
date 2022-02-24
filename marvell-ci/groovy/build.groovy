@@ -289,6 +289,7 @@ def prepare_builds(Object s, nodes) {
 	if (s.ENABLE_CN10K) {
 		/* cn10k test builds */
 		if (s.utils.get_flag(s, "run_test-cn10k") ||
+		    s.utils.get_flag(s, "run_test-cn106-perf") ||
 		    s.utils.get_flag(s, "run_test-asim-cn10ka") ||
 		    !s.utils.get_flag(s, "skip_build"))
 			add_build_stage(s, nodes, "test-cn10k-build", 'gcc-marvell',

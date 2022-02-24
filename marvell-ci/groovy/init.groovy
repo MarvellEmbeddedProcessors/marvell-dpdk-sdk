@@ -68,6 +68,7 @@ def init_env_vars(Object s) {
 		'run_test-cn98-perf' : [ 'Run CN98 Perf tests', false],
 		'run_test-cn10k' : [ 'Run CN10k tests', false],
 		'run_test-cn10k-debug' : [ 'Run CN10k Debug tests', false],
+		'run_test-cn106-perf' : [ 'Run CN106 Perf tests', false],
 		'run_test-asim-cn10ka' : [ 'Run CN10ka tests', false],
 		'run_test-asim-cn10ka-debug' : [ 'Run CN10ka Debug tests', false],
 		'disable_failfast' : [ 'Disable failFast for parallel stages', false ],
@@ -75,6 +76,7 @@ def init_env_vars(Object s) {
 		'skip_check_sanity' : [ 'Skip sanity check', false ],
 		'force_start' : [ 'Force start CI on non-regular branches', false ],
 		'nightly_test-cn96-perf' : [ 'Enables Nightly CN96 Perf tests, checks and messages. This flag will reset other flags.', false ],
+		'nightly_test-cn106-perf' : [ 'Enables Nightly CN106 Perf tests, checks and messages. This flag will reset other flags.', false ],
 		'nightly_test-asim-cn10ka' : [ 'Enables Nightly CN10ka ASIM test, checks and messages. This flag will reset other flags.', false ],
 		'help' : [ 'Display this help message and abort the build', false ],
 	]
