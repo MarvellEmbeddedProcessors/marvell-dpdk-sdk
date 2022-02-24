@@ -52,6 +52,12 @@ struct rte_mldev_data {
 	/** Device state: STARTED(1) / STOPPED(0) */
 	uint8_t dev_started : 1;
 
+	/** Array of pointers to queue pairs. */
+	void **queue_pairs;
+
+	/** Number of device queue pairs. */
+	uint16_t nb_queue_pairs;
+
 	/** PMD-specific private data */
 	void *dev_private;
 } __rte_cache_aligned;

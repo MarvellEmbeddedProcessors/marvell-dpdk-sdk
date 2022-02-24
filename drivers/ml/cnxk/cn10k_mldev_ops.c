@@ -1231,6 +1231,38 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	ml_config->timeout.unload = ML_TIMEOUT_UNLOAD_S * scale_factor;
 	ml_config->timeout.run = ML_TIMEOUT_RUN_S * scale_factor;
 
+	/* Configure queue-pairs */
+	if (dev->data->queue_pairs == NULL) {
+		mz_size = sizeof(dev->data->queue_pairs[0]) *
+			  conf->nb_queue_pairs;
+		dev->data->queue_pairs = rte_zmalloc(
+			"mldev->queue_pairs", mz_size, RTE_CACHE_LINE_SIZE);
+		if (dev->data->queue_pairs == NULL) {
+			dev->data->nb_queue_pairs = 0;
+			plt_err("Failed to get memory for queue_pairs, nb_queue_pairs %u",
+				conf->nb_queue_pairs);
+			return -ENOMEM;
+		}
+	} else { /* re-configure */
+		void **queue_pairs;
+
+		queue_pairs = dev->data->queue_pairs;
+		queue_pairs = rte_realloc(queue_pairs,
+					  sizeof(queue_pairs[0]) *
+						  conf->nb_queue_pairs,
+					  RTE_CACHE_LINE_SIZE);
+		if (queue_pairs == NULL) {
+			plt_err("Failed to realloc queue_pairs, nb_queue_pairs = %u",
+				conf->nb_queue_pairs);
+			return -ENOMEM;
+		}
+
+		memset(queue_pairs, 0,
+		       sizeof(queue_pairs[0]) * conf->nb_queue_pairs);
+		dev->data->queue_pairs = queue_pairs;
+	}
+	dev->data->nb_queue_pairs = conf->nb_queue_pairs;
+
 	ml_config->active = true;
 
 	return 0;
@@ -1290,6 +1322,9 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 	job_pool = rte_mempool_lookup(ML_JOBPOOL_NAME);
 	if (job_pool != NULL)
 		rte_mempool_free(job_pool);
+
+	if (dev->data->queue_pairs)
+		rte_free(dev->data->queue_pairs);
 
 	/* Clear resources */
 	mz = plt_memzone_lookup(ML_CONFIG_MEMZONE_NAME);

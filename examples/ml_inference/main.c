@@ -84,6 +84,7 @@ int
 main(int argc, char **argv)
 {
 	struct rte_mldev_config ml_config;
+	struct rte_mldev_info dev_info;
 	struct rte_ml_model ml_model;
 	const struct rte_memzone *mz;
 	char str[PATH_MAX] = {0};
@@ -115,10 +116,18 @@ main(int argc, char **argv)
 		return -ENODEV;
 	}
 
-	/* Configure ML devices, use only dev_id = 0 */
+	/* Get device info */
 	dev_id = 0;
 	ret = 0;
+	if (rte_mldev_info_get(dev_id, &dev_info) != 0) {
+		printf("Failed to get device info, dev_id = %d\n", dev_id);
+		ret = -1;
+		goto exit_cleanup;
+	}
+
+	/* Configure ML devices, use only dev_id = 0 */
 	ml_config.socket_id = rte_mldev_socket_id(dev_id);
+	ml_config.nb_queue_pairs = dev_info.max_nb_queue_pairs;
 	if (rte_mldev_configure(dev_id, &ml_config) != 0) {
 		printf("Device configuration failed, dev_id = %d\n", dev_id);
 		ret = -1;

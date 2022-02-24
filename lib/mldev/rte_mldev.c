@@ -271,7 +271,9 @@ rte_mldev_name_get(uint8_t dev_id)
 int
 rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config)
 {
+	struct rte_mldev_info dev_info;
 	struct rte_mldev *dev;
+	int ret;
 
 	if (!rte_mldev_is_valid_dev(dev_id)) {
 		MLDEV_LOG_ERR("Invalid dev_id = %x", dev_id);
@@ -279,6 +281,7 @@ rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config)
 	}
 
 	dev = &rte_ml_devices[dev_id];
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_configure, -ENOTSUP);
 
 	if (dev->data->dev_started) {
 		MLDEV_LOG_ERR(
@@ -287,7 +290,16 @@ rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config)
 		return -EBUSY;
 	}
 
-	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_configure, -ENOTSUP);
+	ret = rte_mldev_info_get(dev_id, &dev_info);
+	if (ret < 0)
+		return ret;
+
+	if (config->nb_queue_pairs > dev_info.max_nb_queue_pairs) {
+		MLDEV_LOG_ERR("Dev %u num of queues %d > %d\n", dev_id,
+			      config->nb_queue_pairs,
+			      dev_info.max_nb_queue_pairs);
+		return -EINVAL;
+	}
 
 	return (*dev->dev_ops->dev_configure)(dev, config);
 }

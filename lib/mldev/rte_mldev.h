@@ -115,6 +115,12 @@ rte_mldev_socket_id(uint8_t dev_id);
 struct rte_mldev_config {
 	/**< Socket to allocate resources on */
 	int socket_id;
+
+	/**< Number of queue pairs to configure on this device. This value
+	 * cannot exceed the max_queue_pairs which previously provided in
+	 * rte_mldev_info_get().
+	 */
+	uint16_t nb_queue_pairs;
 };
 
 /**
