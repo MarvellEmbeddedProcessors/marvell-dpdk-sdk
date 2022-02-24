@@ -17,15 +17,25 @@
 
 /* ML global variables */
 static uint16_t g_models_counter;
+static uint16_t g_inputs_counter;
+static uint16_t g_outputs_counter;
 
 /* ML args structure */
 typedef struct {
 	char models[ML_MAX_MODELS][PATH_MAX];
+	char inputs[ML_MAX_MODELS][PATH_MAX];
+	char outputs[ML_MAX_MODELS][PATH_MAX];
 } ml_opts_t;
 
 /* ML model variables structure */
 typedef struct {
 	uint8_t model_id;
+
+	uint32_t isize;
+	uint8_t *ibuff;
+
+	uint8_t *obuff;
+	uint32_t osize;
 } ml_model_vars_t;
 
 static ml_opts_t ml_opts;
@@ -45,11 +55,13 @@ parse_args(int argc, char **argv)
 
 	static struct option lgopts[] = {
 		{"model", required_argument, NULL, 'm'},
+		{"input", required_argument, NULL, 'i'},
+		{"output", required_argument, NULL, 'o'},
 		{"help", no_argument, NULL, 'h'},
 		{NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "m:h", lgopts, &option_index)) !=
-	       EOF)
+	while ((opt = getopt_long(argc, argv, "m:i:o:h", lgopts,
+				  &option_index)) != EOF)
 		switch (opt) {
 		case 'm':
 			if (g_models_counter >= ML_MAX_MODELS) {
@@ -59,6 +71,26 @@ parse_args(int argc, char **argv)
 				return -1;
 			}
 			strncpy(ml_opts.models[g_models_counter++], optarg,
+				PATH_MAX - 1);
+			break;
+		case 'i':
+			if (g_inputs_counter >= ML_MAX_MODELS) {
+				fprintf(stderr,
+					"Inputs Limit Exceeded, MAX %d\n",
+					ML_MAX_MODELS);
+				return -1;
+			}
+			strncpy(ml_opts.inputs[g_inputs_counter++], optarg,
+				PATH_MAX - 1);
+			break;
+		case 'o':
+			if (g_outputs_counter >= ML_MAX_MODELS) {
+				fprintf(stderr,
+					"Outputs Limit Exceeded, MAX %d\n",
+					ML_MAX_MODELS);
+				return -1;
+			}
+			strncpy(ml_opts.outputs[g_outputs_counter++], optarg,
 				PATH_MAX - 1);
 			break;
 		case '?':
@@ -76,6 +108,7 @@ parse_args(int argc, char **argv)
 int
 main(int argc, char **argv)
 {
+	struct rte_ml_model_info ml_model_info;
 	struct rte_mldev_config ml_config;
 	struct rte_mldev_qp_conf qp_conf;
 	struct rte_mldev_info dev_info;
@@ -84,6 +117,7 @@ main(int argc, char **argv)
 	char str[PATH_MAX] = {0};
 	uint8_t dev_count;
 	uint8_t dev_id;
+	uint32_t fsize;
 	uint16_t idx;
 	int ret = 0;
 	int err = 0;
@@ -189,6 +223,63 @@ main(int argc, char **argv)
 			goto error_model_destroy;
 		}
 
+		ret = rte_ml_model_info_get(dev_id, ml_models[idx].model_id,
+					    &ml_model_info);
+		if (ret != 0) {
+			fprintf(stderr, "Error retrieving model info : %s\n",
+				ml_model.model_name);
+			goto error_model_destroy;
+		}
+		ml_models[idx].isize = ml_model_info.total_input_size;
+		ml_models[idx].osize = ml_model_info.total_output_size;
+
+		/* Load input */
+		fp = fopen(ml_opts.inputs[idx], "r+");
+		if (fp == NULL) {
+			fprintf(stderr, "Failed to open file : %s\n",
+				ml_opts.inputs[idx]);
+			ret = -1;
+			goto error_model_destroy;
+		}
+		fseek(fp, 0, SEEK_END);
+		fsize = ftell(fp);
+		fseek(fp, 0, SEEK_SET);
+
+		if (fsize != ml_models[idx].isize) {
+			fprintf(stderr, "Invalid input file size = %d\n",
+				fsize);
+			fclose(fp);
+			ret = -1;
+			goto error_model_destroy;
+		}
+
+		snprintf(str, PATH_MAX, "input_%d", idx);
+		mz = rte_memzone_reserve_aligned(str, ml_models[idx].isize,
+						 rte_mldev_socket_id(dev_id), 0,
+						 ML_ALIGN_SIZE);
+		if (mz == NULL) {
+			fprintf(stderr, "Failed to create memzone: %s\n", str);
+			fclose(fp);
+			ret = -1;
+			goto error_model_destroy;
+		}
+		ml_models[idx].ibuff = mz->addr;
+		fread(ml_models[idx].ibuff, 1, ml_models[idx].isize, fp);
+		fclose(fp);
+
+		/* Create output buffer */
+		snprintf(str, PATH_MAX, "output_%d", idx);
+		mz = rte_memzone_reserve_aligned(str, ml_models[idx].osize,
+						 rte_mldev_socket_id(dev_id), 0,
+						 ML_ALIGN_SIZE);
+		if (mz == NULL) {
+			fprintf(stderr, "Failed to create memzone: %s\n", str);
+			fclose(fp);
+			ret = -1;
+			goto error_model_destroy;
+		}
+		ml_models[idx].obuff = mz->addr;
+
 		ret = rte_ml_model_unload(dev_id, ml_models[idx].model_id);
 		if (ret != 0) {
 			fprintf(stderr, "Error unloading model : %s\n",
@@ -197,9 +288,35 @@ main(int argc, char **argv)
 		}
 
 error_model_destroy:
+
 		err = rte_ml_model_destroy(dev_id, ml_models[idx].model_id);
 		if (err != 0 && ret == 0)
 			ret = err;
+
+		if (ret == 0) {
+			/* Write output */
+			fp = fopen(ml_opts.outputs[idx], "w+");
+			if (fp == NULL) {
+				fprintf(stderr, "Failed to open file : %s\n",
+					ml_opts.outputs[idx]);
+				ret = -1;
+			}
+
+			fwrite(ml_models[idx].obuff, 1, ml_models[idx].osize,
+			       fp);
+			fclose(fp);
+		}
+
+		/* Release buffers */
+		snprintf(str, PATH_MAX, "input_%d", idx);
+		mz = rte_memzone_lookup(str);
+		if (mz)
+			rte_memzone_free(mz);
+
+		snprintf(str, PATH_MAX, "output_%d", idx);
+		mz = rte_memzone_lookup(str);
+		if (mz)
+			rte_memzone_free(mz);
 
 		if (ret != 0)
 			goto error_stop;
