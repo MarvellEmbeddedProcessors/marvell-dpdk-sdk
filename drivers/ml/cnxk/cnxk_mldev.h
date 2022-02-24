@@ -735,6 +735,9 @@ struct cnxk_ml_model {
 
 	/* Run Job descriptor index, initial value is 2. */
 	uint8_t jd_index;
+
+	/* Internal model_info structure */
+	uint8_t *model_info;
 };
 
 /* Configuration object */

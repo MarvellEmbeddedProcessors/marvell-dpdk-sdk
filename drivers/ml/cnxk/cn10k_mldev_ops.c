@@ -1101,6 +1101,30 @@ cnxk_ml_jd_update(struct rte_mldev *dev, enum cnxk_ml_job_cmd ml_job_cmd,
 	}
 }
 
+static void
+cnxk_ml_model_info_set(struct cnxk_ml_model *ml_model)
+{
+	struct cnxk_ml_model_metadata *model_metadata;
+	struct cnxk_ml_model_addr *model_addr;
+	struct rte_ml_model_info *model_info;
+	uint8_t i;
+
+	model_metadata = &ml_model->model_metadata;
+	model_addr = &ml_model->model_addr;
+	model_info = (struct rte_ml_model_info *)(ml_model->model_info);
+
+	memcpy(model_info->name, model_metadata->model.name,
+	       RTE_ML_MODEL_NAME_LEN);
+
+	model_info->total_input_size = 0;
+	for (i = 0; i < model_metadata->model.num_input; i++)
+		model_info->total_input_size += model_addr->input[i].sz_q;
+
+	model_info->total_output_size = 0;
+	for (i = 0; i < model_metadata->model.num_output; i++)
+		model_info->total_output_size += model_addr->output[i].sz_q;
+}
+
 int
 cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 {
@@ -1411,6 +1435,7 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 
 	uint8_t *base_dma_addr_load;
 	uint8_t *base_dma_addr_run;
+	size_t model_info_size;
 	size_t model_data_size;
 	uint8_t *base_dma_addr;
 	uint8_t *dma_addr_load;
@@ -1447,6 +1472,9 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	}
 
 	/* Get MZ size */
+	model_info_size = sizeof(struct rte_ml_model_info);
+	model_info_size = PLT_ALIGN_CEIL(model_info_size, ML_CN10K_ALIGN_SIZE);
+
 	model_data_size = metadata.init_model.file_size +
 			  metadata.main_model.file_size +
 			  metadata.finish_model.file_size +
@@ -1454,7 +1482,7 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	model_data_size = PLT_ALIGN_CEIL(model_data_size, ML_CN10K_ALIGN_SIZE);
 	mz_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
 				 ML_CN10K_ALIGN_SIZE) +
-		  2 * model_data_size +
+		  model_info_size + 2 * model_data_size +
 		  PLT_ALIGN_CEIL(ML_MODEL_JD_POOL_SIZE *
 					 sizeof(struct cnxk_ml_jd),
 				 ML_CN10K_ALIGN_SIZE);
@@ -1470,6 +1498,9 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	ml_model = mz->addr;
 	ml_model->ml_config = ml_config;
 	ml_model->model_id = idx;
+	ml_model->model_info = PLT_PTR_ADD(
+		mz->addr, PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
+					 ML_CN10K_ALIGN_SIZE));
 	if (model->model_name) {
 		plt_strlcpy(ml_model->name, model->model_name,
 			    sizeof(ml_model->name));
@@ -1510,7 +1541,8 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	/* Set DMA base address */
 	base_dma_addr = PLT_PTR_ADD(mz->addr,
 				    PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
-						   ML_CN10K_ALIGN_SIZE));
+						   ML_CN10K_ALIGN_SIZE) +
+					    model_info_size);
 	base_dma_addr_load = base_dma_addr;
 	base_dma_addr_run = base_dma_addr + model_data_size;
 	dma_addr_load = base_dma_addr_load;
@@ -1597,12 +1629,13 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	ml_model->model_mem_map.scratch_pages = scratch_pages;
 
 	/* Update run JD pool */
-	ml_model->jd = PLT_PTR_ADD(mz->addr,
-				   PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
-						  ML_CN10K_ALIGN_SIZE) +
-					   2 * model_data_size);
+	ml_model->jd = PLT_PTR_ADD(
+		mz->addr, PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
+					 ML_CN10K_ALIGN_SIZE) +
+				  model_info_size + 2 * model_data_size);
 	ml_model->jd_index = 0;
 	cnxk_ml_jd_init(dev, ml_model);
+	cnxk_ml_model_info_set(ml_model);
 
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
 	ml_config->ml_models[idx] = ml_model;
@@ -1885,6 +1918,24 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 	return ret;
 }
 
+static int
+cn10k_ml_model_info_get(struct rte_mldev *dev, uint8_t model_id,
+			struct rte_ml_model_info *model_info)
+{
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_model *ml_model;
+	struct cnxk_ml_dev *ml_dev;
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ml_model = ml_config->ml_models[model_id];
+
+	memcpy(model_info, ml_model->model_info,
+	       sizeof(struct rte_ml_model_info));
+
+	return 0;
+}
+
 static void
 qp_memzone_name_get(char *name, int size, int dev_id, int qp_id)
 {
@@ -2026,4 +2077,5 @@ struct rte_mldev_ops cn10k_ml_ops = {
 	.ml_model_destroy = cn10k_ml_model_destroy,
 	.ml_model_load = cn10k_ml_model_load,
 	.ml_model_unload = cn10k_ml_model_unload,
+	.ml_model_info_get = cn10k_ml_model_info_get,
 };

@@ -17,6 +17,7 @@ EXPERIMENTAL {
 	rte_ml_model_destroy;
 	rte_ml_model_load;
 	rte_ml_model_unload;
+	rte_ml_model_info_get;
 };
 
 INTERNAL {

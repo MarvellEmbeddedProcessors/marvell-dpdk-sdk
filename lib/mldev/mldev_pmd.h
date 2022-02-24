@@ -267,6 +267,19 @@ typedef int (*ml_model_load_t)(struct rte_mldev *dev, uint8_t model_id);
  */
 typedef int (*ml_model_unload_t)(struct rte_mldev *dev, uint8_t model_id);
 
+/**
+ * Function used to get model info.
+ *
+ * @param dev
+ *   ML device pointer
+ * @param model_id
+ *   Model ID to use
+ * @param model_info
+ *   Pointer to model info structure
+ */
+typedef int (*ml_model_info_get_t)(struct rte_mldev *dev, uint8_t model_id,
+				   struct rte_ml_model_info *model_info);
+
 /** @internal ML device operations function pointer table */
 struct rte_mldev_ops {
 	/**< Configure device. */
@@ -301,6 +314,9 @@ struct rte_mldev_ops {
 
 	/**< Unload model. */
 	ml_model_unload_t ml_model_unload;
+
+	/**< Get model info. */
+	ml_model_info_get_t ml_model_info_get;
 };
 
 /**

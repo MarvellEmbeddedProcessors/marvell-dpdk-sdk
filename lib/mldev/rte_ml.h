@@ -148,6 +148,42 @@ __rte_experimental
 int
 rte_ml_model_unload(uint8_t dev_id, uint8_t model_id);
 
+/** Maximum length model name string */
+#define RTE_ML_MODEL_NAME_LEN 64
+
+/** Model information structure */
+struct rte_ml_model_info {
+	/** Model name. */
+	char name[RTE_ML_MODEL_NAME_LEN];
+
+	/** Total quantized size of all inputs in bytes. */
+	uint32_t total_input_size;
+
+	/** Total quantized output size of all outputs in bytes. */
+	uint32_t total_output_size;
+};
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Get ML model information.
+ *
+ * @param[in] dev_id
+ *   Device identifier
+ * @param[in] model_id
+ *   Identifier for the model created
+ * @param[in] model_info
+ *   Pointer to a model info structure
+ *
+ * @return
+ *   - Returns 0 on success
+ *   - Returns negative value on failure
+ */
+__rte_experimental
+int
+rte_ml_model_info_get(uint8_t dev_id, uint8_t model_id, struct rte_ml_model_info *model_info);
+
 #ifdef __cplusplus
 }
 #endif
