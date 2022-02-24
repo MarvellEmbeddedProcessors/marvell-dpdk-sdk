@@ -5,20 +5,25 @@ set -euo pipefail
 
 GENERATOR_BOARD=${GENERATOR_BOARD:?}
 REMOTE_DIR=${REMOTE_DIR:-$(pwd | cut -d/ -f 1-3)}
+PLAT=${PLAT:-"cn9k"}
 CORES=(1 8 16)
 IF0=${IF0:-0002:02:00.0}
 IF1=${IF1:-0002:01:00.1}
 IF2=${IF2:-0002:01:00.2}
-EVENT_DEV=${EVENT_DEV:-0002:0e:00.0}
-CRYPTO_DEV=${CRYPTO_DEV:-0002:10:00.1}
+SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
+CPT_DEV=${CPT_DEV:-$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')}
 TOLERANCE=${TOLERANCE:-5}
 MAX_RETRY_COUNT=${MAX_RETRY_COUNT:-10}
 GENERATOR_SCRIPT=${GENERATOR_SCRIPT:-cnxk_event_perf_gen.sh}
-REF_FILE=${REF_FILE:-ref_numbers/cn96xx_rclk2200_sclk1100.csv}
 TARGET_SSH_CMD=${TARGET_SSH_CMD:-"ssh -o LogLevel=ERROR -o ServerAliveInterval=30 \
 	-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"}
 TARGET_SSH_CMD="$TARGET_SSH_CMD -n"
 RES_SEPERATOR="------------------------------------------------------------------------"
+if [[ $PLAT == cn10k ]]; then
+	REF_FILE=${REF_FILE:-ref_numbers/cn106xx_rclk2000_sclk1000.csv}
+else
+	REF_FILE=${REF_FILE:-ref_numbers/cn96xx_rclk2200_sclk1100.csv}
+fi
 
 trap 'cleanup $?' EXIT
 
@@ -36,29 +41,54 @@ get_test_args()
 
 	case $test_name in
 		L2FWD_EVENT)
-			echo "-l 0-$num_cores -n 4 -a $IF0 -a $EVENT_DEV -- -p 1" \
+			echo "-l 0-$num_cores -n 4 -a $IF0 -a $SSO_DEV -- -p 1" \
 				"--mode=eventdev --eventq-sched=${sched_mode:0:1}"
 			;;
 		L3FWD_EVENT)
-			echo "-l 0-$((num_cores - 1)) -n 4 -a $IF0 -a $EVENT_DEV -- -p 1" \
+			echo "-l 0-$((num_cores - 1)) -n 4 -a $IF0 -a $SSO_DEV -- -p 1" \
 				"--mode=eventdev --eventq-sched=$sched_mode -P"
 			;;
 		PERF_ATQ)
-			echo "-l 0-$num_cores -n 4 -a $IF0 -a $EVENT_DEV --" \
+			echo "-l 0-$num_cores -n 4 -a $IF0 -a $SSO_DEV --" \
 				"--prod_type_ethdev --nb_pkts=0 --test=perf_atq" \
 				"--stlist=${sched_mode:0:1} --wlcores=1-$num_cores"
 			;;
 		PIPELINE_ATQ_TX_FIRST)
-			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $EVENT_DEV -- " \
+			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}"\
 				"--wlcores=1-$num_cores --tx_first 256"
+			;;
+		GW_MODE_NO_PREF)
+			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=0 -- " \
+				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
+				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
+				"--wlcores=1-$num_cores --tx_first 256"
+			;;
+		GW_MODE_PREF)
+			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=1 -- " \
+				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
+				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
+				"--wlcores=1-$num_cores --tx_first 256"
+			;;
+		GW_MODE_WFE_PREF)
+			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=2 -- " \
+				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
+				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
+				"--wlcores=1-$num_cores --tx_first 256"
+			;;
+		VECTOR_MODE)
+			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
+				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
+				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
+				"--wlcores=1-$num_cores --tx_first 256" \
+				"--enable_vector --nb_eth_queues 2 --vector_size 128"
 			;;
 		CRYPTO_ADAPTER_FWD)
 			local req_cores=$((num_cores * 2))
 			local max_cores=$(($(grep -c ^processor /proc/cpuinfo) - 1))
 			((req_cores = req_cores>max_cores?max_cores:req_cores))
-			echo "-l 0-$req_cores -n 4 -a $CRYPTO_DEV -a $EVENT_DEV --" \
+			echo "-l 0-$req_cores -n 4 -a $CPT_DEV -a $SSO_DEV --" \
 				"--prod_type_cryptodev --crypto_adptr_mode 1 --nb_flows=100" \
 				"--nb_pkts=0 --test=perf_atq --stlist=${sched_mode:0:1}" \
 				"--plcores=1-$num_cores --wlcores=$((num_cores + 1))-$req_cores"
@@ -91,11 +121,11 @@ gen_needed()
 	local test_name=$1
 
 	case $test_name in
-		CRYPTO_ADAPTER_FWD | PIPELINE_ATQ_TX_FIRST)
-			return 1
+		L2FWD_EVENT | L3FWD_EVENT | PERF_ATQ)
+			return 0
 			;;
 		*)
-			return 0
+			return 1
 			;;
 	esac
 }
@@ -225,7 +255,7 @@ get_sched_modes()
 	test_name=$1
 
 	case $test_name in
-		L2FWD_EVENT)
+		L2FWD_EVENT | GW_MODE_* | VECTOR_MODE)
 			echo "atomic"
 			;;
 		L3FWD_EVENT | PIPELINE_ATQ_TX_FIRST)
@@ -274,6 +304,13 @@ run_event_perf_regression()
 	#FIXME: cleanup not terminating in time for below tests on SIGTERM
 	#PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
 	#CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+	if [[ $PLAT == cn10k ]]; then
+		test_info+="
+		GW_MODE_NO_PREF		dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
+		GW_MODE_PREF		dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
+		GW_MODE_WFE_PREF	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
+		VECTOR_MODE		dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+	fi
 
 	while IFS= read -r test; do
 		local retry_count=$MAX_RETRY_COUNT
