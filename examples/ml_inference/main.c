@@ -17,7 +17,6 @@
 
 /* ML global variables */
 static uint16_t g_models_counter;
-static bool g_interleave;
 
 /* ML args structure */
 typedef struct {
@@ -46,14 +45,10 @@ parse_args(int argc, char **argv)
 
 	static struct option lgopts[] = {
 		{"model", required_argument, NULL, 'm'},
-		{"interleave", no_argument, NULL, 'I'},
 		{"help", no_argument, NULL, 'h'},
 		{NULL, 0, NULL, 0}};
 
-	/* Set defaults */
-	g_interleave = false;
-
-	while ((opt = getopt_long(argc, argv, "m:Ih", lgopts, &option_index)) !=
+	while ((opt = getopt_long(argc, argv, "m:h", lgopts, &option_index)) !=
 	       EOF)
 		switch (opt) {
 		case 'm':
@@ -65,9 +60,6 @@ parse_args(int argc, char **argv)
 			}
 			strncpy(ml_opts.models[g_models_counter++], optarg,
 				PATH_MAX - 1);
-			break;
-		case 'I':
-			g_interleave = true;
 			break;
 		case '?':
 		case 'h':
@@ -93,9 +85,9 @@ main(int argc, char **argv)
 	uint8_t dev_count;
 	uint8_t dev_id;
 	uint16_t idx;
-	uint16_t i;
+	int ret = 0;
+	int err = 0;
 	FILE *fp;
-	int ret;
 
 	/* Init EAL */
 	ret = rte_eal_init(argc, argv);
@@ -114,25 +106,26 @@ main(int argc, char **argv)
 	/* Get total number of ML devices initialized */
 	dev_count = rte_mldev_count();
 	if (dev_count <= 0) {
-		printf("No ML devices found. exit.\n");
+		fprintf(stderr, "No ML devices found. exit.\n");
 		return -ENODEV;
 	}
 
 	/* Get device info */
 	dev_id = 0;
-	ret = 0;
-	if (rte_mldev_info_get(dev_id, &dev_info) != 0) {
-		printf("Failed to get device info, dev_id = %d\n", dev_id);
-		ret = -1;
+	ret = rte_mldev_info_get(dev_id, &dev_info);
+	if (ret != 0) {
+		fprintf(stderr, "Failed to get device info, dev_id = %d\n",
+			dev_id);
 		goto exit_cleanup;
 	}
 
 	/* Configure ML devices, use only dev_id = 0 */
 	ml_config.socket_id = rte_mldev_socket_id(dev_id);
 	ml_config.nb_queue_pairs = dev_info.max_nb_queue_pairs;
-	if (rte_mldev_configure(dev_id, &ml_config) != 0) {
-		printf("Device configuration failed, dev_id = %d\n", dev_id);
-		ret = -1;
+	ret = rte_mldev_configure(dev_id, &ml_config);
+	if (ret != 0) {
+		fprintf(stderr, "Device configuration failed, dev_id = %d\n",
+			dev_id);
 		goto exit_cleanup;
 	}
 
@@ -147,9 +140,9 @@ main(int argc, char **argv)
 	}
 
 	/* Start device */
-	if (rte_mldev_start(dev_id) != 0) {
+	ret = rte_mldev_start(dev_id);
+	if (ret != 0) {
 		fprintf(stderr, "Device start failed, dev_id = %d\n", dev_id);
-		ret = -1;
 		goto error_close;
 	};
 
@@ -159,7 +152,7 @@ main(int argc, char **argv)
 		if (fp == NULL) {
 			fprintf(stderr, "Failed to open file : %s\n",
 				ml_opts.models[idx]);
-			goto error_destroy;
+			goto error_stop;
 		}
 		fseek(fp, 0, SEEK_END);
 		ml_model.model_size = ftell(fp);
@@ -174,62 +167,45 @@ main(int argc, char **argv)
 		if (mz == NULL) {
 			fprintf(stderr, "Failed to create memzone: %s\n",
 				ml_model.model_name);
-			goto error_destroy;
+			fclose(fp);
+			goto error_stop;
 		}
 		ml_model.model_buffer = mz->addr;
-
 		fread(ml_model.model_buffer, 1, ml_model.model_size, fp);
 		fclose(fp);
 
-		if (rte_ml_model_create(dev_id, &ml_model,
-					&ml_models[idx].model_id) != 0) {
+		ret = rte_ml_model_create(dev_id, &ml_model,
+					  &ml_models[idx].model_id);
+		if (ret != 0) {
 			fprintf(stderr, "Error creating model : %s\n",
 				ml_model.model_name);
-			goto error_destroy;
+			goto error_stop;
 		}
+
+		ret = rte_ml_model_load(dev_id, ml_models[idx].model_id);
+		if (ret != 0) {
+			fprintf(stderr, "Error loading model : %s\n",
+				ml_model.model_name);
+			goto error_model_destroy;
+		}
+
+		ret = rte_ml_model_unload(dev_id, ml_models[idx].model_id);
+		if (ret != 0) {
+			fprintf(stderr, "Error unloading model : %s\n",
+				ml_model.model_name);
+			goto error_model_destroy;
+		}
+
+error_model_destroy:
+		err = rte_ml_model_destroy(dev_id, ml_models[idx].model_id);
+		if (err != 0 && ret == 0)
+			ret = err;
+
+		if (ret != 0)
+			goto error_stop;
 	}
 
-	if (g_interleave) {
-		for (idx = 0; idx < g_models_counter; idx++) {
-			if (rte_ml_model_load(dev_id,
-					      ml_models[idx].model_id) != 0) {
-				fprintf(stderr, "Error loading model : %s\n",
-					ml_model.model_name);
-				goto error_unload;
-			}
-		}
-
-error_unload:
-		for (i = 0; i < idx; i++) {
-			if (rte_ml_model_unload(dev_id,
-						ml_models[i].model_id) != 0) {
-				fprintf(stderr, "Error unloading model : %s\n",
-					ml_model.model_name);
-				goto error_destroy;
-			}
-		}
-	} else {
-		for (idx = 0; idx < g_models_counter; idx++) {
-			if (rte_ml_model_load(dev_id,
-					      ml_models[idx].model_id) != 0) {
-				fprintf(stderr, "Error loading model : %s\n",
-					ml_model.model_name);
-				goto error_destroy;
-			}
-
-			if (rte_ml_model_unload(dev_id,
-						ml_models[idx].model_id) != 0) {
-				fprintf(stderr, "Error unloading model : %s\n",
-					ml_model.model_name);
-				goto error_destroy;
-			}
-		}
-	}
-
-error_destroy:
-	for (i = 0; i < idx; i++)
-		rte_ml_model_destroy(dev_id, ml_models[i].model_id);
-
+error_stop:
 	/* Stop device */
 	rte_mldev_stop(dev_id);
 
