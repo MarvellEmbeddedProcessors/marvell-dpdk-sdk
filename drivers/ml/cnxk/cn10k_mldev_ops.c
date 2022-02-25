@@ -2069,12 +2069,73 @@ static int
 ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
 	   struct cn10k_ml_pending_queue *pend_q)
 {
-	PLT_SET_USED(dev);
-	PLT_SET_USED(qp);
-	PLT_SET_USED(op);
-	PLT_SET_USED(pend_q);
+	struct cnxk_ml_job_compl *ml_job_compl;
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_model *ml_model;
+	struct cnxk_ml_dev *ml_dev;
+	uint64_t *job_result;
+	uint8_t *ibuffer;
+	uint8_t *obuffer;
+	uint8_t jd_index;
+	int avail_count;
+	int ret = 0;
 
-	return 0;
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ml_model = ml_config->ml_models[op->model_id];
+
+	ml_job_compl = NULL;
+	ret = rte_mempool_get(ml_config->job_pool, (void **)(&ml_job_compl));
+	if (ret != 0)
+		return ret;
+
+	ml_job_compl->job_result.user_ptr = op->user_ptr;
+	job_result =
+		roc_ml_addr_ap2mlip(&ml_dev->roc, &ml_job_compl->job_result);
+	ibuffer = roc_ml_addr_ap2mlip(&ml_dev->roc, op->ibuffer);
+	obuffer = roc_ml_addr_ap2mlip(&ml_dev->roc, op->obuffer);
+
+	rte_spinlock_lock(&ml_config->run_lock);
+	avail_count = roc_ml_jcmdq_avail_count_get(&ml_dev->roc);
+	if (avail_count) {
+		/* Get job descriptor index.
+		 * Reuse the JD after queueing OTK_ML_MODEL_JD_POOL_SIZE jobs.
+		 */
+		jd_index = ml_model->jd_index;
+
+		ml_model->jd[jd_index].hdr.job_result = job_result;
+		ml_model->jd[jd_index].run.input_ddr_addr =
+			PLT_U64_CAST(ibuffer);
+		ml_model->jd[jd_index].run.output_ddr_addr =
+			PLT_U64_CAST(obuffer);
+
+		ml_model->jd[jd_index].hdr.compl_W0.u = 0;
+		ml_model->jd[jd_index].hdr.compl_W1.status_ptr =
+			PLT_U64_CAST(&ml_job_compl->status_ptr);
+		ml_model->jd[jd_index].hdr.flags = ML_FLAGS_POLL_COMPL;
+
+		plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
+		ml_job_compl->job_result.status = ML_STATUS_FAILURE;
+		ml_job_compl->job_result.error_code = 0x0;
+		plt_wmb();
+
+		ml_job_compl->start_cycle = plt_tsc_cycles();
+		roc_ml_jcmdq_enqueue(&ml_dev->roc, &ml_model->jd[jd_index]);
+		ml_model->jd_index =
+			(jd_index + 1) % (ML_MODEL_JD_POOL_SIZE - 2);
+
+		pend_q->req_queue[pend_q->enq_tail].op_handle = (uintptr_t)op;
+		pend_q->req_queue[pend_q->enq_tail].job_handle =
+			(uintptr_t)ml_job_compl;
+
+		ML_MOD_INC(pend_q->enq_tail, qp->nb_desc);
+		pend_q->pending_count += 1;
+	} else {
+		ret = -1;
+	}
+	rte_spinlock_unlock(&ml_config->run_lock);
+
+	return ret;
 }
 
 uint16_t
@@ -2107,15 +2168,40 @@ cn10k_ml_enqueue_burst(struct rte_mldev *dev, uint16_t qp_id,
 	return count;
 }
 
+static void
+cnxk_ml_result_update(struct cnxk_ml_job_result *job_result,
+		      struct rte_ml_op *op)
+{
+	op->result.success =
+		(job_result->status == ML_STATUS_SUCCESS) ? true : false;
+	op->result.error_code = job_result->error_code;
+	op->user_ptr = job_result->user_ptr;
+}
+
 static int
 ml_dequeue(struct rte_mldev *dev, struct rte_ml_op *op,
 	   struct cn10k_ml_req *req)
 {
-	PLT_SET_USED(dev);
-	PLT_SET_USED(op);
-	PLT_SET_USED(req);
+	struct cnxk_ml_job_compl *ml_job_compl;
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_dev *ml_dev;
+	int ret = 0;
 
-	return 0;
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ml_job_compl = (struct cnxk_ml_job_compl *)(req->job_handle);
+
+	if (ml_job_compl->job_result.status == ML_STATUS_SUCCESS) {
+		ret = 0;
+	} else if (ml_job_compl->job_result.status == ML_STATUS_FAILURE) {
+		plt_err("Model run failed, model_id = %d", op->model_id);
+		ret = -1;
+	}
+
+	cnxk_ml_result_update(&ml_job_compl->job_result, op);
+	rte_mempool_put(ml_config->job_pool, ml_job_compl);
+
+	return ret;
 }
 
 uint16_t
