@@ -239,6 +239,40 @@ __rte_experimental
 extern int
 rte_mldev_info_get(uint8_t dev_id, struct rte_mldev_info *dev_info);
 
+/** ML device queue pair configuration structure. */
+struct rte_mldev_qp_conf {
+	/**< Number of descriptors per queue pair */
+	uint32_t nb_desc;
+};
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Allocate and set up a receive queue pair for a device.
+ *
+ * @param dev_id
+ *   The identifier of the device.
+ * @param queue_pair_id
+ *   The index of the queue pairs to set up. The value must be in the range [0,
+ * nb_queue_pair - 1] previously supplied to rte_mldev_configure().
+ * @param qp_conf
+ *   The pointer to the configuration data to be used for the queue pair.
+ * @param socket_id
+ *   The *socket_id* argument is the socket identifier in case of NUMA. The
+ * value can be *SOCKET_ID_ANY* if there is no NUMA constraint for the DMA
+ * memory allocated for the receive queue pair.
+ *
+ * @return
+ *   - 0: Success, queue pair correctly set up.
+ *   - <0: Queue pair configuration failed
+ */
+__rte_experimental
+extern int
+rte_mldev_queue_pair_setup(uint8_t dev_id, uint16_t queue_pair_id,
+			   const struct rte_mldev_qp_conf *qp_conf,
+			   int socket_id);
+
 #ifdef __cplusplus
 }
 #endif

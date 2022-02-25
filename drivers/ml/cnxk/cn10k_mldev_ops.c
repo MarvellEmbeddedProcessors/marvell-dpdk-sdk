@@ -1245,6 +1245,14 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 		}
 	} else { /* re-configure */
 		void **queue_pairs;
+		uint16_t i;
+
+		for (i = conf->nb_queue_pairs; i < dev->data->nb_queue_pairs;
+		     i++) {
+			ret = cn10k_ml_queue_pair_release(dev, i);
+			if (ret < 0)
+				return ret;
+		}
 
 		queue_pairs = dev->data->queue_pairs;
 		queue_pairs = rte_realloc(queue_pairs,
@@ -1877,6 +1885,130 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 	return ret;
 }
 
+static void
+qp_memzone_name_get(char *name, int size, int dev_id, int qp_id)
+{
+	snprintf(name, size, "cn10k_ml_pq_mem_%u:%u", dev_id, qp_id);
+}
+
+static struct cn10k_ml_qp *
+cn10k_ml_qp_create(const struct rte_mldev *dev, uint16_t qp_id,
+		   uint32_t nb_desc, int socket_id)
+{
+	const struct rte_memzone *qp_mem;
+	char name[RTE_MEMZONE_NAMESIZE];
+	struct cn10k_ml_qp *qp;
+	uint32_t len;
+	uint8_t *va;
+
+	/* Allocate queue pair */
+	qp = rte_zmalloc_socket("CNXK ML PMD Queue Pair",
+				sizeof(struct cn10k_ml_qp), ROC_ALIGN,
+				socket_id);
+	if (qp == NULL) {
+		plt_err("Could not allocate queue pair");
+		return NULL;
+	}
+
+	/* For pending queue */
+	len = nb_desc * sizeof(struct cn10k_ml_req);
+
+	qp_memzone_name_get(name, RTE_MEMZONE_NAMESIZE, dev->data->dev_id,
+			    qp_id);
+	qp_mem = rte_memzone_reserve_aligned(name, len, socket_id,
+					     RTE_MEMZONE_SIZE_HINT_ONLY |
+						     RTE_MEMZONE_256MB,
+					     RTE_CACHE_LINE_SIZE);
+	if (qp_mem == NULL) {
+		plt_err("Could not allocate reserved memzone");
+		goto qp_free;
+	}
+
+	va = qp_mem->addr;
+	memset(va, 0, len);
+
+	/* Initialize pending queue */
+	qp->id = qp_id;
+	qp->pend_q.pending_count = 0;
+	qp->pend_q.req_queue = (struct cn10k_ml_req *)va;
+	qp->pend_q.enq_tail = 0;
+	qp->pend_q.deq_head = 0;
+	qp->nb_desc = nb_desc;
+
+	return qp;
+
+qp_free:
+	rte_free(qp);
+
+	return NULL;
+}
+
+int
+cn10k_ml_queue_pair_setup(struct rte_mldev *dev, uint16_t qp_id,
+			  const struct rte_mldev_qp_conf *qp_conf,
+			  int socket_id)
+{
+	struct cn10k_ml_qp *qp;
+
+	if (dev->data->queue_pairs[qp_id] != NULL)
+		cn10k_ml_queue_pair_release(dev, qp_id);
+
+	if (qp_conf->nb_desc > ML_CN10K_DESC_PER_QP) {
+		plt_err("Could not setup queue pair for %u descriptors",
+			qp_conf->nb_desc);
+		return -EINVAL;
+	}
+
+	qp = cn10k_ml_qp_create(dev, qp_id, qp_conf->nb_desc, socket_id);
+	if (qp == NULL) {
+		plt_err("Could not create queue pair %d", qp_id);
+		return -ENOMEM;
+	}
+	dev->data->queue_pairs[qp_id] = qp;
+
+	return 0;
+}
+
+static int
+cn10k_ml_qp_destroy(const struct rte_mldev *dev, struct cn10k_ml_qp *qp)
+{
+	const struct rte_memzone *qp_mem;
+	char name[RTE_MEMZONE_NAMESIZE];
+	int ret;
+
+	qp_memzone_name_get(name, RTE_MEMZONE_NAMESIZE, dev->data->dev_id,
+			    qp->id);
+	qp_mem = rte_memzone_lookup(name);
+	ret = rte_memzone_free(qp_mem);
+	if (ret)
+		return ret;
+
+	rte_free(qp);
+
+	return 0;
+}
+
+int
+cn10k_ml_queue_pair_release(struct rte_mldev *dev, uint16_t qp_id)
+{
+	struct cn10k_ml_qp *qp;
+	int ret;
+
+	qp = dev->data->queue_pairs[qp_id];
+	if (qp == NULL)
+		return -EINVAL;
+
+	ret = cn10k_ml_qp_destroy(dev, qp);
+	if (ret) {
+		plt_err("Could not destroy queue pair %d", qp_id);
+		return ret;
+	}
+
+	dev->data->queue_pairs[qp_id] = NULL;
+
+	return 0;
+}
+
 struct rte_mldev_ops cn10k_ml_ops = {
 	/* Device control ops */
 	.dev_configure = cn10k_ml_dev_configure,
@@ -1884,6 +2016,10 @@ struct rte_mldev_ops cn10k_ml_ops = {
 	.dev_start = cn10k_ml_dev_start,
 	.dev_stop = cn10k_ml_dev_stop,
 	.dev_info_get = cn10k_ml_dev_info_get,
+
+	/* Queue-pair handling ops */
+	.queue_pair_setup = cn10k_ml_queue_pair_setup,
+	.queue_pair_release = cn10k_ml_queue_pair_release,
 
 	/* ML model handling ops */
 	.ml_model_create = cn10k_ml_model_create,

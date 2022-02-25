@@ -11,6 +11,7 @@ EXPERIMENTAL {
 	rte_mldev_start;
 	rte_mldev_stop;
 	rte_mldev_info_get;
+	rte_mldev_queue_pair_setup;
 
 	rte_ml_model_create;
 	rte_ml_model_destroy;

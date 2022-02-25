@@ -408,3 +408,33 @@ rte_mldev_info_get(uint8_t dev_id, struct rte_mldev_info *dev_info)
 
 	return 0;
 }
+
+int
+rte_mldev_queue_pair_setup(uint8_t dev_id, uint16_t queue_pair_id,
+			   const struct rte_mldev_qp_conf *qp_conf,
+			   int socket_id)
+{
+	struct rte_mldev *dev;
+
+	if (!rte_mldev_is_valid_dev(dev_id)) {
+		MLDEV_LOG_ERR("Invalid dev_id=%x", dev_id);
+		return -EINVAL;
+	}
+
+	dev = &rte_ml_devices[dev_id];
+	if (queue_pair_id >= dev->data->nb_queue_pairs) {
+		MLDEV_LOG_ERR("Invalid queue_pair_id=%d", queue_pair_id);
+		return -EINVAL;
+	}
+
+	if (dev->data->dev_started) {
+		MLDEV_LOG_ERR(
+			"device %d must be stopped to allow configuration",
+			dev_id);
+		return -EBUSY;
+	}
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->queue_pair_setup, -ENOTSUP);
+	return (*dev->dev_ops->queue_pair_setup)(dev, queue_pair_id, qp_conf,
+						 socket_id);
+}

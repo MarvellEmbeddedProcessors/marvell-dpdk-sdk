@@ -15,8 +15,8 @@
  */
 
 #include "rte_dev.h"
-#include "rte_mldev.h"
 #include "rte_ml.h"
+#include "rte_mldev.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -182,6 +182,40 @@ typedef int (*mldev_info_get_t)(struct rte_mldev *dev,
 				struct rte_mldev_info *dev_info);
 
 /**
+ * Setup a queue pair for a device.
+ *
+ * @param dev
+ *   ML device pointer
+ * @param qp_id
+ *    Queue Pair Index
+ * @param qp_conf
+ *    Queue configuration structure
+ * @param socket_id
+ *   Socket Index
+ *
+ * @return
+ *   Returns 0 on success.
+ */
+typedef int (*mldev_queue_pair_setup_t)(struct rte_mldev *dev, uint16_t qp_id,
+					const struct rte_mldev_qp_conf *qp_conf,
+					int socket_id);
+
+
+/**
+ * Release memory resources allocated by given queue pair.
+ *
+ * @param dev
+ *   ML device pointer
+ * @param qp_id
+ *   Queue Pair Index
+ *
+ * @return
+ *   - 0 on success.
+ *   - EAGAIN if can't close as device is busy
+ */
+typedef int (*mldev_queue_pair_release_t)(struct rte_mldev *dev, uint16_t qp_id);
+
+/**
  * Function used to create an ML model.
  *
  * @param dev
@@ -197,8 +231,7 @@ typedef int (*mldev_info_get_t)(struct rte_mldev *dev,
  *
  */
 typedef int (*ml_model_create_t)(struct rte_mldev *dev,
-				 struct rte_ml_model *model,
-				 uint8_t *model_id);
+				 struct rte_ml_model *model, uint8_t *model_id);
 
 /**
  * Function used to destroy an ML model.
@@ -250,6 +283,12 @@ struct rte_mldev_ops {
 
 	/**< Get device information. */
 	mldev_info_get_t dev_info_get;
+
+	/**< Set up a device queue pair. */
+	mldev_queue_pair_setup_t queue_pair_setup;
+
+	/**< Release a queue pair. */
+	mldev_queue_pair_release_t queue_pair_release;
 
 	/**< Create model. */
 	ml_model_create_t ml_model_create;

@@ -33,6 +33,9 @@
 /* Number of Queue-Pairs per device */
 #define ML_CN10K_QP_PER_DEVICE 1
 
+/* Maximum number of descriptors per queue-pair */
+#define ML_CN10K_DESC_PER_QP 1024
+
 /* ML OCM and Tile information structure */
 struct cn10k_ml_ocm_tile_info {
 	/* Mask of used / allotted pages on tile's OCM */

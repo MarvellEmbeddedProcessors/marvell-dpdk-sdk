@@ -13,6 +13,7 @@
 /* ML constants */
 #define ML_MAX_MODELS 32
 #define ML_ALIGN_SIZE 128
+#define ML_QUEUE_SIZE 64
 
 /* ML global variables */
 static uint16_t g_models_counter;
@@ -84,6 +85,7 @@ int
 main(int argc, char **argv)
 {
 	struct rte_mldev_config ml_config;
+	struct rte_mldev_qp_conf qp_conf;
 	struct rte_mldev_info dev_info;
 	struct rte_ml_model ml_model;
 	const struct rte_memzone *mz;
@@ -132,6 +134,16 @@ main(int argc, char **argv)
 		printf("Device configuration failed, dev_id = %d\n", dev_id);
 		ret = -1;
 		goto exit_cleanup;
+	}
+
+	/* setup queue pairs */
+	qp_conf.nb_desc = ML_QUEUE_SIZE;
+	if (rte_mldev_queue_pair_setup(dev_id, 0, &qp_conf,
+				       rte_mldev_socket_id(dev_id)) != 0) {
+		fprintf(stderr, "Queue-pair setup failed, dev_id = %d\n",
+			dev_id);
+		ret = -1;
+		goto error_close;
 	}
 
 	/* Start device */
