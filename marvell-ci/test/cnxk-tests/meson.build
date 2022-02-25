@@ -59,6 +59,7 @@ test_subdirs = [
         'gpio_test',
         'ipsec_msns',
         'meter_test',
+        'bphy_irq',
 ]
 
 foreach dir:test_subdirs
