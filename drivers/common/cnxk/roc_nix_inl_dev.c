@@ -2,6 +2,8 @@
  * Copyright(C) 2021 Marvell.
  */
 
+#include <unistd.h>
+
 #include "roc_api.h"
 #include "roc_priv.h"
 
@@ -712,7 +714,7 @@ nix_inl_outb_poll_thread(void *args)
 					inl_outb_soft_exp_poll(inl_dev, i);
 			}
 		}
-		plt_delay_us(poll_freq);
+		usleep(poll_freq);
 	}
 
 	return 0;
