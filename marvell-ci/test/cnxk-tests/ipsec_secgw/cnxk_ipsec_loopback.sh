@@ -241,7 +241,7 @@ function run_ipsec_secgw_cn10k()
 	echo -e ""
 	echo -e "Inline protocol ipsec-secgw event mode"
 	echo -e "---------------------------"
-	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128,force_inb_inl_dev=1 -a $LIF4,ipsec_in_max_spi=128,force_inb_inl_dev=1 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_inline_test.cfg --transfer-mode event --event-schedule-type parallel' 2
+	run_test '$DPDK_TEST_BIN -c $IPSEC_COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF4,ipsec_in_max_spi=128 --file-prefix $PREFIX -- -P -p 0x3 -u 0x1 -f ./ep1_inline_test.cfg --transfer-mode event --event-schedule-type parallel' 2
 
 	sleep 5
 	# DPDK IPSEC-SECGW App - inline protocol poll mode
