@@ -346,7 +346,7 @@ def prepare_builds(Object s, nodes) {
 		add_build_stage(s, nodes, "test-cn9k-debug-build", 'gcc-marvell', 'static', '-O0',
 			'', 'cn9k',
 			"-Dexamples=all --buildtype=debug --werror -Dc_args='-DRTE_ENABLE_ASSERT'",
-			'', true, true, false)
+			'', false, true, false)
 
 	/* CN10k Debug Build */
 	if (s.ENABLE_CN10K && (!s.utils.get_flag(s, "skip_build") ||
@@ -355,7 +355,7 @@ def prepare_builds(Object s, nodes) {
 		add_build_stage(s, nodes, "test-cn10k-debug-build", 'gcc-marvell',
 			'static', '-O0', '', 'cn10k',
 			"-Dexamples=all --buildtype=debug --werror -Dc_args='-DRTE_ENABLE_ASSERT'",
-			'', true, true, false)
+			'', false, true, false)
 
 }
 
