@@ -280,6 +280,7 @@ def prepare_builds(Object s, nodes) {
 	if (!s.utils.get_flag(s, "skip_test")) {
 		/* CN9k Test builds */
 		if (s.utils.get_flag(s, "run_test-cn9k") ||
+		    s.utils.get_flag(s, "run_test-cn96") ||
 		    s.utils.get_flag(s, "run_test-cn96-perf") ||
 		    s.utils.get_flag(s, "run_test-cn98-perf"))
 			add_build_stage(s, nodes, "test-cn9k-build", 'gcc-marvell', 'static',

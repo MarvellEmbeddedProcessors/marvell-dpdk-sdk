@@ -244,6 +244,10 @@ def prepare_tests(Object s, tests) {
 	prepare_test_stage(s, tests, "test-cn9k", "cn9k.env", "test-cn9k-build",
 				"DEV_CI_DATAPLANE_9xxx")
 
+	/* CN96 Specific Test */
+	prepare_test_stage(s, tests, "test-cn96", "cn96.env", "test-cn9k-build",
+				"DEV_CI_DATAPLANE_96xx")
+
 	/* CN9K Debug Test */
 	prepare_test_stage(s, tests, "test-cn9k-debug", "cn9k.env", "test-cn9k-debug-build",
 				"DEV_CI_DATAPLANE_9xxx")

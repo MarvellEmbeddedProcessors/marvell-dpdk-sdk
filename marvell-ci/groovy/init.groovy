@@ -48,6 +48,7 @@ def init_env_vars(Object s) {
 	s.FAILING_FAST = false
 
 	s.base_tests = [
+		'test-cn96',
 		'test-cn9k',
 		'test-cn10k',
 	]
@@ -64,6 +65,7 @@ def init_env_vars(Object s) {
 		'skip_test' : [ 'Skips all tests', false],
 		'run_test-cn9k' : [ 'Run CN9k tests', false],
 		'run_test-cn9k-debug' : [ 'Run CN9k Debug tests', false],
+		'run_test-cn96' : [ 'Run CN96 Specific tests', false],
 		'run_test-cn96-perf' : [ 'Run CN96 Perf tests', false],
 		'run_test-cn98-perf' : [ 'Run CN98 Perf tests', false],
 		'run_test-cn10k' : [ 'Run CN10k tests', false],
