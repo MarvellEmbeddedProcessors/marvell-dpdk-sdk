@@ -124,6 +124,7 @@ function run_all_tests()
 {
 	local tst
 	local res
+	local failed_tests=""
 	local test_num=0
 
 	# Errors will be handled inline. No need for sig handler
@@ -148,9 +149,17 @@ function run_all_tests()
 		run_test $tst
 		res=$?
 		if [[ $res -ne 0 ]] && [[ $res -ne 77 ]] ; then
-			test_exit -1 "FAILURE: Test $tst failed"
+			if [[ -n $PERF_STAGE ]]; then
+				echo "FAILURE: Test $tst failed"
+				failed_tests="$failed_tests $tst"
+			else
+				test_exit -1 "FAILURE: Test $tst failed"
+			fi
 		fi
 	done
+	if [[ -n $failed_tests ]]; then
+		test_exit -1 "FAILURE: Test(s) [$failed_tests] failed"
+	fi
 }
 
 function test_exit()
