@@ -60,6 +60,7 @@ test_subdirs = [
         'ipsec_msns',
         'meter_test',
         'bphy_irq',
+        'queue_intr_test',
 ]
 
 foreach dir:test_subdirs
