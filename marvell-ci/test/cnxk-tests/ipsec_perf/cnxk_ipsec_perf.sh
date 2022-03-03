@@ -11,7 +11,7 @@ MAX_TRY_CNT=5
 CORES=(1)
 COREMASK="0x10000"
 NUM_MODES=3
-TXWAIT=10
+TXWAIT=15
 RXWAIT=5
 WS=2
 
@@ -28,12 +28,22 @@ declare -i RCLK
 declare -i CPTCLK
 declare -A PASS_PPS_TABLE
 
-# Get CPU PART NUMBER
-PARTNUM=$(grep -m 1 'CPU part' /proc/cpuinfo | grep -o '0x0[a-b][0-3]$')
-if [[ $PARTNUM == $PARTNUM_98XX ]]; then
-	HW="98xx"
+! $(cat /proc/device-tree/compatible | grep -q "cn10k")
+IS_CN10K=$?
+
+if [[ $IS_CN10K -ne 0 ]]; then
+	HW="106xx"
+	CDEV_VF=$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')
+	INLINE_DEV=0002:1d:00.0
 else
-	HW="96xx"
+	# Get CPU PART NUMBER
+	PARTNUM=$(grep -m 1 'CPU part' /proc/cpuinfo | grep -o '0x0[a-b][0-3]$')
+	if [[ $PARTNUM == $PARTNUM_98XX ]]; then
+		HW="98xx"
+	else
+		HW="96xx"
+	fi
+	CDEV_VF=$(lspci -d :a0fe | head -1 | awk -e '{ print $1 }')
 fi
 
 if [[ -d /sys/bus/pci/drivers/octeontx2-nicvf ]]; then
@@ -84,9 +94,13 @@ function get_system_info()
 	local div=1000000
 
 	sysclk_dir="/sys/kernel/debug/clk"
+if [[ $IS_CN10K -ne 0 ]]; then
+	fp_rclk="$sysclk_dir/coreclk/clk_rate"
+else
 	fp_rclk="$sysclk_dir/rclk/clk_rate"
-	fp_sclk="$sysclk_dir/sclk/clk_rate"
 	fp_cptclk="$sysclk_dir/cptclk/clk_rate"
+fi
+	fp_sclk="$sysclk_dir/sclk/clk_rate"
 
 	if $SUDO test -f "$fp_rclk"; then
 		RCLK=$(echo "`$SUDO cat $fp_rclk` / $div" | bc)
@@ -102,6 +116,11 @@ function get_system_info()
 		exit 1
 	fi
 
+if [[ $IS_CN10K -ne 0 ]]; then
+	echo "CORECLK:   $RCLK Mhz"
+	echo "SCLK:      $SCLK Mhz"
+	return
+fi
 	if $SUDO test -f "$fp_cptclk"; then
 		CPTCLK=$(echo "`$SUDO cat $fp_cptclk` / $div" | bc)
 	else
@@ -117,7 +136,25 @@ function get_system_info()
 function run_test()
 {
 	local cmd=$1
-	eval "nohup $1 >> $2 2>&1 &"
+	eval "nohup $1 >> $IPSEC_LOG 2>&1 &"
+	PT1="IPSEC: entering main loop on lcore"
+	PT2="IPSEC: Launching event mode worker"
+
+	local itr=0
+	while ! (cat $IPSEC_LOG | grep -q -e "$PT1" -e "$PT2")
+	do
+		sleep 1
+		((itr+=1))
+
+		if [[ $itr -eq 100 ]]
+		then
+			echo "Timeout waiting for IPSEC main loop"
+			exit 2
+		fi
+
+		if [[ $((itr%5)) -eq 0 ]]
+		then echo "Waiting for IPSEC main loop"; fi
+	done
 }
 
 function run_ipsec_secgw()
@@ -126,9 +163,13 @@ function run_ipsec_secgw()
 
 	echo "ipsec-secgw outb"
 	if [[ $Y -eq 2 ]]; then
-		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel' $IPSEC_LOG
+		if [[ $IS_CN10K -ne 0 ]]; then
+			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+		else
+			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+		fi
 	else
-		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --config=$config' $IPSEC_LOG
+		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --config=$config'
 	fi
 	sleep $WS
 }
@@ -140,9 +181,13 @@ function run_ipsec_secgw_inb()
 	echo "ipsec-secgw inb"
 
 	if [[ $Y -eq 2 ]]; then
-		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel' $IPSEC_LOG
+		if [[ $IS_CN10K -ne 0 ]]; then
+			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+		else
+			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+		fi
 	else
-		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config' $IPSEC_LOG
+		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config'
 	fi
 	sleep $WS
 }
@@ -169,6 +214,11 @@ function sig_handler()
 		ipsec_exit
 		testpmd_quit "$TPMD_TX_PREFIX"
 		testpmd_quit "$TPMD_RX_PREFIX"
+		awk ' { print FILENAME": " $0 } ' $IPSEC_LOG
+		awk ' { print FILENAME": " $0 } ' testpmd.in.$TPMD_TX_PREFIX
+		awk ' { print FILENAME": " $0 } ' testpmd.out.$TPMD_TX_PREFIX
+		awk ' { print FILENAME": " $0 } ' testpmd.in.$TPMD_RX_PREFIX
+		awk ' { print FILENAME": " $0 } ' testpmd.out.$TPMD_RX_PREFIX
 	fi
 	cleanup_interfaces
 	exit $status
@@ -471,8 +521,14 @@ function aes_gcm_inb()
 
 get_system_info
 
-FNAME="rclk"${RCLK}"_sclk"${SCLK}"_cptclk"${CPTCLK}"."${HW}
-FPATH="$CNXKTESTPATH/ref_numbers/cn9k/$FNAME"
+if [[ $IS_CN10K -ne 0 ]]; then
+	FNAME="rclk"${RCLK}"_sclk"${SCLK}"."${HW}
+	FPATH="$CNXKTESTPATH/ref_numbers/cn10k/$FNAME"
+else
+	FNAME="rclk"${RCLK}"_sclk"${SCLK}"_cptclk"${CPTCLK}"."${HW}
+	FPATH="$CNXKTESTPATH/ref_numbers/cn9k/$FNAME"
+fi
+
 
 if [[ ! -f "$FPATH.lc.outb" ]]; then
 	echo "File $FPATH.lc.outb not present"
@@ -515,8 +571,6 @@ LIF2=0002:01:00.6
 LIF3=0002:01:00.7
 LIF4=0002:01:01.0
 
-CDEV_VF=0002:10:00.1
-CDEV_PF=0002:10:00.0
 SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 EVENT_VF=$SSO_DEV
 
