@@ -38,7 +38,8 @@ cnxk_sso_tel_handle_info(const char *cmd __plt_unused,
 			 struct plt_tel_data *d)
 {
 	plt_tel_data_start_dict(d);
-	return cnxk_tel_sso(d);
+	cnxk_tel_sso(d);
+	return 0;
 }
 
 PLT_INIT(cnxk_telemetry_sso_init)

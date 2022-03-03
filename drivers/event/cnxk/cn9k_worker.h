@@ -453,7 +453,6 @@ NIX_RX_FASTPATH_MODES
 			      uint64_t timeout_ticks)                          \
 	{                                                                      \
 		struct cn9k_sso_hws *ws = port;                                \
-                                                                               \
 		RTE_SET_USED(timeout_ticks);                                   \
 		if (ws->swtag_req) {                                           \
 			ws->swtag_req = 0;                                     \
@@ -474,7 +473,6 @@ NIX_RX_FASTPATH_MODES
 		struct cn9k_sso_hws *ws = port;                                \
 		uint16_t ret = 1;                                              \
 		uint64_t iter;                                                 \
-                                                                               \
 		if (ws->swtag_req) {                                           \
 			ws->swtag_req = 0;                                     \
 			cnxk_sso_hws_swtag_wait(ws->base + SSOW_LF_GWS_TAG);   \
@@ -542,7 +540,6 @@ NIX_RX_FASTPATH_MODES
 	{                                                                      \
 		struct cn9k_sso_hws_dual *dws = port;                          \
 		uint16_t gw;                                                   \
-                                                                               \
 		RTE_SET_USED(timeout_ticks);                                   \
 		if (dws->swtag_req) {                                          \
 			dws->swtag_req = 0;                                    \
@@ -569,7 +566,6 @@ NIX_RX_FASTPATH_MODES
 		struct cn9k_sso_hws_dual *dws = port;                          \
 		uint16_t ret = 1;                                              \
 		uint64_t iter;                                                 \
-                                                                               \
 		if (dws->swtag_req) {                                          \
 			dws->swtag_req = 0;                                    \
 			cnxk_sso_hws_swtag_wait(dws->base[!dws->vws] +         \
@@ -615,9 +611,8 @@ NIX_RX_FASTPATH_MODES
 static __rte_always_inline void
 cn9k_sso_txq_fc_wait(const struct cn9k_eth_txq *txq)
 {
-	while (!((txq->nb_sqb_bufs_adj -
-		  __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED))
-		 << (txq)->sqes_per_sqb_log2))
+	while ((uint64_t)txq->nb_sqb_bufs_adj <=
+	       __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED))
 		;
 }
 
@@ -779,7 +774,6 @@ cn9k_sso_hws_event_tx(uint64_t base, struct rte_event *ev, uint64_t *cmd,
 
 	/* Perform header writes before barrier for TSO */
 	cn9k_nix_xmit_prepare_tso(m, flags);
-
 	/* Lets commit any changes in the packet here in case when
 	 * fast free is set as no further changes will be made to mbuf.
 	 * In case of fast free is not set, both cn9k_nix_prepare_mseg()
@@ -872,7 +866,6 @@ NIX_TX_FASTPATH_MODES
 	{                                                                      \
 		struct cn9k_sso_hws *ws = port;                                \
 		uint64_t cmd[sz];                                              \
-                                                                               \
 		RTE_SET_USED(nb_events);                                       \
 		return cn9k_sso_hws_event_tx(ws->base, &ev[0], cmd,            \
 					     (uint64_t *)ws->tx_adptr_data,    \
@@ -885,7 +878,6 @@ NIX_TX_FASTPATH_MODES
 	{                                                                      \
 		uint64_t cmd[(sz) + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];           \
 		struct cn9k_sso_hws *ws = port;                                \
-                                                                               \
 		RTE_SET_USED(nb_events);                                       \
 		return cn9k_sso_hws_event_tx(ws->base, &ev[0], cmd,            \
 					     (uint64_t *)ws->tx_adptr_data,    \
@@ -898,7 +890,6 @@ NIX_TX_FASTPATH_MODES
 	{                                                                      \
 		struct cn9k_sso_hws_dual *ws = port;                           \
 		uint64_t cmd[sz];                                              \
-                                                                               \
 		RTE_SET_USED(nb_events);                                       \
 		return cn9k_sso_hws_event_tx(ws->base[!ws->vws], &ev[0], cmd,  \
 					     (uint64_t *)ws->tx_adptr_data,    \
@@ -911,7 +902,6 @@ NIX_TX_FASTPATH_MODES
 	{                                                                      \
 		uint64_t cmd[(sz) + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];           \
 		struct cn9k_sso_hws_dual *ws = port;                           \
-                                                                               \
 		RTE_SET_USED(nb_events);                                       \
 		return cn9k_sso_hws_event_tx(ws->base[!ws->vws], &ev[0], cmd,  \
 					     (uint64_t *)ws->tx_adptr_data,    \

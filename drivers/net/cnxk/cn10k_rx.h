@@ -43,15 +43,20 @@
 		       (uint64_t *)(((uintptr_t)(b)) + CQE_SZ(i) - (o)))
 
 #ifdef RTE_LIBRTE_MEMPOOL_DEBUG
-#define NIX_MBUF_VALIDATE_NEXT(m)                                              \
-	if (m->nb_segs == 1 && mbuf->next) {                                   \
-		rte_panic("mbuf->next[%p] valid when mbuf->nb_segs is %d",     \
-			  m->next, m->nb_segs);                                \
+static inline void
+nix_mbuf_validate_next(struct rte_mbuf *m)
+{
+	if (m->nb_segs == 1 && m->next) {
+		rte_panic("mbuf->next[%p] valid when mbuf->nb_segs is %d",
+			m->next, m->nb_segs);
 	}
+}
 #else
-#define NIX_MBUF_VALIDATE_NEXT(m)                                              \
-	do {                                                                   \
-	} while (0)
+static inline void
+nix_mbuf_validate_next(struct rte_mbuf *m)
+{
+	RTE_SET_USED(m);
+}
 #endif
 
 #define NIX_RX_SEC_REASSEMBLY_F \
@@ -1044,8 +1049,8 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 							*(uint64_t *)args :
 							rxq->mbuf_initializer;
 	const uint64x2_t data_off = flags & NIX_RX_VWQE_F ?
-					    vdupq_n_u64(RTE_PKTMBUF_HEADROOM) :
-						  vdupq_n_u64(rxq->data_off);
+					vdupq_n_u64(RTE_PKTMBUF_HEADROOM) :
+					vdupq_n_u64(rxq->data_off);
 	const uint32_t qmask = flags & NIX_RX_VWQE_F ? 0 : rxq->qmask;
 	const uint64_t wdata = flags & NIX_RX_VWQE_F ? 0 : rxq->wdata;
 	const uintptr_t desc = flags & NIX_RX_VWQE_F ? 0 : rxq->desc;
@@ -1130,69 +1135,62 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 
 		if (flags & NIX_RX_VWQE_F) {
 			if (pkts - packets > 4) {
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 4, 0, flags));
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 5, 0, flags));
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 6, 0, flags));
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 7, 0, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0,
+					4, 0, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0,
+					5, 0, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0,
+					6, 0, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0,
+					7, 0, flags));
 
 				if (likely(pkts - packets > 8)) {
-					rte_prefetch1(
-						CQE_PTR_OFF(cq0, 8, 0, flags));
-					rte_prefetch1(
-						CQE_PTR_OFF(cq0, 9, 0, flags));
-					rte_prefetch1(
-						CQE_PTR_OFF(cq0, 10, 0, flags));
-					rte_prefetch1(
-						CQE_PTR_OFF(cq0, 11, 0, flags));
+					rte_prefetch1(CQE_PTR_OFF(cq0,
+						8, 0, flags));
+					rte_prefetch1(CQE_PTR_OFF(cq0,
+						9, 0, flags));
+					rte_prefetch1(CQE_PTR_OFF(cq0,
+						10, 0, flags));
+					rte_prefetch1(CQE_PTR_OFF(cq0,
+						11, 0, flags));
 					if (pkts - packets > 12) {
-						rte_prefetch1(CQE_PTR_OFF(
-							cq0, 12, 0, flags));
-						rte_prefetch1(CQE_PTR_OFF(
-							cq0, 13, 0, flags));
-						rte_prefetch1(CQE_PTR_OFF(
-							cq0, 14, 0, flags));
-						rte_prefetch1(CQE_PTR_OFF(
-							cq0, 15, 0, flags));
+						rte_prefetch1(CQE_PTR_OFF(cq0,
+							12, 0, flags));
+						rte_prefetch1(CQE_PTR_OFF(cq0,
+							13, 0, flags));
+						rte_prefetch1(CQE_PTR_OFF(cq0,
+							14, 0, flags));
+						rte_prefetch1(CQE_PTR_OFF(cq0,
+							15, 0, flags));
 					}
 				}
 
-				rte_prefetch0(CQE_PTR_DIFF(
-					cq0, 4, RTE_PKTMBUF_HEADROOM, flags));
-				rte_prefetch0(CQE_PTR_DIFF(
-					cq0, 5, RTE_PKTMBUF_HEADROOM, flags));
-				rte_prefetch0(CQE_PTR_DIFF(
-					cq0, 6, RTE_PKTMBUF_HEADROOM, flags));
-				rte_prefetch0(CQE_PTR_DIFF(
-					cq0, 7, RTE_PKTMBUF_HEADROOM, flags));
+				rte_prefetch0(CQE_PTR_DIFF(cq0,
+					4, RTE_PKTMBUF_HEADROOM, flags));
+				rte_prefetch0(CQE_PTR_DIFF(cq0,
+					5, RTE_PKTMBUF_HEADROOM, flags));
+				rte_prefetch0(CQE_PTR_DIFF(cq0,
+					6, RTE_PKTMBUF_HEADROOM, flags));
+				rte_prefetch0(CQE_PTR_DIFF(cq0,
+					7, RTE_PKTMBUF_HEADROOM, flags));
+
 				if (likely(pkts - packets > 8)) {
-					rte_prefetch0(CQE_PTR_DIFF(
-						cq0, 8, RTE_PKTMBUF_HEADROOM,
-						flags));
-					rte_prefetch0(CQE_PTR_DIFF(
-						cq0, 9, RTE_PKTMBUF_HEADROOM,
-						flags));
-					rte_prefetch0(CQE_PTR_DIFF(
-						cq0, 10, RTE_PKTMBUF_HEADROOM,
-						flags));
-					rte_prefetch0(CQE_PTR_DIFF(
-						cq0, 11, RTE_PKTMBUF_HEADROOM,
-						flags));
+					rte_prefetch0(CQE_PTR_DIFF(cq0,
+						8, RTE_PKTMBUF_HEADROOM, flags));
+					rte_prefetch0(CQE_PTR_DIFF(cq0,
+						9, RTE_PKTMBUF_HEADROOM, flags));
+					rte_prefetch0(CQE_PTR_DIFF(cq0,
+						10, RTE_PKTMBUF_HEADROOM, flags));
+					rte_prefetch0(CQE_PTR_DIFF(cq0,
+						11, RTE_PKTMBUF_HEADROOM, flags));
 				}
 			}
 		} else {
 			if (pkts - packets > 4) {
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 4, 64, flags));
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 5, 64, flags));
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 6, 64, flags));
-				rte_prefetch_non_temporal(
-					CQE_PTR_OFF(cq0, 7, 64, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0, 4, 64, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0, 5, 64, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0, 6, 64, flags));
+				rte_prefetch_non_temporal(CQE_PTR_OFF(cq0, 7, 64, flags));
 			}
 		}
 
@@ -1227,13 +1225,11 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 				0xFF, 0xFF, /* pkt_type set as unknown */
 				0xFF, 0xFF, /* pkt_type set as unknown */
 				0,    1,    /* octet 1~0, low 16 bits pkt_len */
-				0xFF, 0xFF, /* skip high 16 bits pkt_len, zero
-					       out */
+				0xFF, 0xFF, /* skip high 16it pkt_len, zero out */
 				0,    1,    /* octet 1~0, 16 bits data_len */
 				0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-			/* Form the rx_descriptor_fields1 with pkt_len and
-			 * data_len */
+			/* Form the rx_descriptor_fields1 with pkt_len and data_len */
 			f0 = vqtbl1q_u8(cq0_w8, shuf_msk);
 			f1 = vqtbl1q_u8(cq1_w8, shuf_msk);
 			f2 = vqtbl1q_u8(cq2_w8, shuf_msk);
@@ -1530,10 +1526,10 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 		RTE_MEMPOOL_CHECK_COOKIES(mbuf2->pool, (void **)&mbuf2, 1, 1);
 		RTE_MEMPOOL_CHECK_COOKIES(mbuf3->pool, (void **)&mbuf3, 1, 1);
 
-		NIX_MBUF_VALIDATE_NEXT(mbuf0);
-		NIX_MBUF_VALIDATE_NEXT(mbuf1);
-		NIX_MBUF_VALIDATE_NEXT(mbuf2);
-		NIX_MBUF_VALIDATE_NEXT(mbuf3);
+		nix_mbuf_validate_next(mbuf0);
+		nix_mbuf_validate_next(mbuf1);
+		nix_mbuf_validate_next(mbuf2);
+		nix_mbuf_validate_next(mbuf3);
 
 		packets += NIX_DESCS_PER_LOOP;
 
@@ -1549,8 +1545,7 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 				/* Update aura handle */
 				*(uint64_t *)(laddr - 8) =
 					(((uint64_t)(15 & 0x1) << 32) |
-					 roc_npa_aura_handle_to_aura(
-						 aura_handle));
+				    roc_npa_aura_handle_to_aura(aura_handle));
 				loff = loff - 15;
 				shft += 3;
 
@@ -1573,8 +1568,7 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 				/* Update aura handle */
 				*(uint64_t *)(laddr - 8) =
 					(((uint64_t)(loff & 0x1) << 32) |
-					 roc_npa_aura_handle_to_aura(
-						 aura_handle));
+				    roc_npa_aura_handle_to_aura(aura_handle));
 
 				data = (data & ~(0x7UL << shft)) |
 				       (((uint64_t)loff >> 1) << shft);
@@ -1836,13 +1830,10 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 #define R(name, flags)                                                         \
 	uint16_t __rte_noinline __rte_hot cn10k_nix_recv_pkts_##name(          \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn10k_nix_recv_pkts_mseg_##name(     \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn10k_nix_recv_pkts_vec_##name(      \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn10k_nix_recv_pkts_vec_mseg_##name( \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
 	uint16_t __rte_noinline __rte_hot cn10k_nix_recv_pkts_reas_##name(     \

@@ -38,7 +38,6 @@
 #define CNXK_SSO_XAQ_CACHE_CNT (0x7)
 #define CNXK_SSO_XAQ_SLACK     (8)
 #define CNXK_SSO_WQE_SG_PTR    (9)
-#define CNXK_SSO_SQB_LIMIT     (0x180)
 #define CNXK_SSO_PRIORITY_CNT  (8)
 #define CNXK_SSO_WEIGHT_CNT    (64)
 #define CNXK_SSO_AFFINITY_CNT  (16)

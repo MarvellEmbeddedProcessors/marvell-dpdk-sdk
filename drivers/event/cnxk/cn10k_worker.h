@@ -464,7 +464,6 @@ NIX_RX_FASTPATH_MODES
 			      uint64_t timeout_ticks)                          \
 	{                                                                      \
 		struct cn10k_sso_hws *ws = port;                               \
-                                                                               \
 		RTE_SET_USED(timeout_ticks);                                   \
 		if (ws->swtag_req) {                                           \
 			ws->swtag_req = 0;                                     \
@@ -486,7 +485,6 @@ NIX_RX_FASTPATH_MODES
 		struct cn10k_sso_hws *ws = port;                               \
 		uint16_t ret = 1;                                              \
 		uint64_t iter;                                                 \
-                                                                               \
 		if (ws->swtag_req) {                                           \
 			ws->swtag_req = 0;                                     \
 			ws->gw_rdata = cnxk_sso_hws_swtag_wait(                \
@@ -527,6 +525,14 @@ cn10k_sso_hws_xtract_meta(struct rte_mbuf *m, const uint64_t *txq_data)
 			*)(txq_data[(txq_data[m->port] >> 48) +
 				    rte_event_eth_tx_adapter_txq_get(m)] &
 			   (BIT_ULL(48) - 1));
+}
+
+static __rte_always_inline void
+cn10k_sso_txq_fc_wait(const struct cn10k_eth_txq *txq)
+{
+	while ((uint64_t)txq->nb_sqb_bufs_adj <=
+	       __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED))
+		;
 }
 
 static __rte_always_inline void
@@ -577,6 +583,7 @@ cn10k_sso_tx_one(struct cn10k_sso_hws *ws, struct rte_mbuf *m, uint64_t *cmd,
 	if (!CNXK_TAG_IS_HEAD(ws->gw_rdata) && !sched_type)
 		ws->gw_rdata = roc_sso_hws_head_wait(ws->base);
 
+	cn10k_sso_txq_fc_wait(txq);
 	roc_lmt_submit_steorl(lmt_id, pa);
 }
 
@@ -637,7 +644,6 @@ cn10k_sso_hws_event_tx(struct cn10k_sso_hws *ws, struct rte_event *ev,
 	struct cn10k_eth_txq *txq;
 	struct rte_mbuf *m;
 	uintptr_t lmt_addr;
-	uint16_t ref_cnt;
 	uint16_t lmt_id;
 
 	lmt_addr = ws->lmt_base;
@@ -668,17 +674,9 @@ cn10k_sso_hws_event_tx(struct cn10k_sso_hws *ws, struct rte_event *ev,
 	}
 
 	m = ev->mbuf;
-	ref_cnt = m->refcnt;
 	cn10k_sso_tx_one(ws, m, cmd, lmt_id, lmt_addr, ev->sched_type, txq_data,
 			 flags);
 
-	if (flags & NIX_TX_OFFLOAD_MBUF_NOFF_F) {
-		if (ref_cnt > 1)
-			return 1;
-	}
-
-	cnxk_sso_hws_swtag_flush(ws->base + SSOW_LF_GWS_TAG,
-				 ws->base + SSOW_LF_GWS_OP_SWTAG_FLUSH);
 	return 1;
 }
 
@@ -697,7 +695,6 @@ NIX_TX_FASTPATH_MODES
 	{                                                                      \
 		struct cn10k_sso_hws *ws = port;                               \
 		uint64_t cmd[sz];                                              \
-                                                                               \
 		RTE_SET_USED(nb_events);                                       \
 		return cn10k_sso_hws_event_tx(                                 \
 			ws, &ev[0], cmd, (const uint64_t *)ws->tx_adptr_data,  \
@@ -710,7 +707,6 @@ NIX_TX_FASTPATH_MODES
 	{                                                                      \
 		uint64_t cmd[(sz) + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];           \
 		struct cn10k_sso_hws *ws = port;                               \
-                                                                               \
 		RTE_SET_USED(nb_events);                                       \
 		return cn10k_sso_hws_event_tx(                                 \
 			ws, &ev[0], cmd, (const uint64_t *)ws->tx_adptr_data,  \
