@@ -15,6 +15,8 @@ test_dir = meson.current_build_dir()
 
 # Copy the required scripts to build directory.
 run_command(copy_data, test_script)
+run_command(copy_data, 'ucast_in.pcap')
+run_command(copy_data, 'mcast_in.pcap')
 
 # Add the meson test
 test(

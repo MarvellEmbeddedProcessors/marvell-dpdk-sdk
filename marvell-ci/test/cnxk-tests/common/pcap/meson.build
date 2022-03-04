@@ -19,6 +19,13 @@ executable(
     install: true,
     install_dir : 'bin/cnxk/common/pcap')
 
+executable(
+    'pcap-mac',
+    files('pcap_mac.c'),
+    dependencies: test_dep_objs,
+    install: true,
+    install_dir : 'bin/cnxk/common/pcap')
+
 run_command(copy_data, 'sample.pcap')
 install_data(
     'sample.pcap',
