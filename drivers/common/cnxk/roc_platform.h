@@ -117,10 +117,11 @@
 #define plt_bitmap_scan			rte_bitmap_scan
 #define plt_bitmap_get_memory_footprint rte_bitmap_get_memory_footprint
 
-#define plt_spinlock_t	    rte_spinlock_t
-#define plt_spinlock_init   rte_spinlock_init
-#define plt_spinlock_lock   rte_spinlock_lock
-#define plt_spinlock_unlock rte_spinlock_unlock
+#define plt_spinlock_t	     rte_spinlock_t
+#define plt_spinlock_init    rte_spinlock_init
+#define plt_spinlock_lock    rte_spinlock_lock
+#define plt_spinlock_unlock  rte_spinlock_unlock
+#define plt_spinlock_trylock rte_spinlock_trylock
 
 #define plt_intr_callback_register   rte_intr_callback_register
 #define plt_intr_callback_unregister rte_intr_callback_unregister
