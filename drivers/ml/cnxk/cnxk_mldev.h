@@ -20,9 +20,9 @@ enum cnxk_ml_job_cmd {
 /* Model states */
 enum cnxk_ml_model_state {
 	CNXK_ML_MODEL_STATE_CREATED,
-	CNXK_ML_MODEL_STATE_LOAD_ACTIVE,
+	CNXK_ML_MODEL_STATE_JOB_ACTIVE,
 	CNXK_ML_MODEL_STATE_LOADED,
-	CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE,
+	CNXK_ML_MODEL_STATE_UNKNOWN,
 };
 
 /* Model Metadata : v 2.1.0.2 */
@@ -696,6 +696,9 @@ struct cnxk_ml_model {
 	/* Model address structure */
 	struct cnxk_ml_model_addr model_addr;
 
+	/* Model lock, used to update model state */
+	plt_spinlock_t lock;
+
 	/* Model state */
 	enum cnxk_ml_model_state state;
 
@@ -738,10 +741,8 @@ struct cnxk_ml_config {
 	/* ML model array */
 	struct cnxk_ml_model **ml_models;
 
-	/* Spin lock for slow path
-	 * Enqueue / access through scratch registers
-	 */
-	rte_spinlock_t scratch_lock;
+	/* Config spinlock, used to update ML config and OCM state only */
+	plt_spinlock_t lock;
 
 	/* Number of OCM tiles */
 	uint8_t ocm_num_tiles;

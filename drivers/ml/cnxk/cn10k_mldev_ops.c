@@ -1214,7 +1214,7 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 		goto err_exit;
 	}
 
-	rte_spinlock_init(&ml_config->scratch_lock);
+	rte_spinlock_init(&ml_config->lock);
 
 	/* Set timeouts */
 	if (roc_env_is_asim())
@@ -1601,6 +1601,8 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 
 	cnxk_ml_model_info_set(ml_model);
 
+	/* Initialize model lock and state */
+	plt_spinlock_init(&ml_model->lock);
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
 	ml_config->ml_models[idx] = ml_model;
 
@@ -1649,13 +1651,14 @@ cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 	struct cnxk_ml_dev *ml_dev;
 	struct cnxk_ml_jd *jd;
 
-	bool scratch_active;
+	bool job_enqueued;
+	bool job_dequeued;
 	uint8_t num_tiles;
 	uint64_t tilemask;
 	int wb_page_start;
 	int tile_start;
 	int tile_end;
-	bool timeout;
+	bool locked;
 	int ret = 0;
 
 	ml_dev = dev->data->dev_private;
@@ -1680,63 +1683,60 @@ cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 	num_tiles = ml_model->model_metadata.model.tile_end -
 		    ml_model->model_metadata.model.tile_start + 1;
 
-	/* Acquire lock and check if scratch is active. This lock protects the
-	 * shared resources like OCM info, used in tilemask_find. tilemask and
-	 * wb_page_start are dynamic, the calculated values are dependent on the
-	 * current state of OCM which is stored in ocm_info. ocm_info is
-	 * shared across all models / threads.
-	 */
-	scratch_active = true;
-	while (scratch_active) {
-		if (rte_spinlock_trylock(&ml_config->scratch_lock) != 0) {
-			bool valid =
-				roc_ml_scratch_is_valid_bit_set(&ml_dev->roc);
-			bool done =
-				roc_ml_scratch_is_done_bit_set(&ml_dev->roc);
+	locked = false;
+	while (!locked) {
+		if (plt_spinlock_trylock(&ml_model->lock) != 0) {
+			if (ml_model->state == CNXK_ML_MODEL_STATE_LOADED) {
+				plt_ml_dbg(
+					"Model already loaded, model = 0x%016lx",
+					PLT_U64_CAST(ml_model));
+				plt_spinlock_unlock(&ml_model->lock);
+				return 1;
+			}
 
-			if (valid == done) /* Initial state or a previous job is
-					    * completed
-					    */
-				scratch_active = false;
-			else /* A job is active */
-				rte_spinlock_unlock(&ml_config->scratch_lock);
+			if (ml_model->state == CNXK_ML_MODEL_STATE_JOB_ACTIVE) {
+				plt_err("A slow-path job is active for the model = 0x%016lx",
+					PLT_U64_CAST(ml_model));
+				plt_spinlock_unlock(&ml_model->lock);
+				return -EBUSY;
+			}
+
+			ml_model->state = CNXK_ML_MODEL_STATE_JOB_ACTIVE;
+			plt_spinlock_unlock(&ml_model->lock);
+			locked = true;
 		}
 	}
 
-	if (ml_model->state != CNXK_ML_MODEL_STATE_CREATED) {
-		if (ml_model->state == CNXK_ML_MODEL_STATE_LOADED)
-			plt_ml_dbg("Model already loaded, model = 0x%016lx",
-				   PLT_U64_CAST(ml_model));
+	while (!ml_model->model_mem_map.ocm_reserved) {
+		if (plt_spinlock_trylock(&ml_config->lock) != 0) {
+			wb_page_start = cnxk_ml_ocm_tilemask_find(
+				dev, num_tiles,
+				ml_model->model_mem_map.wb_pages,
+				ml_model->model_mem_map.scratch_pages, -1,
+				&tilemask);
 
-		if ((ml_model->state == CNXK_ML_MODEL_STATE_LOAD_ACTIVE) ||
-		    (ml_model->state == CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE)) {
-			plt_err("A load / unload is active for the model = 0x%016lx",
-				PLT_U64_CAST(ml_model));
-			ret = -EBUSY;
+			if (wb_page_start == -1) {
+				plt_err("Free pages not available on OCM tiles");
+				plt_err("Failed to load model id = 0x%016lx, name = %s",
+					PLT_U64_CAST(ml_model),
+					ml_model->model_metadata.model.name);
+
+				plt_spinlock_unlock(&ml_config->lock);
+				return -ENOMEM;
+			}
+
+			ml_model->model_mem_map.tilemask = tilemask;
+			ml_model->model_mem_map.wb_page_start = wb_page_start;
+
+			cnxk_ml_ocm_reserve_pages(
+				dev, ml_model->model_id,
+				ml_model->model_mem_map.tilemask,
+				ml_model->model_mem_map.wb_page_start,
+				ml_model->model_mem_map.wb_pages,
+				ml_model->model_mem_map.scratch_pages);
+			ml_model->model_mem_map.ocm_reserved = true;
+			plt_spinlock_unlock(&ml_config->lock);
 		}
-
-		rte_spinlock_unlock(&ml_config->scratch_lock);
-		return ret;
-	}
-
-	/* Get tilemask to load the model */
-	if (!ml_model->model_mem_map.ocm_reserved) {
-		wb_page_start = cnxk_ml_ocm_tilemask_find(
-			dev, num_tiles, ml_model->model_mem_map.wb_pages,
-			ml_model->model_mem_map.scratch_pages, -1, &tilemask);
-
-		if (wb_page_start == -1) {
-			plt_err("Free pages not available on OCM tiles");
-			plt_err("Failed to load model = 0x%016lx, name = %s",
-				(uint64_t)ml_model,
-				ml_model->model_metadata.model.name);
-
-			rte_spinlock_unlock(&ml_config->scratch_lock);
-			return -ENOMEM;
-		}
-
-		ml_model->model_mem_map.tilemask = tilemask;
-		ml_model->model_mem_map.wb_page_start = wb_page_start;
 	}
 
 	/* Update JD */
@@ -1746,55 +1746,61 @@ cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 	jd->load.ocm_wb_base_address = ml_model->model_mem_map.wb_page_start *
 				       ml_config->ocm_page_size;
 
-	roc_ml_clk_force_on(&ml_dev->roc);
-	roc_ml_dma_stall_off(&ml_dev->roc);
-	ml_job_compl->start_cycle = plt_tsc_cycles();
-	roc_ml_scratch_enqueue(&ml_dev->roc, jd);
+	job_enqueued = false;
+	job_dequeued = false;
+	do {
+		if (!job_enqueued) {
+			ml_job_compl->start_cycle = plt_tsc_cycles();
+			job_enqueued = roc_ml_scratch_enqueue(&ml_dev->roc, jd);
+		}
 
-	timeout = true;
-	plt_rmb();
-	while (plt_tsc_cycles() - ml_job_compl->start_cycle <
-	       ml_config->timeout.load) {
-		if (roc_ml_scratch_is_done_bit_set(&ml_dev->roc) &&
-		    (plt_read64(&ml_job_compl->status_ptr) ==
-		     ML_CN10K_POLL_JOB_FINISH)) {
-			timeout = false;
+		if (job_enqueued && !job_dequeued)
+			job_dequeued = roc_ml_scratch_dequeue(&ml_dev->roc, jd);
+
+		if (job_dequeued)
 			break;
-		}
-	}
-	roc_ml_dma_stall_on(&ml_dev->roc);
-	roc_ml_clk_force_off(&ml_dev->roc);
+	} while (plt_tsc_cycles() - ml_job_compl->start_cycle <
+		 ml_config->timeout.load);
 
-	if (!timeout &&
-	    (ml_job_compl->job_result.status == ML_STATUS_SUCCESS)) {
-		ml_model->state = CNXK_ML_MODEL_STATE_LOADED;
-		if (!ml_model->model_mem_map.ocm_reserved) {
-			cnxk_ml_ocm_reserve_pages(
-				dev, ml_model->model_id,
-				ml_model->model_mem_map.tilemask,
-				ml_model->model_mem_map.wb_page_start,
-				ml_model->model_mem_map.wb_pages,
-				ml_model->model_mem_map.scratch_pages);
-			ml_model->model_mem_map.ocm_reserved = true;
+	if (job_dequeued) {
+		if (plt_read64(&ml_job_compl->status_ptr) ==
+		    ML_CN10K_POLL_JOB_FINISH) {
+			if (ml_job_compl->job_result.status ==
+			    ML_STATUS_SUCCESS)
+				ret = 0;
+			else if (ml_job_compl->job_result.status ==
+				 ML_STATUS_FAILURE)
+				ret = -1;
 		}
-	} else { /* Model load failed */
-		if (timeout) {
-			plt_err("Model load timeout, model_id = %d", model_id);
-			ret = -ETIME;
-		} else {
-			plt_err("Model load failed, model_id = %d", model_id);
-			ret = -1;
-		}
+	} else { /* Reset scratch registers */
+		roc_ml_scratch_queue_reset(&ml_dev->roc);
+		ret = -ETIME;
 	}
 
-	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
-	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
-	rte_spinlock_unlock(&ml_config->scratch_lock);
+	locked = false;
+	while (!locked) {
+		if (plt_spinlock_trylock(&ml_model->lock) != 0) {
+			if (ret == 0)
+				ml_model->state = CNXK_ML_MODEL_STATE_LOADED;
+			else
+				ml_model->state = CNXK_ML_MODEL_STATE_UNKNOWN;
+
+			plt_spinlock_unlock(&ml_model->lock);
+			locked = true;
+		}
+	}
+
+	if (ml_model->state == CNXK_ML_MODEL_STATE_UNKNOWN) {
+		while (ml_model->model_mem_map.ocm_reserved) {
+			if (plt_spinlock_trylock(&ml_config->lock) != 0) {
+				cnxk_ml_ocm_free_pages(dev, ml_model->model_id);
+				ml_model->model_mem_map.ocm_reserved = false;
+				plt_spinlock_unlock(&ml_config->lock);
+			}
+		}
+	}
+
 	rte_mempool_put(ml_config->job_pool, ml_job_compl);
-
-	if (ret != 0) { /* Call unload, ignore error */
-		cn10k_ml_model_unload(dev, model_id);
-	}
 
 	return ret;
 }
@@ -1808,8 +1814,9 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 	struct cnxk_ml_dev *ml_dev;
 	struct cnxk_ml_jd *jd;
 
-	bool scratch_active;
-	bool timeout;
+	bool job_enqueued;
+	bool job_dequeued;
+	bool locked;
 	int ret = 0;
 
 	ml_dev = dev->data->dev_private;
@@ -1831,73 +1838,77 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
 	plt_wmb();
 
-	/* Acquire spinlock and check if scratch register is active */
-	scratch_active = true;
-	while (scratch_active) {
-		if (rte_spinlock_trylock(&ml_config->scratch_lock) != 0) {
-			if (roc_ml_reg_read64(&ml_dev->roc,
-					      ML_SCRATCH_WORK_PTR) == 0)
-				scratch_active = false;
-			else
-				rte_spinlock_unlock(&ml_config->scratch_lock);
+	locked = false;
+	while (!locked) {
+		if (plt_spinlock_trylock(&ml_model->lock) != 0) {
+			if (ml_model->state == CNXK_ML_MODEL_STATE_CREATED) {
+				plt_ml_dbg("Model not loaded, model = 0x%016lx",
+					   PLT_U64_CAST(ml_model));
+				plt_spinlock_unlock(&ml_model->lock);
+				return 1;
+			}
+
+			if (ml_model->state == CNXK_ML_MODEL_STATE_JOB_ACTIVE) {
+				plt_err("A slow-path job is active for the model = 0x%016lx",
+					PLT_U64_CAST(ml_model));
+				plt_spinlock_unlock(&ml_model->lock);
+				return -EBUSY;
+			}
+
+			ml_model->state = CNXK_ML_MODEL_STATE_JOB_ACTIVE;
+			plt_spinlock_unlock(&ml_model->lock);
+			locked = true;
 		}
 	}
 
-	if (ml_model->state != CNXK_ML_MODEL_STATE_LOADED) {
-		if (ml_model->state == CNXK_ML_MODEL_STATE_CREATED)
-			plt_ml_dbg("Model not loaded, model = 0x%016lx",
-				   PLT_U64_CAST(ml_model));
-
-		if ((ml_model->state == CNXK_ML_MODEL_STATE_LOAD_ACTIVE) ||
-		    (ml_model->state == CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE)) {
-			plt_err("A load / unload is active for the model = 0x%016lx",
-				PLT_U64_CAST(ml_model));
-			ret = -EBUSY;
+	while (ml_model->model_mem_map.ocm_reserved) {
+		if (plt_spinlock_trylock(&ml_config->lock) != 0) {
+			cnxk_ml_ocm_free_pages(dev, ml_model->model_id);
+			ml_model->model_mem_map.ocm_reserved = false;
+			plt_spinlock_unlock(&ml_config->lock);
 		}
-
-		rte_spinlock_unlock(&ml_config->scratch_lock);
-		return ret;
 	}
 
-	roc_ml_clk_force_on(&ml_dev->roc);
-	roc_ml_dma_stall_off(&ml_dev->roc);
-	ml_job_compl->start_cycle = plt_tsc_cycles();
-	roc_ml_scratch_enqueue(&ml_dev->roc, jd);
+	job_enqueued = false;
+	job_dequeued = false;
+	do {
+		if (!job_enqueued) {
+			ml_job_compl->start_cycle = plt_tsc_cycles();
+			job_enqueued = roc_ml_scratch_enqueue(&ml_dev->roc, jd);
+		}
 
-	timeout = true;
-	plt_rmb();
-	while (plt_tsc_cycles() - ml_job_compl->start_cycle <
-	       ml_config->timeout.unload) {
-		if (roc_ml_scratch_is_done_bit_set(&ml_dev->roc) &&
-		    (plt_read64(&ml_job_compl->status_ptr) ==
-		     ML_CN10K_POLL_JOB_FINISH)) {
-			timeout = false;
+		if (job_enqueued && !job_dequeued)
+			job_dequeued = roc_ml_scratch_dequeue(&ml_dev->roc, jd);
+
+		if (job_dequeued)
 			break;
-		}
-	}
-	roc_ml_dma_stall_on(&ml_dev->roc);
-	roc_ml_clk_force_off(&ml_dev->roc);
+	} while (plt_tsc_cycles() - ml_job_compl->start_cycle <
+		 ml_config->timeout.unload);
 
-	if (!timeout &&
-	    (ml_job_compl->job_result.status == ML_STATUS_SUCCESS)) {
-		ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
-		cnxk_ml_ocm_free_pages(dev, ml_model->model_id);
-		ml_model->model_mem_map.ocm_reserved = false;
-		ml_model->model_mem_map.tilemask = 0;
-		ml_model->model_mem_map.wb_page_start = -1;
+	if (job_dequeued) {
+		if (plt_read64(&ml_job_compl->status_ptr) ==
+		    ML_CN10K_POLL_JOB_FINISH) {
+			if (ml_job_compl->job_result.status ==
+			    ML_STATUS_SUCCESS)
+				ret = 0;
+			else if (ml_job_compl->job_result.status ==
+				 ML_STATUS_FAILURE)
+				ret = -1;
+		}
 	} else {
-		if (timeout) {
-			plt_err("Model load timeout, model = %d", model_id);
-			ret = -ETIME;
-		} else {
-			plt_err("Model load failed, model = %d", model_id);
-			ret = -1;
+		roc_ml_scratch_queue_reset(&ml_dev->roc);
+		ret = -ETIME;
+	}
+
+	locked = false;
+	while (!locked) {
+		if (plt_spinlock_trylock(&ml_model->lock) != 0) {
+			ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
+			plt_spinlock_unlock(&ml_model->lock);
+			locked = true;
 		}
 	}
 
-	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_AP_FW_COMM);
-	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
-	rte_spinlock_unlock(&ml_config->scratch_lock);
 	rte_mempool_put(ml_config->job_pool, ml_job_compl);
 
 	return ret;
