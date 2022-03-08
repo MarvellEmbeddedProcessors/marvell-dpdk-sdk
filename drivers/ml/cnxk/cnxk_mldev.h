@@ -9,6 +9,22 @@
 #define ML_FIRMWARE_STRLEN   512
 #define ML_FW_VERSION_STRLEN 32
 
+/* ML Job commands */
+enum cnxk_ml_job_cmd {
+	CNXK_ML_JOB_CMD_RUN = 0,
+	CNXK_ML_JOB_CMD_UNLOAD,
+	CNXK_ML_JOB_CMD_LOAD,
+	CNXK_ML_JOB_CMD_FW_LOAD,
+};
+
+/* Model states */
+enum cnxk_ml_model_state {
+	CNXK_ML_MODEL_STATE_CREATED,
+	CNXK_ML_MODEL_STATE_LOAD_ACTIVE,
+	CNXK_ML_MODEL_STATE_LOADED,
+	CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE,
+};
+
 /* Model Metadata : v 2.1.0.2 */
 #define ML_MODEL_MAGIC_STRING "MRVL"
 #define ML_MODEL_TARGET_ARCH  128
@@ -366,22 +382,6 @@ struct cnxk_ml_model_addr {
 	} output[ML_INPUT_OUTPUT_SIZE];
 };
 
-/* ML Job commands */
-enum cnxk_ml_job_cmd {
-	CNXK_ML_JOB_CMD_RUN = 0,
-	CNXK_ML_JOB_CMD_UNLOAD,
-	CNXK_ML_JOB_CMD_LOAD,
-	CNXK_ML_JOB_CMD_FW_LOAD,
-};
-
-/* Model states */
-enum cnxk_ml_model_state {
-	CNXK_ML_MODEL_STATE_CREATED,
-	CNXK_ML_MODEL_STATE_LOAD_ACTIVE,
-	CNXK_ML_MODEL_STATE_LOADED,
-	CNXK_ML_MODEL_STATE_UNLOAD_ACTIVE,
-};
-
 /* Event mode compl_W0 structure */
 union cnxk_ml_compl_W0 {
 	uint64_t u;
@@ -471,55 +471,6 @@ struct cnxk_ml_fw_debug_cap {
 
 	/* Exception state dump size */
 	uint32_t fw_exception_state_size;
-};
-
-/* ML firmware stats */
-struct cnxk_ml_fw_stats {
-	/* Firmware start cycle */
-	uint64_t fw_start;
-
-	/* Firmware end cycle */
-	uint64_t fw_end;
-
-	/* Hardware start cycle */
-	uint64_t hw_start;
-
-	/* Hardware end cycle */
-	uint64_t hw_end;
-};
-
-/* ML internal result structure */
-struct cnxk_ml_job_result {
-	/* Job status, success = ML_STATUS_SUCCESS, failure = ML_STATUS_FAILURE
-	 */
-	uint64_t status;
-
-	/* Job error code, if status = ML_STATUS_FAILURE */
-	uint64_t error_code;
-
-	/* Firmware stats */
-	struct cnxk_ml_fw_stats fw_stats;
-
-	/* User context pointer */
-	void *user_ptr;
-};
-
-/* ML job structure
- *
- * A buffer of size cnxk_ml_job_compl_t is required for every ML job. For poll
- * mode jobs, the buffer is created by the library and returned the user. For
- * event mode jobs, the buffer is handled by the user. For sync mode jobs, the
- * buffer is created by the library and destroyed before return.
- */
-struct cnxk_ml_job_compl {
-	/* Job completion result */
-	struct cnxk_ml_job_result job_result;
-
-	/* Job status pointer */
-	volatile uint64_t status_ptr;
-
-	/* Job start cycle */
-	uint64_t start_cycle;
 };
 
 /* Firmware Load completion structure */
@@ -655,13 +606,56 @@ struct cnxk_ml_jd {
 	};
 };
 
-/* Memory resources */
-struct cnxk_ml_mem {
-	/* Memory for BAR0 */
-	struct rte_mem_resource res0;
+/* ML firmware stats */
+struct cnxk_ml_fw_stats {
+	/* Firmware start cycle */
+	uint64_t fw_start;
 
-	/* Memory for BAR4 */
-	struct rte_mem_resource res4;
+	/* Firmware end cycle */
+	uint64_t fw_end;
+
+	/* Hardware start cycle */
+	uint64_t hw_start;
+
+	/* Hardware end cycle */
+	uint64_t hw_end;
+};
+
+/* ML internal result structure */
+struct cnxk_ml_job_result {
+	/* Job status, success = ML_STATUS_SUCCESS, failure = ML_STATUS_FAILURE
+	 */
+	uint64_t status;
+
+	/* Job error code, if status = ML_STATUS_FAILURE */
+	uint64_t error_code;
+
+	/* Firmware stats */
+	struct cnxk_ml_fw_stats fw_stats;
+
+	/* User context pointer */
+	void *user_ptr;
+};
+
+/* ML job structure
+ *
+ * A buffer of size cnxk_ml_job_compl_t is required for every ML job. For poll
+ * mode jobs, the buffer is created by the library and returned the user. For
+ * event mode jobs, the buffer is handled by the user. For sync mode jobs, the
+ * buffer is created by the library and destroyed before return.
+ */
+struct cnxk_ml_job_compl {
+	/* Job descriptor */
+	struct cnxk_ml_jd jd;
+
+	/* Job completion result */
+	struct cnxk_ml_job_result job_result;
+
+	/* Job status pointer */
+	volatile uint64_t status_ptr;
+
+	/* Job start cycle */
+	uint64_t start_cycle;
 };
 
 /* ML Model OCM map structure */
@@ -680,27 +674,6 @@ struct cnxk_ml_ocm_model_map {
 
 	/* Number of pages required for scratch memory */
 	uint16_t scratch_pages;
-};
-
-/* ML firmware structure */
-struct cnxk_ml_fw {
-	/* Device reference */
-	struct cnxk_ml_dev *ml_dev;
-
-	/* Firmware file path */
-	char filepath[ML_FIRMWARE_STRLEN];
-
-	/* Load completion structure */
-	struct cnxk_ml_fw_load_compl *load_fw;
-
-	/* Data buffer */
-	uint8_t *data_fw;
-
-	/* Load status pointer */
-	volatile uint64_t status_ptr;
-
-	/* Result structure */
-	struct cnxk_ml_job_result job_result;
 };
 
 /* ML Model Object */
@@ -726,18 +699,29 @@ struct cnxk_ml_model {
 	/* Model state */
 	enum cnxk_ml_model_state state;
 
-	/* Job descriptors pool
-	 * Size of the pool is ML_MODEL_JD_POOL_SIZE.
-	 * JD's  0 to ML_MODEL_JD_POOL_SIZE - 3 are reserved for run
-	 * Last two JD's in the pool are reserved for load and unload
-	 */
-	struct cnxk_ml_jd *jd;
-
-	/* Run Job descriptor index, initial value is 2. */
-	uint8_t jd_index;
-
 	/* Internal model_info structure */
 	uint8_t *model_info;
+};
+
+/* ML firmware structure */
+struct cnxk_ml_fw {
+	/* Device reference */
+	struct cnxk_ml_dev *ml_dev;
+
+	/* Firmware file path */
+	char filepath[ML_FIRMWARE_STRLEN];
+
+	/* Load completion structure */
+	struct cnxk_ml_fw_load_compl *load_fw;
+
+	/* Data buffer */
+	uint8_t *data_fw;
+
+	/* Load status pointer */
+	volatile uint64_t status_ptr;
+
+	/* Result structure */
+	struct cnxk_ml_job_result job_result;
 };
 
 /* Configuration object */
@@ -791,6 +775,15 @@ struct cnxk_ml_config {
 		uint64_t unload;
 		uint64_t run;
 	} timeout;
+};
+
+/* Memory resources */
+struct cnxk_ml_mem {
+	/* Memory for BAR0 */
+	struct rte_mem_resource res0;
+
+	/* Memory for BAR4 */
+	struct rte_mem_resource res4;
 };
 
 /* ML Device private data */

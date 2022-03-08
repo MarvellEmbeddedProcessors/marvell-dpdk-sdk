@@ -975,132 +975,102 @@ cnxk_ml_model_addr_update(struct cnxk_ml_model_metadata *model_metadata,
 }
 
 static void
-cnxk_ml_jd_init(struct rte_mldev *dev, struct cnxk_ml_model *ml_model)
+cnxk_ml_prep_sp_job_descriptor(struct rte_mldev *dev,
+			       struct cnxk_ml_model *ml_model,
+			       struct cnxk_ml_jd *jd,
+			       enum cnxk_ml_job_cmd job_cmd,
+			       struct cnxk_ml_job_compl *ml_job_compl)
 {
 	struct cnxk_ml_model_metadata *model_metadata;
 	struct cnxk_ml_model_addr *model_addr;
 	struct cnxk_ml_dev *ml_dev;
-	uint8_t i;
 
 	ml_dev = dev->data->dev_private;
 	model_addr = &ml_model->model_addr;
 	model_metadata = &ml_model->model_metadata;
 
-	/* Initialize load job descriptor */
-	ml_model->jd[JD_LOAD].hdr.compl_W0.u = 0;
-	ml_model->jd[JD_LOAD].hdr.compl_W1.status_ptr = 0; /* Updated at load */
-	ml_model->jd[JD_LOAD].hdr.model_id = ml_model->model_id;
-	ml_model->jd[JD_LOAD].hdr.command = CNXK_ML_JOB_CMD_LOAD;
-	ml_model->jd[JD_LOAD].hdr.flags = 0;
-	ml_model->jd[JD_LOAD].hdr.job_result = NULL; /* Updated at load */
-	ml_model->jd[JD_LOAD].load.model_src_ddr_addr = PLT_U64_CAST(
-		roc_ml_addr_ap2mlip(&ml_dev->roc, model_addr->init_load_addr));
-	ml_model->jd[JD_LOAD].load.model_dst_ddr_addr = PLT_U64_CAST(
-		roc_ml_addr_ap2mlip(&ml_dev->roc, model_addr->init_run_addr));
-	ml_model->jd[JD_LOAD].load.model_init_offset = 0x0;
-	ml_model->jd[JD_LOAD].load.model_main_offset =
-		model_metadata->init_model.file_size;
-	ml_model->jd[JD_LOAD].load.model_finish_offset =
-		model_metadata->init_model.file_size +
-		model_metadata->main_model.file_size;
-	ml_model->jd[JD_LOAD].load.model_init_size =
-		model_metadata->init_model.file_size;
-	ml_model->jd[JD_LOAD].load.model_main_size =
-		model_metadata->main_model.file_size;
-	ml_model->jd[JD_LOAD].load.model_finish_size =
-		model_metadata->finish_model.file_size;
-	ml_model->jd[JD_LOAD].load.model_wb_offset =
-		model_metadata->init_model.file_size +
-		model_metadata->main_model.file_size +
-		model_metadata->finish_model.file_size;
-	ml_model->jd[JD_LOAD].load.num_layers =
-		model_metadata->model.num_layers;
-	ml_model->jd[JD_LOAD].load.num_gather_entries = 0;
-	ml_model->jd[JD_LOAD].load.num_scatter_entries = 0;
-	ml_model->jd[JD_LOAD].load.tilemask = 0x0; /* Updated at load */
-	ml_model->jd[JD_LOAD].load.ocm_wb_base_address =
-		0x0; /* Updated at load */
-	ml_model->jd[JD_LOAD].load.ocm_wb_range_start =
-		model_metadata->model.ocm_wb_range_start;
-	ml_model->jd[JD_LOAD].load.ocm_wb_range_end =
-		model_metadata->model.ocm_wb_range_end;
-	ml_model->jd[JD_LOAD].load.ddr_wb_base_address =
-		PLT_U64_CAST(roc_ml_addr_ap2mlip(
+	memset(jd, 0, sizeof(struct cnxk_ml_jd));
+	jd->hdr.compl_W0.u = 0;
+	jd->hdr.compl_W1.status_ptr = PLT_U64_CAST(&ml_job_compl->status_ptr);
+	jd->hdr.model_id = ml_model->model_id;
+	jd->hdr.command = job_cmd;
+	jd->hdr.flags = ML_FLAGS_POLL_COMPL;
+	jd->hdr.job_result =
+		roc_ml_addr_ap2mlip(&ml_dev->roc, &ml_job_compl->job_result);
+
+	if (job_cmd == CNXK_ML_JOB_CMD_LOAD) {
+		jd->load.model_src_ddr_addr = PLT_U64_CAST(roc_ml_addr_ap2mlip(
+			&ml_dev->roc, model_addr->init_load_addr));
+		jd->load.model_dst_ddr_addr = PLT_U64_CAST(roc_ml_addr_ap2mlip(
+			&ml_dev->roc, model_addr->init_run_addr));
+		jd->load.model_init_offset = 0x0;
+		jd->load.model_main_offset =
+			model_metadata->init_model.file_size;
+		jd->load.model_finish_offset =
+			model_metadata->init_model.file_size +
+			model_metadata->main_model.file_size;
+		jd->load.model_init_size = model_metadata->init_model.file_size;
+		jd->load.model_main_size = model_metadata->main_model.file_size;
+		jd->load.model_finish_size =
+			model_metadata->finish_model.file_size;
+		jd->load.model_wb_offset =
+			model_metadata->init_model.file_size +
+			model_metadata->main_model.file_size +
+			model_metadata->finish_model.file_size;
+		jd->load.num_layers = model_metadata->model.num_layers;
+		jd->load.num_gather_entries = 0;
+		jd->load.num_scatter_entries = 0;
+		jd->load.tilemask = 0; /* Updated after reserving pages */
+		jd->load.ocm_wb_base_address =
+			0; /* Updated after reserving pages */
+		jd->load.ocm_wb_range_start =
+			model_metadata->model.ocm_wb_range_start;
+		jd->load.ocm_wb_range_end =
+			model_metadata->model.ocm_wb_range_end;
+		jd->load.ddr_wb_base_address = PLT_U64_CAST(roc_ml_addr_ap2mlip(
 			&ml_dev->roc,
 			PLT_PTR_ADD(model_addr->finish_load_addr,
 				    model_metadata->finish_model.file_size)));
-	ml_model->jd[JD_LOAD].load.ddr_wb_range_start =
-		model_metadata->model.ddr_wb_range_start;
-	ml_model->jd[JD_LOAD].load.ddr_wb_range_end =
-		model_metadata->model.ddr_wb_range_end;
-	ml_model->jd[JD_LOAD].load.input.s.ddr_range_start =
-		model_metadata->model.ddr_input_range_start;
-	ml_model->jd[JD_LOAD].load.input.s.ddr_range_end =
-		model_metadata->model.ddr_input_range_end;
-	ml_model->jd[JD_LOAD].load.output.s.ddr_range_start =
-		model_metadata->model.ddr_output_range_start;
-	ml_model->jd[JD_LOAD].load.output.s.ddr_range_end =
-		model_metadata->model.ddr_output_range_end;
-
-	/* Initialize unload job descriptor */
-	memset(&ml_model->jd[JD_UNLOAD], 0, sizeof(struct cnxk_ml_jd));
-	ml_model->jd[JD_UNLOAD].hdr.model_id = ml_model->model_id;
-	ml_model->jd[JD_UNLOAD].hdr.command = CNXK_ML_JOB_CMD_UNLOAD;
-	ml_model->jd[JD_UNLOAD].hdr.compl_W1.status_ptr =
-		0; /* Updated at unload */
-
-	/* Initialize run job descriptors */
-	for (i = 0; i < ML_MODEL_JD_POOL_SIZE - 2; i++) {
-		ml_model->jd[i].hdr.model_id = ml_model->model_id;
-		ml_model->jd[i].hdr.command = CNXK_ML_JOB_CMD_RUN;
-		ml_model->jd[i].hdr.flags = ML_FLAGS_SSO_COMPL;
-		ml_model->jd[i].hdr.job_result = NULL;	 /* Updated at run */
-		ml_model->jd[i].hdr.compl_W0.u = 0;	 /* Updated at run */
-		ml_model->jd[i].hdr.compl_W1.W1 = 0;	 /* Updated at run */
-		ml_model->jd[i].run.input_ddr_addr = 0;	 /* Updated at run */
-		ml_model->jd[i].run.output_ddr_addr = 0; /* Updated at run */
+		jd->load.ddr_wb_range_start =
+			model_metadata->model.ddr_wb_range_start;
+		jd->load.ddr_wb_range_end =
+			model_metadata->model.ddr_wb_range_end;
+		jd->load.input.s.ddr_range_start =
+			model_metadata->model.ddr_input_range_start;
+		jd->load.input.s.ddr_range_end =
+			model_metadata->model.ddr_input_range_end;
+		jd->load.output.s.ddr_range_start =
+			model_metadata->model.ddr_output_range_start;
+		jd->load.output.s.ddr_range_end =
+			model_metadata->model.ddr_output_range_end;
 	}
 }
 
 static void
-cnxk_ml_jd_update(struct rte_mldev *dev, enum cnxk_ml_job_cmd ml_job_cmd,
-		  struct cnxk_ml_model *ml_model,
-		  struct cnxk_ml_job_compl *ml_job_compl)
+cnxk_ml_prep_fp_job_descriptor(struct rte_mldev *dev,
+			       struct cnxk_ml_model *ml_model,
+			       struct cnxk_ml_jd *jd,
+			       struct cnxk_ml_job_compl *ml_job_compl,
+			       struct rte_ml_op *op)
 {
-	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_dev *ml_dev;
-	int tile_start;
-	int tile_end;
 
 	ml_dev = dev->data->dev_private;
-	ml_config = &ml_dev->ml_config;
 
-	if (ml_job_cmd == CNXK_ML_JOB_CMD_LOAD) {
-		/* Get tile_start and tile_end */
-		cnxk_ml_ocm_tilecount(ml_model->model_mem_map.tilemask,
-				      &tile_start, &tile_end);
+	memset(jd, 0, sizeof(struct cnxk_ml_jd));
+	jd->hdr.compl_W0.u = 0;
+	jd->hdr.compl_W1.W1 = 0;
 
-		ml_model->jd[JD_LOAD].load.tilemask =
-			GENMASK_ULL(tile_end, tile_start);
-		ml_model->jd[JD_LOAD].load.ocm_wb_base_address =
-			ml_model->model_mem_map.wb_page_start *
-			ml_config->ocm_page_size;
-		ml_model->jd[JD_LOAD].hdr.compl_W1.status_ptr =
-			PLT_U64_CAST(&ml_job_compl->status_ptr);
-		ml_model->jd[JD_LOAD].hdr.job_result = roc_ml_addr_ap2mlip(
-			&ml_dev->roc, &ml_job_compl->job_result);
-
-		ml_model->jd[JD_LOAD].hdr.compl_W1.status_ptr =
-			PLT_U64_CAST(&ml_job_compl->status_ptr);
-		ml_model->jd[JD_LOAD].hdr.job_result = roc_ml_addr_ap2mlip(
-			&ml_dev->roc, &ml_job_compl->job_result);
-
-	} else if (ml_job_cmd == CNXK_ML_JOB_CMD_UNLOAD) {
-		ml_model->jd[JD_UNLOAD].hdr.compl_W1.status_ptr =
-			PLT_U64_CAST(&ml_job_compl->status_ptr);
-		ml_model->jd[JD_UNLOAD].hdr.job_result = roc_ml_addr_ap2mlip(
-			&ml_dev->roc, &ml_job_compl->job_result);
-	}
+	jd->hdr.compl_W1.status_ptr = PLT_U64_CAST(&ml_job_compl->status_ptr);
+	jd->hdr.model_id = ml_model->model_id;
+	jd->hdr.command = CNXK_ML_JOB_CMD_RUN;
+	jd->hdr.flags = ML_FLAGS_POLL_COMPL;
+	jd->hdr.job_result =
+		roc_ml_addr_ap2mlip(&ml_dev->roc, &ml_job_compl->job_result);
+	jd->run.input_ddr_addr =
+		PLT_U64_CAST(roc_ml_addr_ap2mlip(&ml_dev->roc, op->ibuffer));
+	jd->run.output_ddr_addr =
+		PLT_U64_CAST(roc_ml_addr_ap2mlip(&ml_dev->roc, op->obuffer));
 }
 
 static void
@@ -1340,7 +1310,6 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 	/* Set MLIP clock off and stall on */
 	roc_ml_clk_force_off(&ml_dev->roc);
 	roc_ml_dma_stall_on(&ml_dev->roc);
-	ret = roc_ml_mlip_reset(&ml_dev->roc);
 
 	/* Clear scratch registers */
 	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
@@ -1487,10 +1456,7 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	model_data_size = PLT_ALIGN_CEIL(model_data_size, ML_CN10K_ALIGN_SIZE);
 	mz_size = PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
 				 ML_CN10K_ALIGN_SIZE) +
-		  model_info_size + 2 * model_data_size +
-		  PLT_ALIGN_CEIL(ML_MODEL_JD_POOL_SIZE *
-					 sizeof(struct cnxk_ml_jd),
-				 ML_CN10K_ALIGN_SIZE);
+		  model_info_size + 2 * model_data_size;
 
 	/* Allocate memzone for model object and model data */
 	snprintf(str, PATH_MAX, "%s_%d", ML_MODEL_MEMZONE_NAME, idx);
@@ -1633,13 +1599,6 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	ml_model->model_mem_map.wb_pages = wb_pages;
 	ml_model->model_mem_map.scratch_pages = scratch_pages;
 
-	/* Update run JD pool */
-	ml_model->jd = PLT_PTR_ADD(
-		mz->addr, PLT_ALIGN_CEIL(sizeof(struct cnxk_ml_model),
-					 ML_CN10K_ALIGN_SIZE) +
-				  model_info_size + 2 * model_data_size);
-	ml_model->jd_index = 0;
-	cnxk_ml_jd_init(dev, ml_model);
 	cnxk_ml_model_info_set(ml_model);
 
 	ml_model->state = CNXK_ML_MODEL_STATE_CREATED;
@@ -1688,11 +1647,14 @@ cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
+	struct cnxk_ml_jd *jd;
 
 	bool scratch_active;
 	uint8_t num_tiles;
 	uint64_t tilemask;
 	int wb_page_start;
+	int tile_start;
+	int tile_end;
 	bool timeout;
 	int ret = 0;
 
@@ -1700,12 +1662,23 @@ cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 	ml_config = &ml_dev->ml_config;
 	ml_model = ml_config->ml_models[model_id];
 
-	num_tiles = ml_model->model_metadata.model.tile_end -
-		    ml_model->model_metadata.model.tile_start + 1;
-
 	ret = rte_mempool_get(ml_config->job_pool, (void **)(&ml_job_compl));
 	if (ret != 0)
 		return ret;
+
+	/* Prepare JD */
+	jd = &ml_job_compl->jd;
+	cnxk_ml_prep_sp_job_descriptor(dev, ml_model, jd, CNXK_ML_JOB_CMD_LOAD,
+				       ml_job_compl);
+
+	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
+	ml_job_compl->job_result.user_ptr = NULL;
+
+	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
+	plt_wmb();
+
+	num_tiles = ml_model->model_metadata.model.tile_end -
+		    ml_model->model_metadata.model.tile_start + 1;
 
 	/* Acquire lock and check if scratch is active. This lock protects the
 	 * shared resources like OCM info, used in tilemask_find. tilemask and
@@ -1766,16 +1739,17 @@ cn10k_ml_model_load(struct rte_mldev *dev, uint8_t model_id)
 		ml_model->model_mem_map.wb_page_start = wb_page_start;
 	}
 
-	cnxk_ml_jd_update(dev, CNXK_ML_JOB_CMD_LOAD, ml_model, ml_job_compl);
-	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
-	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
-	ml_job_compl->job_result.user_ptr = NULL;
-	plt_wmb();
+	/* Update JD */
+	cnxk_ml_ocm_tilecount(ml_model->model_mem_map.tilemask, &tile_start,
+			      &tile_end);
+	jd->load.tilemask = GENMASK_ULL(tile_end, tile_start);
+	jd->load.ocm_wb_base_address = ml_model->model_mem_map.wb_page_start *
+				       ml_config->ocm_page_size;
 
 	roc_ml_clk_force_on(&ml_dev->roc);
 	roc_ml_dma_stall_off(&ml_dev->roc);
 	ml_job_compl->start_cycle = plt_tsc_cycles();
-	roc_ml_scratch_enqueue(&ml_dev->roc, &ml_model->jd[JD_LOAD]);
+	roc_ml_scratch_enqueue(&ml_dev->roc, jd);
 
 	timeout = true;
 	plt_rmb();
@@ -1832,6 +1806,7 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
+	struct cnxk_ml_jd *jd;
 
 	bool scratch_active;
 	bool timeout;
@@ -1844,6 +1819,17 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 	ret = rte_mempool_get(ml_config->job_pool, (void **)(&ml_job_compl));
 	if (ret != 0)
 		return ret;
+
+	/* Prepare JD */
+	jd = &ml_job_compl->jd;
+	cnxk_ml_prep_sp_job_descriptor(dev, ml_model, jd,
+				       CNXK_ML_JOB_CMD_UNLOAD, ml_job_compl);
+
+	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
+	ml_job_compl->job_result.user_ptr = NULL;
+
+	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
+	plt_wmb();
 
 	/* Acquire spinlock and check if scratch register is active */
 	scratch_active = true;
@@ -1873,21 +1859,15 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 		return ret;
 	}
 
-	cnxk_ml_jd_update(dev, CNXK_ML_JOB_CMD_UNLOAD, ml_model, ml_job_compl);
-	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
-	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
-	ml_job_compl->job_result.user_ptr = NULL;
-	plt_wmb();
-
 	roc_ml_clk_force_on(&ml_dev->roc);
 	roc_ml_dma_stall_off(&ml_dev->roc);
 	ml_job_compl->start_cycle = plt_tsc_cycles();
-	roc_ml_scratch_enqueue(&ml_dev->roc, &ml_model->jd[JD_UNLOAD]);
+	roc_ml_scratch_enqueue(&ml_dev->roc, jd);
 
 	timeout = true;
 	plt_rmb();
 	while (plt_tsc_cycles() - ml_job_compl->start_cycle <
-	       ml_config->timeout.load) {
+	       ml_config->timeout.unload) {
 		if (roc_ml_scratch_is_done_bit_set(&ml_dev->roc) &&
 		    (plt_read64(&ml_job_compl->status_ptr) ==
 		     ML_CN10K_POLL_JOB_FINISH)) {
@@ -2073,10 +2053,7 @@ ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
-	uint64_t *job_result;
-	uint8_t *ibuffer;
-	uint8_t *obuffer;
-	uint8_t jd_index;
+	struct cnxk_ml_jd *jd;
 	int avail_count;
 	int ret = 0;
 
@@ -2089,40 +2066,21 @@ ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
 	if (ret != 0)
 		return ret;
 
+	/* Prepare JD */
+	jd = &ml_job_compl->jd;
+	cnxk_ml_prep_fp_job_descriptor(dev, ml_model, jd, ml_job_compl, op);
+
+	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
 	ml_job_compl->job_result.user_ptr = op->user_ptr;
-	job_result =
-		roc_ml_addr_ap2mlip(&ml_dev->roc, &ml_job_compl->job_result);
-	ibuffer = roc_ml_addr_ap2mlip(&ml_dev->roc, op->ibuffer);
-	obuffer = roc_ml_addr_ap2mlip(&ml_dev->roc, op->obuffer);
+
+	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
+	plt_wmb();
 
 	rte_spinlock_lock(&ml_config->run_lock);
 	avail_count = roc_ml_jcmdq_avail_count_get(&ml_dev->roc);
 	if (avail_count) {
-		/* Get job descriptor index.
-		 * Reuse the JD after queueing OTK_ML_MODEL_JD_POOL_SIZE jobs.
-		 */
-		jd_index = ml_model->jd_index;
-
-		ml_model->jd[jd_index].hdr.job_result = job_result;
-		ml_model->jd[jd_index].run.input_ddr_addr =
-			PLT_U64_CAST(ibuffer);
-		ml_model->jd[jd_index].run.output_ddr_addr =
-			PLT_U64_CAST(obuffer);
-
-		ml_model->jd[jd_index].hdr.compl_W0.u = 0;
-		ml_model->jd[jd_index].hdr.compl_W1.status_ptr =
-			PLT_U64_CAST(&ml_job_compl->status_ptr);
-		ml_model->jd[jd_index].hdr.flags = ML_FLAGS_POLL_COMPL;
-
-		plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
-		ml_job_compl->job_result.status = ML_STATUS_FAILURE;
-		ml_job_compl->job_result.error_code = 0x0;
-		plt_wmb();
-
 		ml_job_compl->start_cycle = plt_tsc_cycles();
-		roc_ml_jcmdq_enqueue(&ml_dev->roc, &ml_model->jd[jd_index]);
-		ml_model->jd_index =
-			(jd_index + 1) % (ML_MODEL_JD_POOL_SIZE - 2);
+		roc_ml_jcmdq_enqueue(&ml_dev->roc, jd);
 
 		pend_q->req_queue[pend_q->enq_tail].op_handle = (uintptr_t)op;
 		pend_q->req_queue[pend_q->enq_tail].job_handle =
