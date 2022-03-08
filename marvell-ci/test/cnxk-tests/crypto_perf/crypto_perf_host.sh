@@ -12,9 +12,6 @@ PROJROOT=${PROJROOT:-$PWD}
 BUILD_DIR=${BUILD_DIR:-$PWD/build}
 TMO=10m
 
-$REMOTE "cat /proc/device-tree/compatible | grep -q 'cn10k'"
-IS_CN10K=$?
-
 function test_init()
 {
 	$REMOTE 'sudo dmesg -c' 2>&1 > /dev/null

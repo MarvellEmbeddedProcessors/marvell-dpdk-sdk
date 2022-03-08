@@ -7,7 +7,7 @@ set -euo pipefail
 SUDO=${SUDO:-"sudo"}
 SCRIPTPATH=$1
 CORES=(1 2 4)
-COREMASK="0x1f00"
+COREMASK=("0x300" "0x700" "0x1f00")
 BUFSIZE=(64 384 1504)
 BUFFERSZ="64,384,1504"
 PREFIX="cpt"
@@ -44,7 +44,7 @@ then
 	exit 1
 fi
 
-EAL_ARGS="-c $COREMASK -a $CRYPTO_DEVICE"
+EAL_ARGS="-a $CRYPTO_DEVICE"
 
 declare -i SCLK
 declare -i RCLK
@@ -127,6 +127,7 @@ function cryptoperf_run()
 
 	cryptoperf_cleanup $PREFIX
 	remove_files
+	echo "$DPDK_TEST_BIN $eal_args --file-prefix $PREFIX -- $cryptoperf_args"
 	touch $IN
 	tail -f $IN | ($unbuffer $SUDO $DPDK_TEST_BIN $eal_args \
 		--file-prefix $PREFIX -- $cryptoperf_args &>$OUT) &
@@ -159,8 +160,9 @@ function write_mops()
 {
 	local rn=0
 	local cn
-	local val
 	local a
+	local i
+	local j
 
 	echo $1 >> $FPATH
 	for i in ${BUFSIZE[@]}
@@ -169,13 +171,7 @@ function write_mops()
 		str=$i":"
 		for j in ${CORES[@]}
 		do
-			val="0"
-			for (( k=0; k < $MAX_TRY_CNT; k++ ))
-			do
-				val=$val+${ACT_MOPS_TABLE[$k,$rn,$cn]}
-			done
-
-			a=$(echo "scale=3; (($val) / $MAX_TRY_CNT)" | bc)
+			a=$(echo "scale=3; (${ACT_MOPS_TABLE[$rn,$cn]})" | bc)
 			str+=" $a"
 			let cn=cn+1
 		done
@@ -189,43 +185,51 @@ function populate_act_mops()
 {
 	local rn=0
 	local cn
+	local i
+
 	cat $OUT
+
+	case $1 in
+		1) cn=0;;
+		2) cn=1;;
+		4) cn=2;;
+		*) exit 1;;
+	esac
 
 	for i in ${BUFSIZE[@]}
 	do
-		cn=0
-		for j in ${CORES[@]}
-		do
-			ACT_MOPS_TABLE[$1,$rn,$cn]=""
-			ACT_MOPS_TABLE[$1,$rn,$cn]=$(check_mops $j $i)
-			let cn=cn+1
-		done
+		ACT_MOPS_TABLE[$rn,$cn]=""
+		ACT_MOPS_TABLE[$rn,$cn]=$(check_mops $1 $i)
 		let rn=rn+1
 	done
+}
+
+function crypto_perf_common()
+{
+	local eargs
+	local j=0
+	local i
+
+	echo "Perf Test: $1"
+
+	for i in ${COREMASK[@]}
+	do
+		eargs=$EAL_ARGS" -c $i"
+		cryptoperf_run "$eargs" "$2"
+
+		populate_act_mops ${CORES[$j]}
+		let j=j+1
+	done
+
+	write_mops $1
 }
 
 function aes_cbc_perf()
 {
 	local cipher="aes-cbc-only"
 	local cipharg="aes-cbc"
-	local try_cnt=1
 
-	echo "Perf Test: $cipher"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput \
-		--optype cipher-only --cipher-algo $cipharg \
-		--pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 \
-		--cipher-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $cipher
+	crypto_perf_common "$cipher" "--devtype $DEVTYPE --ptest throughput --optype cipher-only --cipher-algo $cipharg --pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 --cipher-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aes_sha1_hmac_perf()
@@ -233,49 +237,15 @@ function aes_sha1_hmac_perf()
 	local cipher="aes-cbc"
 	local auth="sha1-hmac"
 	local algo_str="${cipher}_${auth}"
-	local try_cnt=1
 
-	echo "Perf Test: $algo_str"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput \
-		--optype cipher-then-auth --cipher-algo $cipher \
-		--pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 \
-		--cipher-iv-sz 16 --auth-algo $auth --auth-op generate \
-		--auth-key-sz 64 --digest-sz 20 --buffer-sz $BUFFERSZ \
-		--total-ops $NUMOPS --burst-sz $BURSTSZ --silent \
-		--csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $algo_str
+	crypto_perf_common "$algo_str" "--devtype $DEVTYPE --ptest throughput --optype cipher-then-auth --cipher-algo $cipher --pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 --cipher-iv-sz 16 --auth-algo $auth --auth-op generate --auth-key-sz 64 --digest-sz 20 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aead_perf()
 {
 	local cipher="aes-gcm"
-	local try_cnt=1
 
-	echo "Perf Test: $cipher"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype aead \
-		--aead-algo $cipher --pool-sz $POOLSZ  --aead-op encrypt \
-		--aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 \
-		--digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $cipher
+	crypto_perf_common "$cipher" "--devtype $DEVTYPE --ptest throughput --optype aead --aead-algo $cipher --pool-sz $POOLSZ  --aead-op encrypt --aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 --digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aes_sha1_hmac_ipsec_perf()
@@ -283,121 +253,38 @@ function aes_sha1_hmac_ipsec_perf()
 	local cipher="aes-cbc"
 	local auth="sha1-hmac"
 	local algo_str="${cipher}_${auth}-ipsec"
-	local try_cnt=1
 
-	echo "Perf Test: $algo_str"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput \
-		--optype ipsec --cipher-algo $cipher \
-		--pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 16 \
-		--cipher-iv-sz 16 --auth-algo $auth --auth-op generate \
-		--auth-key-sz 20 --digest-sz 16 --buffer-sz $BUFFERSZ \
-		--total-ops $NUMOPS --burst-sz $BURSTSZ --silent \
-		--csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $algo_str
+	crypto_perf_common "$algo_str" "--devtype $DEVTYPE --ptest throughput --optype ipsec --cipher-algo $cipher --pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 16 --cipher-iv-sz 16 --auth-algo $auth --auth-op generate --auth-key-sz 20 --digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aead_ipsec_perf()
 {
 	local cipher="aes-gcm"
 	local algo_str="${cipher}-ipsec"
-	local try_cnt=1
 
-	echo "Perf Test: $algo_str"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype ipsec \
-		--aead-algo $cipher --pool-sz $POOLSZ  --aead-op encrypt \
-		--aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 \
-		--digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $algo_str
+	crypto_perf_common "$algo_str" "--devtype $DEVTYPE --ptest throughput --optype ipsec --aead-algo $cipher --pool-sz $POOLSZ  --aead-op encrypt --aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 --digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 
 function zuc_eia3_perf()
 {
 	local auth="zuc-eia3"
-	local try_cnt=1
 
-	echo "Perf Test: $auth"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype auth-only \
-		--auth-algo $auth --pool-sz $POOLSZ --auth-op generate \
-		--auth-key-sz 16 --digest-sz 4 --auth-iv-sz 16 \
-		--buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ \
-		--silent --csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $auth
+	crypto_perf_common "$auth" "--devtype $DEVTYPE --ptest throughput --optype auth-only --auth-algo $auth --pool-sz $POOLSZ --auth-op generate --auth-key-sz 16 --digest-sz 4 --auth-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function zuc_eea3_perf()
 {
 	local cipher="zuc-eea3"
-	local try_cnt=1
 
-	echo "Perf Test: $cipher"
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype cipher-only \
-		--cipher-algo $cipher --pool-sz $POOLSZ --cipher-op decrypt \
-		--cipher-key-sz 16 --cipher-iv-sz 16 --buffer-sz $BUFFERSZ \
-		--total-ops $NUMOPS --burst-sz $BURSTSZ --silent \
-		--csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $cipher
+	crypto_perf_common "$cipher" "--devtype $DEVTYPE --ptest throughput --optype cipher-only --cipher-algo $cipher --pool-sz $POOLSZ --cipher-op decrypt --cipher-key-sz 16 --cipher-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function ae_modex_perf()
 {
 	local optype="modex"
-	local try_cnt=1
 
-	echo "Perf Test: $optype"
-
-	if [[ $IS_CN10K -ne 0 ]]; then
-		MAX_TRY_CNT=1
-	fi
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype $optype \
-		--pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-
-	populate_act_mops $((try_cnt-1))
-	let try_cnt=try_cnt+1
-	done
-
-	write_mops $optype
+	crypto_perf_common "$optype" "--devtype $DEVTYPE --ptest throughput --optype $optype --pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 get_system_info

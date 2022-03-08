@@ -7,7 +7,7 @@ set -e
 SUDO=${SUDO:-"sudo"}
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 CORES=(1 2 4)
-COREMASK="0x1f00"
+COREMASK=("0x300" "0x700" "0x1f00")
 BUFSIZE=(64 384 1504)
 BUFFERSZ="64,384,1504"
 PREFIX="cpt"
@@ -17,7 +17,7 @@ BURSTSZ=32
 POOLSZ=16384
 NUMOPS=10000000
 DL=","
-MAX_TRY_CNT=20
+MAX_TRY_CNT=10
 PARTNUM_98XX=0x0b1
 ! $(cat /proc/device-tree/compatible | grep -q "cn10k")
 IS_CN10K=$?
@@ -47,7 +47,7 @@ then
 	exit 1
 fi
 
-EAL_ARGS="-c $COREMASK -a $CRYPTO_DEVICE"
+EAL_ARGS="-a $CRYPTO_DEVICE"
 
 # Error Patterns in cryptoperf run.
 CPT_PERF_ERROR_PATTERNS=(
@@ -174,6 +174,7 @@ function cryptoperf_run()
 
 	cryptoperf_cleanup $PREFIX
 	remove_files
+	echo "$DPDK_TEST_BIN $eal_args --file-prefix $PREFIX -- $cryptoperf_args"
 	sleep 1
 	touch $IN
 	tail -f $IN | \
@@ -209,22 +210,24 @@ function compare_pass_mops()
 	local ret=0
 	local rn=0
 	local cn
+	local i
+
+	case $2 in
+		1) cn=0;;
+		2) cn=1;;
+		4) cn=2;;
+		*) echo "Core number $2 not supported">&2; exit 1;;
+	esac
 
 	for i in ${BUFSIZE[@]}
 	do
-		cn=0
-		for j in ${CORES[@]}
-		do
-			a=${ACT_MOPS_TABLE[$rn,$cn]}
-			e=${PASS_MOPS_TABLE[$rn,$cn]}
-			if (( $(echo "$a < $e" | bc) )); then
-				echo "$1:Low numbers for buffer size $i " \
-					"($a < $e) for $j cores">&2
-				ret=1
-				break 2
-			fi
-			let cn=cn+1
-		done
+		a=${ACT_MOPS_TABLE[$rn,$cn]}
+		e=${PASS_MOPS_TABLE[$rn,$cn]}
+		if (( $(echo "$a < $e" | bc) )); then
+			echo "$1:Low numbers for buffer size $i ($a < $e) for $2 cores">&2
+			ret=1
+			break 2
+		fi
 		let rn=rn+1
 	done
 
@@ -235,6 +238,8 @@ function populate_pass_mops()
 {
 	local rn=0
 	local cn
+	local i
+	local j
 
 	for i in ${BUFSIZE[@]}
 	do
@@ -255,15 +260,19 @@ function populate_act_mops()
 {
 	local rn=0
 	local cn
+	local i
+
+	case $1 in
+		1) cn=0;;
+		2) cn=1;;
+		4) cn=2;;
+		*) echo "Core number $1 not supported">&2; exit 1;;
+	esac
 
 	for i in ${BUFSIZE[@]}
 	do
-		cn=0
-		for j in ${CORES[@]}
-		do
-			ACT_MOPS_TABLE[$rn,$cn]=$(check_mops $j $i)
-			let cn=cn+1
-		done
+		ACT_MOPS_TABLE[$rn,$cn]=""
+		ACT_MOPS_TABLE[$rn,$cn]=$(check_mops $1 $i)
 		let rn=rn+1
 	done
 }
@@ -291,45 +300,52 @@ function post_run()
 
 	ret=$(check_errors)
 	if [ "$ret" != "2" ]; then
-		populate_act_mops
-		ret=$(compare_pass_mops $1)
+		populate_act_mops $2
+		ret=$(compare_pass_mops $1 $2)
 	fi
 	echo "$ret"
+}
+
+function crypto_perf_common()
+{
+	local try_cnt
+	local eargs
+	local j=0
+	local ret
+	local i
+
+	echo "Perf Test: $1"
+	populate_pass_mops $1
+
+	for i in ${COREMASK[@]}
+	do
+		try_cnt=1
+		eargs=$EAL_ARGS" -c $i"
+		while [ $try_cnt -le $MAX_TRY_CNT ]; do
+			echo "Run $try_cnt"
+			cryptoperf_run "$eargs" "$2"
+			cat $OUT
+			ret=$(post_run $1 ${CORES[$j]})
+			if [ "$ret" == "0" ]; then
+				echo "Test Passed"
+				break
+			fi
+			let try_cnt=try_cnt+1
+		done
+		if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
+			echo "Test Failed"
+			exit 1
+		fi
+		let j=j+1
+	done
 }
 
 function aes_cbc_perf()
 {
 	local cipher="aes-cbc-only"
 	local cipharg="aes-cbc"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $cipher"
-	populate_pass_mops $cipher
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput \
-		--optype cipher-only --cipher-algo $cipharg \
-		--pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 \
-		--cipher-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $cipher)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$cipher" "--devtype $DEVTYPE --ptest throughput --optype cipher-only --cipher-algo $cipharg --pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 --cipher-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aes_sha1_hmac_perf()
@@ -337,71 +353,15 @@ function aes_sha1_hmac_perf()
 	local cipher="aes-cbc"
 	local auth="sha1-hmac"
 	local algo_str="${cipher}_${auth}"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $algo_str"
-	populate_pass_mops $algo_str
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput \
-		--optype cipher-then-auth --cipher-algo $cipher \
-		--pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 \
-		--cipher-iv-sz 16 --auth-algo $auth --auth-op generate \
-		--auth-key-sz 64 --digest-sz 20 --buffer-sz $BUFFERSZ \
-		--total-ops $NUMOPS --burst-sz $BURSTSZ --silent \
-		--csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $algo_str)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$algo_str" "--devtype $DEVTYPE --ptest throughput --optype cipher-then-auth --cipher-algo $cipher --pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 32 --cipher-iv-sz 16 --auth-algo $auth --auth-op generate --auth-key-sz 64 --digest-sz 20 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aead_perf()
 {
 	local cipher="aes-gcm"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $cipher"
-	populate_pass_mops $cipher
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype aead \
-		--aead-algo $cipher --pool-sz $POOLSZ --aead-op encrypt \
-		--aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 \
-		--digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $cipher)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$cipher" "--devtype $DEVTYPE --ptest throughput --optype aead --aead-algo $cipher --pool-sz $POOLSZ --aead-op encrypt --aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 --digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aes_sha1_hmac_ipsec_perf()
@@ -409,173 +369,38 @@ function aes_sha1_hmac_ipsec_perf()
 	local cipher="aes-cbc"
 	local auth="sha1-hmac"
 	local algo_str="${cipher}_${auth}-ipsec"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $algo_str"
-	populate_pass_mops $algo_str
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput \
-		--optype ipsec --cipher-algo $cipher \
-		--pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 16 \
-		--cipher-iv-sz 16 --auth-algo $auth --auth-op generate \
-		--auth-key-sz 20 --digest-sz 16 --buffer-sz $BUFFERSZ \
-		--total-ops $NUMOPS --burst-sz $BURSTSZ --silent \
-		--csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $algo_str)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$algo_str" "--devtype $DEVTYPE --ptest throughput --optype ipsec --cipher-algo $cipher --pool-sz $POOLSZ --cipher-op encrypt --cipher-key-sz 16 --cipher-iv-sz 16 --auth-algo $auth --auth-op generate --auth-key-sz 20 --digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function aead_ipsec_perf()
 {
 	local cipher="aes-gcm"
 	local algo_str="${cipher}-ipsec"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $algo_str"
-	populate_pass_mops $algo_str
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype ipsec \
-		--aead-algo $cipher --pool-sz $POOLSZ --aead-op encrypt \
-		--aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 \
-		--digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $algo_str)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$algo_str" "--devtype $DEVTYPE --ptest throughput --optype ipsec --aead-algo $cipher --pool-sz $POOLSZ --aead-op encrypt --aead-key-sz 32 --aead-iv-sz 12 --aead-aad-sz 64 --digest-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 
 function zuc_eia3_perf()
 {
 	local auth="zuc-eia3"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $auth"
-	populate_pass_mops $auth
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype auth-only \
-		--auth-algo $auth --pool-sz $POOLSZ --auth-op generate \
-		--auth-key-sz 16 --digest-sz 4 --auth-iv-sz 16 \
-		--buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ \
-		--silent --csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $auth)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$auth" "--devtype $DEVTYPE --ptest throughput --optype auth-only --auth-algo $auth --pool-sz $POOLSZ --auth-op generate --auth-key-sz 16 --digest-sz 4 --auth-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function zuc_eea3_perf()
 {
 	local cipher="zuc-eea3"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $cipher"
-	populate_pass_mops $cipher
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype cipher-only \
-		--cipher-algo $cipher --pool-sz $POOLSZ --cipher-op decrypt \
-		--cipher-key-sz 16 --cipher-iv-sz 16 --buffer-sz $BUFFERSZ \
-		--total-ops $NUMOPS --burst-sz $BURSTSZ --silent \
-		--csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $cipher)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$cipher" "--devtype $DEVTYPE --ptest throughput --optype cipher-only --cipher-algo $cipher --pool-sz $POOLSZ --cipher-op decrypt --cipher-key-sz 16 --cipher-iv-sz 16 --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 function ae_modex_perf()
 {
 	local optype="modex"
-	local try_cnt=1
-	local ret
 
-	echo "Perf Test: $optype"
-	populate_pass_mops $optype
-
-	while [ $try_cnt -le $MAX_TRY_CNT ]; do
-	echo "Run $try_cnt"
-	cryptoperf_run "$EAL_ARGS" \
-		"--devtype $DEVTYPE --ptest throughput --optype $optype \
-		--pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS \
-		--burst-sz $BURSTSZ --silent --csv-friendly"
-	cat $OUT
-
-	ret=$(post_run $optype)
-	if [ "$ret" == "0" ]; then
-		echo "Test Passed"
-		break
-	fi
-
-	let try_cnt=try_cnt+1
-	done
-
-	if [[ $try_cnt -gt $MAX_TRY_CNT ]]; then
-		echo "Test Failed"
-		exit 1
-	fi
+	crypto_perf_common "$optype" "--devtype $DEVTYPE --ptest throughput --optype $optype --pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
 echo "Starting crypto perf application"

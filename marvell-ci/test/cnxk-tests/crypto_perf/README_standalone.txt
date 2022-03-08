@@ -33,7 +33,8 @@ export PROJROOT=$PWD
 export BUILD_DIR=$PWD/build
 export REMOTE_DIR=<target dir> (optional)
 export SKIP_TARGET_SETUP=y (optional)
-export TARGET_BOARD=<user@target ip>
+export TARGET_BOARD=ci@<target ip>
+(The ci user is present in linux used in Marvell's DPDK devel CI)
 ./marvell-ci/test/cnxk-tests/crypto_perf/crypto_perf_host.sh
 
 
@@ -41,20 +42,21 @@ Output File
 ===========
 
 The output file containing the ops per second in millions(Mops) for different cipher algo combination
-is generated on the target board.
+is generated on the target board. The output file can be used to provide the updated performance
+numbers to Marvell's DPDK devel CI.
 
 The output file is named according to following format:
-rclk<rclk freq>_sclk<sclk freq>_cptclk<cptclk freq>.HW.
+rclk<rclk freq>_sclk<sclk freq>_cptclk<cptclk freq>.HW
 
-For 96xx:  rclk2200_sclk1100_cptclk1000.96xx.
-For 106xx: rclk2000_sclk1000.10xx.
+For 96xx:  rclk2200_sclk1100_cptclk1000.96xx
+For 106xx: rclk2000_sclk1000.10xx
 
 The following is the snippet of output file for aes-cbc-only algorithm.
 aes-cbc-only
-64: 14.379 28.758 57.513
-384: 7.910 15.821 31.647
-1504: 2.922 5.844 11.691
+64: 18.533 33.789 57.409
+384: 18.444 31.615 31.627
+1504: 11.652 11.656 11.692
 <end>
 
 The 1st column (64, 384, 1504) is the buffer size. The 2nd column shows the Mops for 1 core,
-the 3rd column shows the Mops for 2 cores and the 3rd column shows the Mops for 4 cores.
+the 3rd column shows the Mops for 2 cores and the 4th column shows the Mops for 4 cores.
