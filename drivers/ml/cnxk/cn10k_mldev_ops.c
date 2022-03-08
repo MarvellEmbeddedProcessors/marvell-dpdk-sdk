@@ -1215,7 +1215,6 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 	}
 
 	rte_spinlock_init(&ml_config->scratch_lock);
-	rte_spinlock_init(&ml_config->run_lock);
 
 	/* Set timeouts */
 	if (roc_env_is_asim())
@@ -1310,6 +1309,7 @@ cn10k_ml_dev_close(struct rte_mldev *dev)
 	/* Set MLIP clock off and stall on */
 	roc_ml_clk_force_off(&ml_dev->roc);
 	roc_ml_dma_stall_on(&ml_dev->roc);
+	ret = roc_ml_mlip_reset(&ml_dev->roc, false);
 
 	/* Clear scratch registers */
 	roc_ml_reg_write64(&ml_dev->roc, 0, ML_SCRATCH_WORK_PTR);
@@ -2054,7 +2054,6 @@ ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
 	struct cnxk_ml_jd *jd;
-	int avail_count;
 	int ret = 0;
 
 	ml_dev = dev->data->dev_private;
@@ -2076,12 +2075,8 @@ ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
 	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
 	plt_wmb();
 
-	rte_spinlock_lock(&ml_config->run_lock);
-	avail_count = roc_ml_jcmdq_avail_count_get(&ml_dev->roc);
-	if (avail_count) {
-		ml_job_compl->start_cycle = plt_tsc_cycles();
-		roc_ml_jcmdq_enqueue(&ml_dev->roc, jd);
-
+	ml_job_compl->start_cycle = plt_tsc_cycles();
+	if (roc_ml_jcmdq_enqueue(&ml_dev->roc, jd)) {
 		pend_q->req_queue[pend_q->enq_tail].op_handle = (uintptr_t)op;
 		pend_q->req_queue[pend_q->enq_tail].job_handle =
 			(uintptr_t)ml_job_compl;
@@ -2089,9 +2084,9 @@ ml_enqueue(struct rte_mldev *dev, struct cn10k_ml_qp *qp, struct rte_ml_op *op,
 		ML_MOD_INC(pend_q->enq_tail, qp->nb_desc);
 		pend_q->pending_count += 1;
 	} else {
+		rte_mempool_put(ml_config->job_pool, ml_job_compl);
 		ret = -1;
 	}
-	rte_spinlock_unlock(&ml_config->run_lock);
 
 	return ret;
 }

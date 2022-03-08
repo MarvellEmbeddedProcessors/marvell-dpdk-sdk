@@ -743,11 +743,6 @@ struct cnxk_ml_config {
 	 */
 	rte_spinlock_t scratch_lock;
 
-	/* Spin lock for fastpath
-	 * Enqueue through JCMDQ
-	 */
-	rte_spinlock_t run_lock;
-
 	/* Number of OCM tiles */
 	uint8_t ocm_num_tiles;
 
