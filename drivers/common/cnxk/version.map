@@ -99,7 +99,6 @@ INTERNAL {
 	roc_ml_scratch_write_job;
 	roc_ml_scratch_is_valid_bit_set;
 	roc_ml_scratch_is_done_bit_set;
-	roc_ml_jcmdq_avail_count_get;
 	roc_ml_scratch_enqueue;
 	roc_ml_scratch_dequeue;
 	roc_ml_scratch_queue_reset;

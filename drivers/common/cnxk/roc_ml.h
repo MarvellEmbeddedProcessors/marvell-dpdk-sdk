@@ -103,7 +103,6 @@ void *__roc_api roc_ml_addr_mlip2ap(struct roc_ml *roc_ml, void *addr);
 void __roc_api roc_ml_scratch_write_job(struct roc_ml *roc_ml, void *jd);
 bool __roc_api roc_ml_scratch_is_valid_bit_set(struct roc_ml *roc_ml);
 bool __roc_api roc_ml_scratch_is_done_bit_set(struct roc_ml *roc_ml);
-uint16_t __roc_api roc_ml_jcmdq_avail_count_get(struct roc_ml *roc_ml);
 bool __roc_api roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *jd);
 bool __roc_api roc_ml_scratch_dequeue(struct roc_ml *roc_ml, void *jd);
 void __roc_api roc_ml_scratch_queue_reset(struct roc_ml *roc_ml);

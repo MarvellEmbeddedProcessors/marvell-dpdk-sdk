@@ -103,13 +103,6 @@ roc_ml_scratch_is_done_bit_set(struct roc_ml *roc_ml)
 	return false;
 }
 
-uint16_t
-roc_ml_jcmdq_avail_count_get(struct roc_ml *roc_ml)
-{
-	return FIELD_GET(ROC_ML_JCMDQ_STATUS_AVAIL_COUNT,
-			 roc_ml_reg_read64(roc_ml, ML_JCMDQ_STATUS));
-}
-
 bool
 roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *jd)
 {
