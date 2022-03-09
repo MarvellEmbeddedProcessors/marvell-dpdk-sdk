@@ -96,10 +96,13 @@ INTERNAL {
 	roc_ml_reg_write32;
 	roc_ml_addr_ap2mlip;
 	roc_ml_addr_mlip2ap;
-	roc_ml_scratch_enqueue;
+	roc_ml_scratch_write_job;
 	roc_ml_scratch_is_valid_bit_set;
 	roc_ml_scratch_is_done_bit_set;
 	roc_ml_jcmdq_avail_count_get;
+	roc_ml_scratch_enqueue;
+	roc_ml_scratch_dequeue;
+	roc_ml_scratch_queue_reset;
 	roc_ml_jcmdq_enqueue;
 	roc_ml_clk_force_on;
 	roc_ml_clk_force_off;

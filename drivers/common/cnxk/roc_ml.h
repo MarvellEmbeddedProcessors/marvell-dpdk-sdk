@@ -82,6 +82,8 @@
 
 struct roc_ml {
 	struct plt_pci_device *pci_dev;
+	plt_spinlock_t sp_spinlock;
+	plt_spinlock_t fp_spinlock;
 	uint8_t reserved[ROC_ML_MEM_SZ] __plt_cache_aligned;
 } __plt_cache_aligned;
 
@@ -98,11 +100,14 @@ void *__roc_api roc_ml_addr_ap2mlip(struct roc_ml *roc_ml, void *addr);
 void *__roc_api roc_ml_addr_mlip2ap(struct roc_ml *roc_ml, void *addr);
 
 /* Scratch and JCMDQ job functions */
-void __roc_api roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *jd);
+void __roc_api roc_ml_scratch_write_job(struct roc_ml *roc_ml, void *jd);
 bool __roc_api roc_ml_scratch_is_valid_bit_set(struct roc_ml *roc_ml);
 bool __roc_api roc_ml_scratch_is_done_bit_set(struct roc_ml *roc_ml);
 uint16_t __roc_api roc_ml_jcmdq_avail_count_get(struct roc_ml *roc_ml);
-void __roc_api roc_ml_jcmdq_enqueue(struct roc_ml *roc_ml, void *jd);
+bool __roc_api roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *jd);
+bool __roc_api roc_ml_scratch_dequeue(struct roc_ml *roc_ml, void *jd);
+void __roc_api roc_ml_scratch_queue_reset(struct roc_ml *roc_ml);
+bool __roc_api roc_ml_jcmdq_enqueue(struct roc_ml *roc_ml, void *jd);
 
 /* Device management */
 void __roc_api roc_ml_clk_force_on(struct roc_ml *roc_ml);
@@ -110,7 +115,7 @@ void __roc_api roc_ml_clk_force_off(struct roc_ml *roc_ml);
 void __roc_api roc_ml_dma_stall_on(struct roc_ml *roc_ml);
 void __roc_api roc_ml_dma_stall_off(struct roc_ml *roc_ml);
 bool __roc_api roc_ml_mlip_is_enabled(struct roc_ml *roc_ml);
-int __roc_api roc_ml_mlip_reset(struct roc_ml *roc_ml);
+int __roc_api roc_ml_mlip_reset(struct roc_ml *roc_ml, bool force);
 
 /* Device / Block, Init / Finish functions */
 int __roc_api roc_ml_dev_init(struct roc_ml *roc_ml);

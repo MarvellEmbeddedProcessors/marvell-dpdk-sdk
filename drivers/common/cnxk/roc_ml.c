@@ -62,7 +62,7 @@ roc_ml_addr_mlip2ap(struct roc_ml *roc_ml, void *addr)
 }
 
 void
-roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *jd)
+roc_ml_scratch_write_job(struct roc_ml *roc_ml, void *jd)
 {
 	union ml_scratch_ap_fw_comm reg_ap_fw_comm;
 	union ml_scratch_work_ptr reg_work_ptr;
@@ -110,12 +110,101 @@ roc_ml_jcmdq_avail_count_get(struct roc_ml *roc_ml)
 			 roc_ml_reg_read64(roc_ml, ML_JCMDQ_STATUS));
 }
 
+bool
+roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *jd)
+{
+	union ml_scratch_ap_fw_comm reg_ap_fw_comm;
+	union ml_scratch_work_ptr reg_work_ptr;
+	bool rval = false;
+
+	reg_work_ptr.u = 0;
+	reg_work_ptr.s.work_cmd_ptr = (uint64_t)roc_ml_addr_ap2mlip(roc_ml, jd);
+
+	reg_ap_fw_comm.u = 0x0;
+	reg_ap_fw_comm.s.valid = 0x1;
+
+	if (plt_spinlock_trylock(&roc_ml->sp_spinlock) != 0) {
+		bool valid = roc_ml_scratch_is_valid_bit_set(roc_ml);
+		bool done = roc_ml_scratch_is_done_bit_set(roc_ml);
+
+		if (valid == done) {
+			roc_ml_clk_force_on(roc_ml);
+			roc_ml_dma_stall_off(roc_ml);
+
+			roc_ml_reg_write64(roc_ml, reg_work_ptr.u,
+					   ML_SCRATCH_WORK_PTR);
+			roc_ml_reg_write64(roc_ml, reg_ap_fw_comm.u,
+					   ML_SCRATCH_AP_FW_COMM);
+
+			rval = true;
+		}
+		plt_spinlock_unlock(&roc_ml->sp_spinlock);
+	}
+
+	return rval;
+}
+
+bool
+roc_ml_scratch_dequeue(struct roc_ml *roc_ml, void *jd)
+{
+	union ml_scratch_work_ptr reg_work_ptr;
+	bool rval = false;
+
+	if (plt_spinlock_trylock(&roc_ml->sp_spinlock) != 0) {
+		bool valid = roc_ml_scratch_is_valid_bit_set(roc_ml);
+		bool done = roc_ml_scratch_is_done_bit_set(roc_ml);
+
+		if (valid && done) {
+			reg_work_ptr.u =
+				roc_ml_reg_read64(roc_ml, ML_SCRATCH_WORK_PTR);
+			if (jd == roc_ml_addr_mlip2ap(roc_ml,
+						      (void *)reg_work_ptr.u)) {
+				roc_ml_dma_stall_on(roc_ml);
+				roc_ml_clk_force_off(roc_ml);
+
+				roc_ml_reg_write64(roc_ml, 0x0,
+						   ML_SCRATCH_WORK_PTR);
+				roc_ml_reg_write64(roc_ml, 0x0,
+						   ML_SCRATCH_AP_FW_COMM);
+				rval = true;
+			}
+		}
+		plt_spinlock_unlock(&roc_ml->sp_spinlock);
+	}
+
+	return rval;
+}
+
 void
+roc_ml_scratch_queue_reset(struct roc_ml *roc_ml)
+{
+	if (plt_spinlock_trylock(&roc_ml->sp_spinlock) != 0) {
+		roc_ml_dma_stall_on(roc_ml);
+		roc_ml_clk_force_off(roc_ml);
+		roc_ml_reg_write64(roc_ml, 0x0, ML_SCRATCH_WORK_PTR);
+		roc_ml_reg_write64(roc_ml, 0x0, ML_SCRATCH_AP_FW_COMM);
+		plt_spinlock_unlock(&roc_ml->sp_spinlock);
+	}
+}
+
+bool
 roc_ml_jcmdq_enqueue(struct roc_ml *roc_ml, void *jd)
 {
-	plt_atomic_thread_fence(__ATOMIC_ACQ_REL);
-	roc_ml_reg_write64(roc_ml, 0x0, ML_JCMDQ_IN(0));
-	roc_ml_reg_write64(roc_ml, (uint64_t)jd, ML_JCMDQ_IN(1));
+	bool rval = false;
+
+	if (plt_spinlock_trylock(&roc_ml->fp_spinlock) != 0) {
+		if (FIELD_GET(ROC_ML_JCMDQ_STATUS_AVAIL_COUNT,
+			      roc_ml_reg_read64(roc_ml, ML_JCMDQ_STATUS)) !=
+		    0) {
+			roc_ml_reg_write64(roc_ml, 0x0, ML_JCMDQ_IN(0));
+			roc_ml_reg_write64(roc_ml, (uint64_t)jd,
+					   ML_JCMDQ_IN(1));
+			rval = true;
+		}
+		plt_spinlock_unlock(&roc_ml->fp_spinlock);
+	}
+
+	return rval;
 }
 
 void
@@ -173,12 +262,28 @@ roc_ml_mlip_is_enabled(struct roc_ml *roc_ml)
 }
 
 int
-roc_ml_mlip_reset(struct roc_ml *roc_ml)
+roc_ml_mlip_reset(struct roc_ml *roc_ml, bool force)
 {
 	uint64_t start_cycle;
 	uint64_t wait_cycles;
 	uint64_t reg_val;
 	bool timeout;
+
+	/* Force reset */
+	if (force) {
+		/* Set ML(0)_CFG[ENA] = 0. */
+		reg_val = roc_ml_reg_read64(roc_ml, ML_CFG);
+		reg_val &= ~ROC_ML_CFG_ENA;
+		roc_ml_reg_write64(roc_ml, reg_val, ML_CFG);
+
+		/* Set ML(0)_CFG[MLIP_ENA] = 0. */
+		reg_val = roc_ml_reg_read64(roc_ml, ML_CFG);
+		reg_val &= ~ROC_ML_CFG_MLIP_ENA;
+		roc_ml_reg_write64(roc_ml, reg_val, ML_CFG);
+
+		/* Clear ML_MLR_BASE */
+		roc_ml_reg_write64(roc_ml, 0, ML_MLR_BASE);
+	}
 
 	wait_cycles = (ROC_ML_TIMEOUT_MS * plt_tsc_hz()) / TIME_SEC_IN_MS;
 
@@ -296,6 +401,9 @@ roc_ml_dev_init(struct roc_ml *roc_ml)
 	plt_ml_dbg("ML: PCI Virtual Address : 0x%016lx",
 		   (uint64_t)ml->pci_dev->mem_resource[0].addr);
 
+	plt_spinlock_init(&roc_ml->sp_spinlock);
+	plt_spinlock_init(&roc_ml->fp_spinlock);
+
 	return 0;
 }
 
@@ -338,6 +446,9 @@ roc_ml_blk_init(struct roc_bphy *roc_bphy, struct roc_ml *roc_ml)
 
 	ml->ml_reg_addr = PLT_PTR_ADD(ml->pci_dev->mem_resource[0].addr,
 				      ML_MLAB_BLK_OFFSET);
+
+	plt_spinlock_init(&roc_ml->sp_spinlock);
+	plt_spinlock_init(&roc_ml->fp_spinlock);
 
 	return 0;
 }
