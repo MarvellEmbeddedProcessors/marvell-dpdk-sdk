@@ -283,8 +283,8 @@ npc_get_kex_capability(struct npc *npc)
 	/* Custom L3 frame: varied offset and lengths */
 	kex_cap.bit.custom_l3 =
 		npc_is_kex_enabled(npc, NPC_LID_LC, NPC_LT_LC_CUSTOM0, 0, 0);
-	kex_cap.bit.custom_l3 |=
-		npc_is_kex_enabled(npc, NPC_LID_LC, NPC_LT_LC_CUSTOM1, 0, 0);
+	kex_cap.bit.custom_l3 |= (uint64_t)npc_is_kex_enabled(
+		npc, NPC_LID_LC, NPC_LT_LC_CUSTOM1, 0, 0);
 	/* SCTP sport : offset 0B, len 2B */
 	kex_cap.bit.sctp_sport = npc_is_kex_enabled(
 		npc, NPC_LID_LD, NPC_LT_LD_SCTP, 0 * 8, 2 * 8);
