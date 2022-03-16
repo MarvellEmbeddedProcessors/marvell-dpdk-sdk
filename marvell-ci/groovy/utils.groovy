@@ -70,9 +70,17 @@ def setup_board(Object s, board, force = false) {
 		python3 ./marvell-ci/test/board/board_setup.py ${force_reboot} --ssh-ip ${board}
 		"""
 	} catch (err) {
-		return false
+		if (s.FAILING_FAST) {
+			unstable ("Aborting board setup as another parallel stage failed")
+		} else {
+			if (!s.utils.get_flag(s, "disable_failfast"))
+				s.FAILING_FAST = true
+
+			print "${board} Inaccessible!!"
+			s.utils.message_slack(s, "Job ${env.BUILD_NUMBER} cannot access Board ${board}")
+			error "-E- Failed to run stage as boards can't be accessed"
+		}
 	}
-	return true
 }
 
 def post_artifacts(dir) {

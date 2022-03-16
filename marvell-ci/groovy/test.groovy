@@ -3,29 +3,14 @@
  */
 
 def lock_board_and_test(s, board_rsrc, test_name, test_def) {
-	def retry = s.utils.get_boards(board_rsrc).size()
-	def access = false
-
 	stage ("Test: ${test_name}") {
-		while (!access && retry) {
-			lock(label: "${board_rsrc}", variable: "board_ip", quantity:'1') {
-				def board_ip = "${env.board_ip.trim()}"
-				println "Locked ${board_rsrc} HW IP is ${board_ip}"
-				retry = retry - 1
-				access = s.utils.setup_board(s, board_ip, "--force-reboot")
-				if (access) {
-					test_def(board_ip, "")
-				} else {
-					print "${board_ip} Inaccessible. Trying other boards !!"
-					s.utils.message_slack(s,
-						"Job ${env.BUILD_NUMBER} cannot access Board ${board_ip}")
-				}
-			}
+		lock(label: "${board_rsrc}", variable: "board_ip", quantity:'1') {
+			def board_ip = "${env.board_ip.trim()}"
+			println "Locked ${board_rsrc} HW IP is ${board_ip}"
+			s.utils.setup_board(s, board_ip, "--force-reboot")
+			test_def(board_ip, "")
 		}
 	}
-
-	if (!access)
-		 error "-E- Failed to run stage as boards can't be accessed"
 }
 
 def lock_dual_board_and_test(s, board_rsrc, test_name, test_def) {
@@ -37,14 +22,9 @@ def lock_dual_board_and_test(s, board_rsrc, test_name, test_def) {
 			def gen_board_ip = tokens[2]
 
 			lock(resource: "${board_ip}") {
-				if (!s.utils.setup_board(s, board_ip, "--force-reboot"))
-					error "-E- Failed to setup board ${board_ip}"
-
+				s.utils.setup_board(s, board_ip, "--force-reboot")
 				lock(resource: "${gen_board_ip}") {
-					if (!s.utils.setup_board(s, gen_board_ip,
-								 "--force-reboot"))
-						error "-E- Failed to setup board ${gen_board_ip}"
-
+					s.utils.setup_board(s, gen_board_ip, "--force-reboot")
 					println "Locked ${setup} [${board_ip}, ${gen_board_ip}]"
 					test_def(board_ip, gen_board_ip)
 				}
