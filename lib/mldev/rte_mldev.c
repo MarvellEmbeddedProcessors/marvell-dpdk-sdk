@@ -9,6 +9,8 @@
 #include "mldev_pmd.h"
 #include "rte_mldev.h"
 
+static uint8_t nb_drivers;
+
 static struct rte_mldev rte_ml_devices[RTE_ML_MAX_DEVS];
 
 static struct rte_mldev_global mldev_globals = {
@@ -268,6 +270,52 @@ rte_mldev_name_get(uint8_t dev_id)
 	return dev->data->name;
 }
 
+TAILQ_HEAD(mldev_driver_list, mldev_driver);
+
+static struct mldev_driver_list mldev_driver_list =
+	TAILQ_HEAD_INITIALIZER(mldev_driver_list);
+
+int
+rte_mldev_driver_id_get(const char *name)
+{
+	struct mldev_driver *driver;
+	const char *driver_name;
+
+	if (name == NULL) {
+		RTE_LOG(DEBUG, MLDEV, "name pointer NULL");
+		return -1;
+	}
+
+	TAILQ_FOREACH(driver, &mldev_driver_list, next) {
+		driver_name = driver->driver->name;
+		if (strncmp(driver_name, name, strlen(driver_name) + 1) == 0)
+			return driver->id;
+	}
+	return -1;
+}
+
+const char *
+rte_mldev_driver_name_get(uint8_t driver_id)
+{
+	struct mldev_driver *driver;
+
+	TAILQ_FOREACH(driver, &mldev_driver_list, next)
+		if (driver->id == driver_id)
+			return driver->driver->name;
+	return NULL;
+}
+
+uint8_t
+rte_mldev_allocate_driver(struct mldev_driver *ml_drv, const struct rte_driver *drv)
+{
+	ml_drv->driver = drv;
+	ml_drv->id = nb_drivers;
+
+	TAILQ_INSERT_TAIL(&mldev_driver_list, ml_drv, next);
+
+	return nb_drivers++;
+}
+
 int
 rte_mldev_configure(uint8_t dev_id, struct rte_mldev_config *config)
 {
@@ -403,8 +451,6 @@ rte_mldev_info_get(uint8_t dev_id, struct rte_mldev_info *dev_info)
 
 	memset(dev_info, 0, sizeof(struct rte_mldev_info));
 	(*dev->dev_ops->dev_info_get)(dev, dev_info);
-
-	dev_info->device = dev->device;
 
 	return 0;
 }

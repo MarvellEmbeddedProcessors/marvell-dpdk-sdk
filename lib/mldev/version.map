@@ -1,6 +1,9 @@
 EXPERIMENTAL {
 	global:
 
+	rte_mldev_driver_id_get;
+	rte_mldev_driver_name_get;
+
 	rte_mldev_get_dev_id;
 	rte_mldev_name_get;
 	rte_mldev_count;
@@ -35,4 +38,6 @@ INTERNAL {
 
 	rte_mldev_pmd_allocate;
 	rte_mldev_pmd_release_device;
+
+	rte_mldev_allocate_driver;
 };

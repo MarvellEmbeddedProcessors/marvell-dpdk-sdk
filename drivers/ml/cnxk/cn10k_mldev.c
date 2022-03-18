@@ -14,6 +14,8 @@
 
 #include "roc_api.h"
 
+uint8_t cn10k_mldev_driver_id;
+
 static int
 cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 		   struct rte_pci_device *pci_dev)
@@ -62,6 +64,7 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	}
 
 	mldev->dev_ops = &cn10k_ml_ops;
+	mldev->driver_id = cn10k_mldev_driver_id;
 
 	rte_mldev_pmd_probing_finish(mldev);
 
@@ -116,6 +119,10 @@ static struct rte_pci_driver cn10k_mldev_pmd = {
 	.remove = cn10k_ml_pci_remove,
 };
 
+static struct mldev_driver cn10k_mldev_drv;
+
 RTE_PMD_REGISTER_PCI(MLDEV_NAME_CN10K_PMD, cn10k_mldev_pmd);
 RTE_PMD_REGISTER_PCI_TABLE(MLDEV_NAME_CN10K_PMD, pci_id_ml_table);
 RTE_PMD_REGISTER_KMOD_DEP(MLDEV_NAME_CN10K_PMD, "vfio-pci");
+RTE_PMD_REGISTER_ML_DRIVER(cn10k_mldev_drv, cn10k_mldev_pmd.driver,
+			   cn10k_mldev_driver_id);

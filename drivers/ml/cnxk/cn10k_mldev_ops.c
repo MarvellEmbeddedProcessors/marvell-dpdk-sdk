@@ -1379,13 +1379,13 @@ cn10k_ml_dev_stop(struct rte_mldev *dev)
 static int
 cn10k_ml_dev_info_get(struct rte_mldev *dev, struct rte_mldev_info *info)
 {
-	PLT_SET_USED(dev);
-
 	if (info == NULL)
 		return -EINVAL;
 
 	info->max_nb_queue_pairs = ML_CN10K_QP_PER_DEVICE;
-	plt_ml_dbg("max_nb_queue_pairs %u", info->max_nb_queue_pairs);
+	info->driver_id = cn10k_mldev_driver_id;
+	info->driver_name = dev->device->driver->name;
+	info->device = dev->device;
 
 	return 0;
 }

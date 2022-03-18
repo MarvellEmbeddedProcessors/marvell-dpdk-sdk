@@ -89,6 +89,9 @@ struct rte_mldev {
 	/** Backing device */
 	struct rte_device *device;
 
+	/** ML driver identifier*/
+	uint8_t driver_id;
+
 	__extension__
 	/** Flag indicating the device is attached */
 	uint8_t attached : 1;
@@ -106,6 +109,13 @@ struct rte_mldev_global {
 
 	/**< Number of devices found */
 	uint8_t nb_devs;
+};
+
+/* ML device driver, containing the driver ID */
+struct mldev_driver {
+	RTE_TAILQ_ENTRY(mldev_driver) next; /**< Next in list. */
+	const struct rte_driver *driver;
+	uint8_t id;
 };
 
 /**
@@ -415,6 +425,27 @@ rte_mldev_pmd_destroy(struct rte_mldev *mldev);
 __rte_internal
 void
 rte_mldev_pmd_probing_finish(struct rte_mldev *dev);
+
+/**
+ * @internal
+ * Allocate ML driver.
+ *
+ * @param ml_drv
+ *   Pointer to mldev_driver.
+ * @param drv
+ *   Pointer to rte_driver.
+ *
+ * @return
+ *  The driver type identifier
+ */
+__rte_internal
+uint8_t rte_mldev_allocate_driver(struct mldev_driver *ml_drv, const struct rte_driver *drv);
+
+#define RTE_PMD_REGISTER_ML_DRIVER(ml_drv, drv, driver_id)\
+RTE_INIT(init_ ##driver_id)\
+{\
+	driver_id = rte_mldev_allocate_driver(&ml_drv, &(drv));\
+}
 
 #ifdef __cplusplus
 }

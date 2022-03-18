@@ -7,6 +7,9 @@
 /* Marvell OCTEON CN10K ML PMD device name */
 #define MLDEV_NAME_CN10K_PMD ml_cn10k
 
+/* Driver ID */
+extern uint8_t cn10k_mldev_driver_id;
+
 /* Poll mode job control */
 #define ML_CN10K_POLL_JOB_START	 0
 #define ML_CN10K_POLL_JOB_FINISH 1

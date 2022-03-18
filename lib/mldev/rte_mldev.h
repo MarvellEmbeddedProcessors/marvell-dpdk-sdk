@@ -140,6 +140,59 @@ unsigned int
 rte_mldev_is_valid_dev(uint8_t dev_id);
 
 /**
+ * Get number and identifiers of attached ML devices that
+ * use the same ML driver.
+ *
+ * @param driver_name
+ *    Driver name
+ * @param devices
+ *    Output devices identifiers
+ * @param nb_devices
+ *    Maximum number of devices
+ *
+ * @return
+ *   Returns number of attached ML device.
+ */
+uint8_t
+rte_mldev_devices_get(const char *driver_name, uint8_t *devices, uint8_t nb_devices);
+
+/**
+ * Get number of ML device defined type.
+ *
+ * @param driver_id
+ *    Driver identifier
+ *
+ * @return
+ *   Returns number of ML device.
+ */
+extern uint8_t
+rte_mldev_device_count_by_driver(uint8_t driver_id);
+
+/**
+ * Provide driver identifier.
+ *
+ * @param name
+ *   The pointer to a driver name
+ * @return
+ *  The driver type identifier or -1 if no driver found
+ */
+__rte_experimental
+int
+rte_mldev_driver_id_get(const char *name);
+
+/**
+ * Provide driver name.
+ *
+ * @param driver_id
+ *   The driver identifier.
+ * @return
+ *  The driver name or null if no driver found
+ */
+__rte_experimental
+const char *
+rte_mldev_driver_name_get(uint8_t driver_id);
+
+/**
  * @warning
  * @b EXPERIMENTAL: this API may change without prior notice.
  *
@@ -212,6 +265,12 @@ rte_mldev_stop(uint8_t dev_id);
 
 /**  ML device information */
 struct rte_mldev_info {
+	/**< Driver name. */
+	const char *driver_name;
+
+	/**< Driver identifier */
+	uint8_t driver_id;
+
 	/**< Generic device information. */
 	struct rte_device *device;
 
@@ -317,7 +376,7 @@ rte_mldev_enqueue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
  * @b EXPERIMENTAL: this API may change without prior notice.
  *
  * Dequeue a burst of processed ML inferences operations from a queue on the ML
- * device. The dequeued operations are stored in *rte_crypto_op* structures
+ * device. The dequeued operations are stored in *rte_ml_op* structures
  * whose pointers are supplied in the *ops* array.
  *
  * The rte_mldev_dequeue_burst() function returns the number of inferences
