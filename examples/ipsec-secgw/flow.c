@@ -241,7 +241,7 @@ flow_init_single(struct flow_rule_entry *rule)
 	struct rte_flow_action action[MAX_RTE_FLOW_ACTIONS] = {};
 	struct rte_flow_item_mark mark_mask;
 	struct rte_flow_attr attr = {};
-	struct rte_flow_error err;
+	struct rte_flow_error err = {};
 	int ret, pattern_idx = 0;
 
 	attr.egress = 0;
