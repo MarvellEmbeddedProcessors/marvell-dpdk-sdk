@@ -22,6 +22,18 @@
 extern "C" {
 #endif
 
+#define RTE_MLDEV_PMD_DEFAULT_MAX_NB_QUEUE_PAIRS	8
+#define RTE_MLDEV_PMD_NAME_ARG				("name")
+#define RTE_MLDEV_PMD_MAX_NB_QP_ARG			("max_nb_queue_pairs")
+#define RTE_MLDEV_PMD_SOCKET_ID_ARG			("socket_id")
+
+static const char * const mldev_pmd_valid_params[] = {
+	RTE_MLDEV_PMD_NAME_ARG,
+	RTE_MLDEV_PMD_MAX_NB_QP_ARG,
+	RTE_MLDEV_PMD_SOCKET_ID_ARG,
+	NULL
+};
+
 /**
  * @internal
  * Initialisation parameters for ML devices
@@ -30,6 +42,7 @@ struct rte_mldev_pmd_init_params {
 	char name[RTE_MLDEV_NAME_LEN];
 	size_t private_data_size;
 	int socket_id;
+	unsigned int max_nb_queue_pairs;
 };
 
 struct rte_mldev;
@@ -380,6 +393,29 @@ rte_mldev_pmd_allocate(const char *name, int socket_id);
 __rte_internal
 extern int
 rte_mldev_pmd_release_device(struct rte_mldev *mldev);
+
+/**
+ * @internal
+ *
+ * PMD assist function to parse initialisation arguments for ML driver
+ * when creating a new ML PMD device instance.
+ *
+ * PMD should set default values for that PMD before calling function,
+ * these default values will be over-written with successfully parsed values
+ * from args string.
+ *
+ * @param params
+ *    Parsed PMD initialisation parameters
+ * @param args
+ *    Input argument string to parse
+ *
+ * @return
+ *    - 0 on success
+ *    - errno on failure
+ */
+__rte_internal
+int
+rte_mldev_pmd_parse_input_args(struct rte_mldev_pmd_init_params *params, const char *args);
 
 /**
  * @internal

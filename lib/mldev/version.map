@@ -30,6 +30,7 @@ EXPERIMENTAL {
 INTERNAL {
 	global:
 
+	rte_mldev_pmd_parse_input_args;
 	rte_mldev_pmd_create;
 	rte_mldev_pmd_destroy;
 	rte_mldev_pmd_probing_finish;

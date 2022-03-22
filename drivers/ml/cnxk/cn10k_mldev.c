@@ -28,7 +28,8 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	struct rte_mldev_pmd_init_params init_params = {
 		.name = "",
 		.socket_id = rte_socket_id(),
-		.private_data_size = sizeof(struct cnxk_ml_dev)};
+		.private_data_size = sizeof(struct cnxk_ml_dev),
+		.max_nb_queue_pairs = RTE_MLDEV_PMD_DEFAULT_MAX_NB_QUEUE_PAIRS};
 
 	rc = roc_plt_init();
 	if (rc < 0) {
