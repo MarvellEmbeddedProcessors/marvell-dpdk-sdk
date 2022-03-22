@@ -170,7 +170,7 @@ pci_parse_sysfs_resource(const char *filename, struct rte_pci_device *dev)
 {
 	FILE *f;
 	char buf[BUFSIZ];
-	int i;
+	int i, j;
 	uint64_t phys_addr, end_addr, flags;
 
 	f = fopen(filename, "r");
@@ -195,6 +195,14 @@ pci_parse_sysfs_resource(const char *filename, struct rte_pci_device *dev)
 			dev->mem_resource[i].len = end_addr - phys_addr + 1;
 			/* not mapped for now */
 			dev->mem_resource[i].addr = NULL;
+
+			/* update the same in regions too */
+			for (j = 0; j < PCI_MAX_REGION_PER_RESOURCE; j++) {
+				dev->regions[i][j].phys_addr = phys_addr;
+				dev->regions[i][j].len = end_addr - phys_addr + 1;
+				/* not mapped for now */
+				dev->regions[i][j].addr = NULL;
+			}
 		}
 	}
 	fclose(f);
@@ -626,6 +634,26 @@ pci_device_iova_mode(const struct rte_pci_driver *pdrv,
 		break;
 	}
 	return iova_mode;
+}
+
+bool
+pci_device_get_region_info(const struct rte_pci_driver *drv,
+	uint32_t bar_idx, uint64_t *offset, uint64_t *size)
+{
+	struct rte_pci_region_map *region;
+	bool is_present = false;
+
+	for (region = drv->regions; region->size != 0; region++) {
+		if ((region->bar_idx == bar_idx) && (region->mapped == false)) {
+			*offset = region->offset;
+			*size = region->size;
+			region->mapped = true;
+			is_present = true;
+			break;
+		}
+	}
+
+	return is_present;
 }
 
 /* Read PCI config space. */

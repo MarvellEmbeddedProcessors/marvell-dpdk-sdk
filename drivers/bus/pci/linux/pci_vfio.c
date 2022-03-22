@@ -509,18 +509,25 @@ pci_rte_vfio_setup_device(struct rte_pci_device *dev, int vfio_dev_fd)
 
 static int
 pci_vfio_mmap_bar(int vfio_dev_fd, struct mapped_pci_resource *vfio_res,
-		int bar_index, int additional_flags)
+		int bar_index, int reg_idx, bool map_reg, int additional_flags)
 {
 	struct memreg {
 		uint64_t offset;
 		size_t   size;
 	} memreg[2] = {};
-	void *bar_addr;
+	void *bar_addr = NULL;
+	struct pci_map *region = &vfio_res->regions[bar_index][reg_idx];
 	struct pci_msix_table *msix_table = &vfio_res->msix_table;
 	struct pci_map *bar = &vfio_res->maps[bar_index];
 
-	if (bar->size == 0) {
+	if (!map_reg && bar->size == 0) {
 		RTE_LOG(DEBUG, EAL, "Bar size is 0, skip BAR%d\n", bar_index);
+		return 0;
+	}
+
+	if (map_reg && region->size == 0) {
+		RTE_LOG(DEBUG, EAL, "Region size is 0, skip BAR:REG=(%d:%d)\n",
+			bar_index, reg_idx);
 		return 0;
 	}
 
@@ -571,12 +578,19 @@ pci_vfio_mmap_bar(int vfio_dev_fd, struct mapped_pci_resource *vfio_res,
 			memreg[0].offset, memreg[0].size,
 			memreg[1].offset, memreg[1].size);
 	} else {
-		memreg[0].offset = bar->offset;
-		memreg[0].size = bar->size;
+		if (map_reg) {
+			bar_addr = region->addr;
+			memreg[0].offset = region->offset;
+			memreg[0].size = region->size;
+		} else {
+			bar_addr = bar->addr;
+			memreg[0].offset = bar->offset;
+			memreg[0].size = bar->size;
+		}
 	}
 
 	/* reserve the address using an inaccessible mapping */
-	bar_addr = mmap(bar->addr, bar->size, 0, MAP_PRIVATE |
+	bar_addr = mmap(bar_addr, memreg[0].size, 0, MAP_PRIVATE |
 			MAP_ANONYMOUS | additional_flags, -1, 0);
 	if (bar_addr != MAP_FAILED) {
 		void *map_addr = NULL;
@@ -627,7 +641,11 @@ pci_vfio_mmap_bar(int vfio_dev_fd, struct mapped_pci_resource *vfio_res,
 		return -1;
 	}
 
-	bar->addr = bar_addr;
+	if (map_reg)
+		region->addr = bar_addr;
+	else
+		bar->addr = bar_addr;
+
 	return 0;
 }
 
@@ -727,12 +745,15 @@ pci_vfio_map_resource_primary(struct rte_pci_device *dev)
 	char pci_addr[PATH_MAX] = {0};
 	int vfio_dev_fd;
 	struct rte_pci_addr *loc = &dev->addr;
+	struct rte_pci_driver *drv = dev->driver;
 	int i, ret;
 	struct mapped_pci_resource *vfio_res = NULL;
 	struct mapped_pci_res_list *vfio_res_list =
 		RTE_TAILQ_CAST(rte_vfio_tailq.head, mapped_pci_res_list);
 
+	struct rte_pci_region_map *drv_reg;
 	struct pci_map *maps;
+	bool map_reg;
 
 	if (rte_intr_fd_set(dev->intr_handle, -1))
 		return -1;
@@ -791,9 +812,18 @@ pci_vfio_map_resource_primary(struct rte_pci_device *dev)
 		}
 	}
 
+	map_reg = drv->drv_flags & RTE_PCI_DRV_NEED_REGION_MAPPING ? true : false;
+	if (map_reg) {
+		for (drv_reg = drv->regions; drv_reg->size != 0; drv_reg++)
+			drv_reg->mapped = false;
+	}
+
 	for (i = 0; i < vfio_res->nb_maps; i++) {
 		struct vfio_region_info *reg = NULL;
-		void *bar_addr;
+		struct pci_map *region = NULL;
+		uint64_t offset = 0, size = 0;
+		void *bar_addr = NULL;
+		uint32_t reg_idx = 0;
 
 		ret = pci_vfio_get_region_info(vfio_dev_fd, &reg, i);
 		if (ret < 0) {
@@ -821,22 +851,41 @@ pci_vfio_map_resource_primary(struct rte_pci_device *dev)
 			continue;
 		}
 
+next_region:
+		/* skip BARs if driver requested for region mapping and
+		 * entry in regions table is not available
+		 */
+		if (map_reg && drv->valid_bars[i] == true &&
+		    (pci_device_get_region_info(drv, i, &offset, &size) == false)) {
+			free(reg);
+			continue;
+		}
+
 		/* try mapping somewhere close to the end of hugepages */
 		if (pci_map_addr == NULL)
 			pci_map_addr = pci_find_max_end_va();
 
 		bar_addr = pci_map_addr;
-		pci_map_addr = RTE_PTR_ADD(bar_addr, (size_t) reg->size);
+
+		if (map_reg && drv->valid_bars[i] == true) {
+			region = &vfio_res->regions[i][reg_idx];
+			pci_map_addr = RTE_PTR_ADD(bar_addr, (size_t) size);
+			region->addr = bar_addr;
+			region->path = NULL; /* vfio doesn't have per-resource paths */
+			region->offset = offset + reg->offset;
+			region->size = size;
+		} else {
+			pci_map_addr = RTE_PTR_ADD(bar_addr, (size_t) reg->size);
+			maps[i].addr = bar_addr;
+			maps[i].path = NULL; /* vfio doesn't have per-resource paths */
+			maps[i].offset = reg->offset;
+			maps[i].size = reg->size;
+		}
 
 		pci_map_addr = RTE_PTR_ALIGN(pci_map_addr,
 					sysconf(_SC_PAGE_SIZE));
 
-		maps[i].addr = bar_addr;
-		maps[i].offset = reg->offset;
-		maps[i].size = reg->size;
-		maps[i].path = NULL; /* vfio doesn't have per-resource paths */
-
-		ret = pci_vfio_mmap_bar(vfio_dev_fd, vfio_res, i, 0);
+		ret = pci_vfio_mmap_bar(vfio_dev_fd, vfio_res, i, reg_idx, map_reg, 0);
 		if (ret < 0) {
 			RTE_LOG(ERR, EAL, "%s mapping BAR%i failed: %s\n",
 					pci_addr, i, strerror(errno));
@@ -844,8 +893,16 @@ pci_vfio_map_resource_primary(struct rte_pci_device *dev)
 			goto err_vfio_res;
 		}
 
-		dev->mem_resource[i].addr = maps[i].addr;
+		if (map_reg && (drv->valid_bars[i] == true)) {
+			dev->regions[i][reg_idx].addr = region->addr;
+			dev->regions[i][reg_idx].len = region->size;
+			dev->regions[i][reg_idx].phys_addr += offset;
+			reg_idx++;
+			goto next_region;
+		}
 
+		dev->mem_resource[i].addr = maps[i].addr;
+		reg_idx = 0;
 		free(reg);
 	}
 
@@ -877,14 +934,19 @@ pci_vfio_map_resource_secondary(struct rte_pci_device *dev)
 {
 	struct vfio_device_info device_info = { .argsz = sizeof(device_info) };
 	char pci_addr[PATH_MAX] = {0};
+	struct rte_pci_driver *drv = dev->driver;
 	int vfio_dev_fd;
 	struct rte_pci_addr *loc = &dev->addr;
-	int i, ret;
+	int i, ret, j = 0;
 	struct mapped_pci_resource *vfio_res = NULL;
 	struct mapped_pci_res_list *vfio_res_list =
 		RTE_TAILQ_CAST(rte_vfio_tailq.head, mapped_pci_res_list);
 
+	struct rte_pci_region_map *drv_reg;
+	uint64_t offset = 0, size = 0;
+	struct pci_map *region;
 	struct pci_map *maps;
+	bool map_reg = false;
 
 	if (rte_intr_fd_set(dev->intr_handle, -1))
 		return -1;
@@ -918,16 +980,36 @@ pci_vfio_map_resource_secondary(struct rte_pci_device *dev)
 
 	/* map BARs */
 	maps = vfio_res->maps;
+	for (drv_reg = drv->regions; drv_reg->size != 0; drv_reg++)
+		drv_reg->mapped = false;
 
 	for (i = 0; i < vfio_res->nb_maps; i++) {
-		ret = pci_vfio_mmap_bar(vfio_dev_fd, vfio_res, i, MAP_FIXED);
+next_region:
+		if (drv->drv_flags & RTE_PCI_DRV_NEED_REGION_MAPPING &&
+		    drv->valid_bars[i] == true) {
+			map_reg = pci_device_get_region_info(drv, i, &offset, &size);
+			if (map_reg == false)
+				continue;
+			region = &vfio_res->regions[i][j];
+		}
+
+		ret = pci_vfio_mmap_bar(vfio_dev_fd, vfio_res, i, j, map_reg,
+					MAP_FIXED);
 		if (ret < 0) {
 			RTE_LOG(ERR, EAL, "%s mapping BAR%i failed: %s\n",
 					pci_addr, i, strerror(errno));
 			goto err_vfio_dev_fd;
 		}
 
+		if (map_reg) {
+			dev->regions[i][j].addr = region->addr;
+			j++;
+			map_reg = false;
+			goto next_region;
+		}
+
 		dev->mem_resource[i].addr = maps[i].addr;
+		j = 0;
 	}
 
 	/* we need save vfio_dev_fd, so it can be used during release */

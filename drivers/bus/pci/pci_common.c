@@ -291,7 +291,8 @@ rte_pci_probe_one_driver(struct rte_pci_driver *dr,
 		 * to use driver flags for adjusting configuration.
 		 */
 		dev->driver = dr;
-		if (dev->driver->drv_flags & RTE_PCI_DRV_NEED_MAPPING) {
+		if (dev->driver->drv_flags & RTE_PCI_DRV_NEED_MAPPING ||
+		    dev->driver->drv_flags & RTE_PCI_DRV_NEED_REGION_MAPPING) {
 			ret = rte_pci_map_device(dev);
 			if (ret != 0) {
 				dev->driver = NULL;
@@ -299,6 +300,7 @@ rte_pci_probe_one_driver(struct rte_pci_driver *dr,
 				dev->vfio_req_intr_handle = NULL;
 				rte_intr_instance_free(dev->intr_handle);
 				dev->intr_handle = NULL;
+				dev->driver = NULL;
 				return ret;
 			}
 		}
