@@ -504,3 +504,12 @@ rte_mldev_dequeue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
 	RTE_FUNC_PTR_OR_ERR_RET(*dev->dequeue_burst, -ENOTSUP);
 	return (*dev->dequeue_burst)(dev, qp_id, ops, nb_ops);
 }
+
+int
+rte_mldev_inference_sync(uint8_t dev_id, struct rte_ml_op *op)
+{
+	struct rte_mldev *dev = &rte_ml_devices[dev_id];
+
+	RTE_FUNC_PTR_OR_ERR_RET(*dev->inference_sync, -ENOTSUP);
+	return (*dev->inference_sync)(dev, op);
+}

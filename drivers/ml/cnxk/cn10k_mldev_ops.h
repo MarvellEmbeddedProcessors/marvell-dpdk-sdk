@@ -73,4 +73,6 @@ uint16_t cn10k_ml_enqueue_burst(struct rte_mldev *dev, uint16_t qp_id,
 uint16_t cn10k_ml_dequeue_burst(struct rte_mldev *dev, uint16_t qp_id,
 				struct rte_ml_op **op, uint16_t nb_ops);
 
+int cn10k_ml_inference_sync(struct rte_mldev *dev, struct rte_ml_op *op);
+
 #endif /* _CNXK_MLDEV_OPS_H_ */

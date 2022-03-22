@@ -1268,6 +1268,7 @@ cn10k_ml_dev_configure(struct rte_mldev *dev, struct rte_mldev_config *conf)
 
 	dev->enqueue_burst = cn10k_ml_enqueue_burst;
 	dev->dequeue_burst = cn10k_ml_dequeue_burst;
+	dev->inference_sync = cn10k_ml_inference_sync;
 
 	ml_config->active = true;
 
@@ -2202,6 +2203,82 @@ cn10k_ml_dequeue_burst(struct rte_mldev *dev, uint16_t qp_id,
 	}
 
 	return nb_completed;
+}
+
+int
+cn10k_ml_inference_sync(struct rte_mldev *dev, struct rte_ml_op *op)
+{
+	struct cnxk_ml_job_compl *ml_job_compl;
+	struct cnxk_ml_config *ml_config;
+	struct cnxk_ml_model *ml_model;
+	struct cnxk_ml_dev *ml_dev;
+	struct cnxk_ml_jd *jd;
+	bool timeout;
+	int ret;
+
+	ml_dev = dev->data->dev_private;
+	ml_config = &ml_dev->ml_config;
+	ml_model = ml_config->ml_models[op->model_id];
+
+	ml_job_compl = NULL;
+	ret = rte_mempool_get(ml_config->job_pool, (void **)(&ml_job_compl));
+	if (ret != 0)
+		return ret;
+
+	/* Prepare JD */
+	jd = &ml_job_compl->jd;
+	cnxk_ml_prep_fp_job_descriptor(dev, ml_model, jd, ml_job_compl, op);
+
+	ml_job_compl->job_result.status = ML_STATUS_FAILURE;
+	ml_job_compl->job_result.user_ptr = op->user_ptr;
+
+	plt_write64(ML_CN10K_POLL_JOB_START, &ml_job_compl->status_ptr);
+	plt_wmb();
+
+	timeout = true;
+	ml_job_compl->start_cycle = plt_tsc_cycles();
+	do {
+		if (roc_ml_jcmdq_enqueue(&ml_dev->roc, jd)) {
+			timeout = false;
+			break;
+		}
+	} while (plt_tsc_cycles() - ml_job_compl->start_cycle <
+		 ml_config->timeout.run);
+
+	if (timeout) {
+		ret = -EBUSY;
+		goto error_enqueue;
+	}
+
+	timeout = true;
+	ml_job_compl->start_cycle = plt_tsc_cycles();
+	do {
+		if (plt_read64(&ml_job_compl->status_ptr) ==
+		    ML_CN10K_POLL_JOB_FINISH) {
+			timeout = false;
+			break;
+		}
+	} while (plt_tsc_cycles() - ml_job_compl->start_cycle <
+		 ml_config->timeout.run);
+
+	if (timeout) {
+		ret = -ETIME;
+	} else {
+		if (ml_job_compl->job_result.status == ML_STATUS_SUCCESS) {
+			timeout = false;
+			ret = 0;
+		} else if (ml_job_compl->job_result.status ==
+			   ML_STATUS_FAILURE) {
+			timeout = false;
+			ret = -1;
+		}
+		cnxk_ml_result_update(&ml_job_compl->job_result, op);
+	}
+
+error_enqueue:
+	rte_mempool_put(ml_config->job_pool, ml_job_compl);
+
+	return ret;
 }
 
 struct rte_mldev_ops cn10k_ml_ops = {

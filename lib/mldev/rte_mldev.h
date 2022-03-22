@@ -349,7 +349,7 @@ rte_mldev_queue_pair_setup(uint8_t dev_id, uint16_t queue_pair_id,
  * all packets have been enqueued.
  *
  * @param dev_id
- *   The identifier of the device.
+ *   The ML identifier of the device.
  * @param qp_id
  *   The index of the queue pair which inferences are to be enqueued for
  * processing. The value must be in the range [0, nb_queue_pairs - 1] previously
@@ -394,7 +394,7 @@ rte_mldev_enqueue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
  * notification to avoid the corresponding overhead.
  *
  * @param dev_id
- *   The symmetric ML device identifier
+ *   The ML device identifier
  * @param qp_id
  *   The index of the queue pair from which to retrieve processed packets. The
  * value must be in the range [0, nb_queue_pair - 1] previously supplied to
@@ -413,6 +413,25 @@ __rte_experimental
 uint16_t
 rte_mldev_dequeue_burst(uint8_t dev_id, uint16_t qp_id, struct rte_ml_op **ops,
 			uint16_t nb_ops);
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Perform ML inference operation in synchronous mode.
+ *
+ * @param dev_id
+ *    The ML device identifier.
+ * @param op
+ *    Address of *rte_ml_op* structure
+ *
+ * @return
+ *    0: Success, inference completed
+ *    < 0 : Failed, returns error code
+ */
+__rte_experimental
+int
+rte_mldev_inference_sync(uint8_t dev_id, struct rte_ml_op *op);
 
 #ifdef __cplusplus
 }

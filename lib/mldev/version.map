@@ -24,6 +24,7 @@ EXPERIMENTAL {
 
 	rte_mldev_enqueue_burst;
 	rte_mldev_dequeue_burst;
+	rte_mldev_inference_sync;
 };
 
 INTERNAL {

@@ -42,6 +42,9 @@ typedef uint16_t (*mldev_enqueue_t)(struct rte_mldev *dev, uint16_t qp_id,
 typedef uint16_t (*mldev_dequeue_t)(struct rte_mldev *dev, uint16_t qp_id,
 				    struct rte_ml_op **ops, uint16_t nb_ops);
 
+/**< @internal Run an ML inference job in synchronous mode. */
+typedef int (*mldev_inference_sync_t)(struct rte_mldev *dev, struct rte_ml_op *op);
+
 /**
  * @internal
  * The data part, with no function pointers, associated with each device. This
@@ -79,6 +82,9 @@ struct rte_mldev {
 
 	/** Pointer to PMD dequeue function. */
 	mldev_dequeue_t enqueue_burst;
+
+	/** Pointer to Synchronous inference function. */
+	mldev_inference_sync_t inference_sync;
 
 	/** Pointer to device data */
 	struct rte_mldev_data *data;

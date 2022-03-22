@@ -17,11 +17,15 @@
 #define ML_QUEUE_SIZE 512
 #define ML_OPS_SIZE   64
 
+#define ML_COMPL_MODE_SYNC 0
+#define ML_COMPL_MODE_POLL 1
+
 /* ML global variables */
 static uint16_t g_models_counter;
 static uint16_t g_inputs_counter;
 static uint16_t g_outputs_counter;
 static uint64_t g_inference_repetitions;
+uint8_t g_mode;
 
 /* ML args structure */
 typedef struct {
@@ -29,6 +33,7 @@ typedef struct {
 	char inputs[ML_MAX_MODELS][PATH_MAX];
 	char outputs[ML_MAX_MODELS][PATH_MAX];
 	char repetitions[PATH_MAX];
+	char mode[PATH_MAX];
 } ml_opts_t;
 
 /* ML model variables structure */
@@ -64,13 +69,16 @@ parse_args(int argc, char **argv)
 		{"input", required_argument, NULL, 'i'},
 		{"output", required_argument, NULL, 'o'},
 		{"repetitions", required_argument, NULL, 'r'},
+		{"mode", required_argument, NULL, 'M'},
 		{"help", no_argument, NULL, 'h'},
 		{NULL, 0, NULL, 0}};
 
 	/* Set defaults */
+	strncpy(ml_opts.mode, "poll", strlen("poll") + 1);
 	g_inference_repetitions = 1;
+	g_mode = ML_COMPL_MODE_POLL;
 
-	while ((opt = getopt_long(argc, argv, "m:i:o:r:h", lgopts,
+	while ((opt = getopt_long(argc, argv, "m:i:o:r:M:h", lgopts,
 				  &option_index)) != EOF)
 		switch (opt) {
 		case 'm':
@@ -115,6 +123,21 @@ parse_args(int argc, char **argv)
 			}
 			g_inference_repetitions = num;
 			break;
+		case 'M':
+			strncpy(ml_opts.mode, optarg, PATH_MAX - 1);
+			if (strncmp(ml_opts.mode, "sync", strlen("sync")) ==
+			    0) {
+				g_mode = ML_COMPL_MODE_SYNC;
+			} else if (strncmp(ml_opts.mode, "poll",
+					   strlen("poll")) == 0) {
+				g_mode = ML_COMPL_MODE_POLL;
+			} else {
+				fprintf(stderr, "Invalid mode: %s\n",
+					ml_opts.mode);
+				print_usage(argv[0]);
+				return -1;
+			}
+			break;
 		case '?':
 		case 'h':
 			print_usage(argv[0]);
@@ -139,6 +162,8 @@ main(int argc, char **argv)
 	struct rte_ml_model ml_model;
 	const struct rte_memzone *mz;
 	struct rte_mempool *op_pool;
+	struct rte_ml_op ml_op;
+
 	char str[PATH_MAX] = {0};
 	uint32_t nenq_total = 0;
 	uint32_t ndeq_total = 0;
@@ -195,13 +220,17 @@ main(int argc, char **argv)
 	}
 
 	/* setup queue pairs */
-	qp_conf.nb_desc = ML_QUEUE_SIZE;
-	if (rte_mldev_queue_pair_setup(dev_id, 0, &qp_conf,
-				       rte_mldev_socket_id(dev_id)) != 0) {
-		fprintf(stderr, "Queue-pair setup failed, dev_id = %d\n",
-			dev_id);
-		ret = -1;
-		goto error_close;
+	if (g_mode == ML_COMPL_MODE_POLL) {
+		qp_conf.nb_desc = ML_QUEUE_SIZE;
+		if (rte_mldev_queue_pair_setup(dev_id, 0, &qp_conf,
+					       rte_mldev_socket_id(dev_id)) !=
+		    0) {
+			fprintf(stderr,
+				"Queue-pair setup failed, dev_id = %d\n",
+				dev_id);
+			ret = -1;
+			goto error_close;
+		}
 	}
 
 	/* Start device */
@@ -317,7 +346,7 @@ main(int argc, char **argv)
 		}
 		ml_models[idx].obuff = mz->addr;
 
-		while (true) {
+		while (g_mode == ML_COMPL_MODE_POLL) {
 			/* Enqueue ops */
 			if (g_inference_repetitions - nenq > ML_OPS_SIZE)
 				nops = ML_OPS_SIZE;
@@ -357,6 +386,26 @@ main(int argc, char **argv)
 
 			if ((nenq_total == g_inference_repetitions) &&
 			    (ndeq_total == g_inference_repetitions))
+				break;
+		}
+
+		while (g_mode == ML_COMPL_MODE_SYNC) {
+			ml_op.model_id = ml_models[idx].model_id;
+			ml_op.isize = ml_models[idx].isize;
+			ml_op.ibuffer = ml_models[idx].ibuff;
+			ml_op.osize = ml_models[idx].osize;
+			ml_op.obuffer = ml_models[idx].obuff;
+
+			ret = rte_mldev_inference_sync(dev_id, &ml_op);
+
+			if (ret == 0) {
+				nenq_total++;
+				ndeq_total++;
+			} else {
+				nenq_total++;
+			}
+
+			if (nenq_total == g_inference_repetitions)
 				break;
 		}
 		fprintf(stdout, "nenq_total = %d, ndeq_total = %d\n",
