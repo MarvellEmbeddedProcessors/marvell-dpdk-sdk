@@ -76,6 +76,8 @@ struct rte_pci_device {
 	char name[PCI_PRI_STR_SIZE+1];      /**< PCI location (ASCII) */
 	struct rte_intr_handle *vfio_req_intr_handle;
 				/**< Handler of VFIO request interrupt */
+	struct rte_mem_resource regions[PCI_MAX_RESOURCE][PCI_MAX_REGION_PER_RESOURCE];
+					    /**< PCI Memory regions per resource */
 };
 
 /**
@@ -167,6 +169,8 @@ struct rte_pci_driver {
 	pci_dma_map_t *dma_map;		   /**< device dma map function. */
 	pci_dma_unmap_t *dma_unmap;	   /**< device dma unmap function. */
 	const struct rte_pci_id *id_table; /**< ID table, NULL terminated. */
+	struct rte_pci_region_map *regions; /**< MAP table, NULL terminated. */
+	bool valid_bars[PCI_MAX_RESOURCE]; /**< Valid BARs which has region config */
 	uint32_t drv_flags;                /**< Flags RTE_PCI_DRV_*. */
 };
 
@@ -193,6 +197,27 @@ struct rte_pci_bus {
 #define RTE_PCI_DRV_KEEP_MAPPED_RES 0x0020
 /** Device driver needs IOVA as VA and cannot work with IOVA as PA */
 #define RTE_PCI_DRV_NEED_IOVA_AS_VA 0x0040
+/** Device needs PCI BAR mapping for given region (done with either IGB_UIO or VFIO)
+ * i.e. if regions for a given device is defined as:
+
+  .regions = {
+    {
+      .bar_idx = PCI_BAR_0,
+      .offset = 0x1000,
+      .size = 0x100
+    },
+    {
+      .bar_idx = PCI_BAR_0,
+      .offset = 0x5000,
+      .size = 0x1000
+    }
+  },
+
+then the only valid address mappings will be:
+* X + 0x1000 to X + 0x10FF
+* X + 0x5000 to X + 0x5FFF
+*/
+#define RTE_PCI_DRV_NEED_REGION_MAPPING 0x0080
 
 /**
  * Map the PCI device resources in user space virtual memory address

@@ -98,6 +98,7 @@ struct mapped_pci_resource {
 	int nb_maps;
 	struct pci_map maps[PCI_MAX_RESOURCE];
 	struct pci_msix_table msix_table;
+	struct pci_map regions[PCI_MAX_RESOURCE][PCI_MAX_REGION_PER_RESOURCE];
 };
 
 /** mapped pci device list */
@@ -235,6 +236,10 @@ pci_device_iommu_support_va(const struct rte_pci_device *dev);
 enum rte_iova_mode
 pci_device_iova_mode(const struct rte_pci_driver *pci_drv,
 		     const struct rte_pci_device *pci_dev);
+
+bool
+pci_device_get_region_info(const struct rte_pci_driver *drv, uint32_t bar_idx,
+	uint64_t *offset, uint64_t *size);
 
 /**
  * Get iommu class of PCI devices on the bus.

@@ -75,6 +75,9 @@ extern "C" {
 /** Maximum number of PCI resources. */
 #define PCI_MAX_RESOURCE 6
 
+/** Maximum number of regions per resource. */
+#define PCI_MAX_REGION_PER_RESOURCE 8
+
 /**
  * A structure describing an ID for a PCI driver. Each driver provides a
  * table of these IDs for each device that it supports.
@@ -95,6 +98,18 @@ struct rte_pci_addr {
 	uint8_t bus;                    /**< Device bus */
 	uint8_t devid;                  /**< Device ID */
 	uint8_t function;               /**< Device function. */
+};
+
+/**
+ * A structure describing region mapping information. Driver provides a
+ * table of these mapping if it supports region mapping i.e. drv_flags is set
+ * to RTE_PCI_DRV_NEED_REGION_MAPPING.
+ */
+struct rte_pci_region_map {
+	uint64_t offset;  /**< Offset from where mapping is to be done. */
+	uint64_t size;    /**< Memory size. */
+	uint8_t bar_idx;  /**< BAR number. */
+	uint8_t mapped;   /**< Is region mapped or not */
 };
 
 /** Any PCI device identifier (vendor, device, ...) */
