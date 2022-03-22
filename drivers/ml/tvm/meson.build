@@ -3,6 +3,7 @@
 
 sources = files(
         'tvm_mldev.c',
+        'tvm_mldev_ops.c',
 )
 
 deps += ['bus_vdev', 'eal', 'mldev']

@@ -9,6 +9,7 @@
 #include <rte_mldev.h>
 
 #include "tvm_mldev.h"
+#include "tvm_mldev_ops.h"
 
 uint8_t tvm_mldev_driver_id;
 
@@ -27,6 +28,7 @@ mldev_tvm_create(const char *name, struct rte_vdev_device *vdev,
 	}
 
 	dev->driver_id = tvm_mldev_driver_id;
+	dev->dev_ops = &tvm_ml_ops;
 
 	ml_dev = dev->data->dev_private;
 	ml_dev->max_nb_qpairs = init_params->max_nb_queue_pairs;
