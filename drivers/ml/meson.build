@@ -3,5 +3,6 @@
 
 drivers = [
         'cnxk',
+        'tvm',
 ]
 std_deps = ['mldev']
