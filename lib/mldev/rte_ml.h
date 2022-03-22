@@ -44,6 +44,36 @@ enum rte_ml_io_type {
 	RTE_ML_IO_TYPE_FP32
 };
 
+/** Input / Output tensor format */
+enum rte_ml_io_format {
+	/** Batch size (N) x channels (C) x height (H) x width (W) */
+	RTE_ML_IO_FORMAT_NCHW = 1,
+
+	/** Batch size (N) x height (H) x width (W) x channels (C) */
+	RTE_ML_IO_FORMAT_NHWC,
+
+	/** Channels (C) x height (H) x width (W) x batch size (N) */
+	RTE_ML_IO_FORMAT_CHWN
+};
+
+/** Input / Output shape */
+struct rte_ml_io_shape {
+	/** Format */
+	enum rte_ml_io_format format;
+
+	/** First component of shape */
+	uint32_t w;
+
+	/** Second component of shape. */
+	uint32_t x;
+
+	/** Third component of shape. */
+	uint32_t y;
+
+	/** Fourth component of shape. */
+	uint32_t z;
+};
+
 /** ML model configuration structure */
 struct rte_ml_model {
 	char *model_name;
@@ -148,19 +178,67 @@ __rte_experimental
 int
 rte_ml_model_unload(uint8_t dev_id, uint8_t model_id);
 
-/** Maximum length model name string */
-#define RTE_ML_MODEL_NAME_LEN 64
+/** Maximum length model / input / output name string */
+#define RTE_ML_NAME_LEN 64
+
+/** Input information structure */
+struct rte_ml_input_info {
+	/** Input name */
+	char name[RTE_ML_NAME_LEN];
+
+	/** Type of input */
+	enum rte_ml_io_type model_input_type;
+
+	/** Input shape */
+	struct rte_ml_io_shape shape;
+
+	/** Size in bytes */
+	uint64_t size;
+};
+
+/** Output information structure. */
+struct rte_ml_output_info {
+	/** Output name */
+	char name[RTE_ML_NAME_LEN];
+
+	/** Type of output */
+	enum rte_ml_io_type model_output_type;
+
+	/** Output shape */
+	struct rte_ml_io_shape shape;
+
+	/** Output size in bytes */
+	uint64_t size;
+};
 
 /** Model information structure */
 struct rte_ml_model_info {
 	/** Model name. */
-	char name[RTE_ML_MODEL_NAME_LEN];
+	char name[RTE_ML_NAME_LEN];
 
-	/** Total quantized size of all inputs in bytes. */
+	/** Model version */
+	char version[RTE_ML_NAME_LEN];
+
+	/** Model ID */
+	uint32_t index;
+
+	/** Number of inputs */
+	uint32_t num_inputs;
+
+	/** Total size of all inputs in bytes */
 	uint32_t total_input_size;
 
-	/** Total quantized output size of all outputs in bytes. */
+	/* Input info array. Array size is equal to num_inputs */
+	struct rte_ml_input_info *input_info;
+
+	/** Number of outputs */
+	uint32_t num_outputs;
+
+	/** Total size of all outputs in bytes */
 	uint32_t total_output_size;
+
+	/* Input info array. Array size is equal to num_inputs */
+	struct rte_ml_output_info *output_info;
 };
 
 /**

@@ -289,6 +289,8 @@ main(int argc, char **argv)
 			goto error_model_destroy;
 		}
 
+		ml_model_info.input_info = NULL;
+		ml_model_info.output_info = NULL;
 		ret = rte_ml_model_info_get(dev_id, ml_models[idx].model_id,
 					    &ml_model_info);
 		if (ret != 0) {

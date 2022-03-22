@@ -1077,24 +1077,66 @@ static void
 cnxk_ml_model_info_set(struct cnxk_ml_model *ml_model)
 {
 	struct cnxk_ml_model_metadata *model_metadata;
+	struct rte_ml_output_info *output_info;
 	struct cnxk_ml_model_addr *model_addr;
+	struct rte_ml_input_info *input_info;
 	struct rte_ml_model_info *model_info;
 	uint8_t i;
 
+	model_info = (struct rte_ml_model_info *)(ml_model->model_info);
+	input_info = PLT_PTR_ADD(model_info, sizeof(struct rte_ml_model_info));
+	output_info = PLT_PTR_ADD(input_info,
+				  ml_model->model_metadata.model.num_input *
+					  sizeof(struct rte_ml_input_info));
+
 	model_metadata = &ml_model->model_metadata;
 	model_addr = &ml_model->model_addr;
-	model_info = (struct rte_ml_model_info *)(ml_model->model_info);
 
-	memcpy(model_info->name, model_metadata->model.name,
-	       RTE_ML_MODEL_NAME_LEN);
-
+	/* Set model info */
+	memset(model_info, 0, sizeof(struct rte_ml_model_info));
+	memcpy(model_info->name, model_metadata->model.name, ML_MODEL_NAME_LEN);
+	memcpy(model_info->version, model_metadata->model.version, 4);
+	model_info->index = ml_model->model_id;
+	model_info->num_inputs = model_metadata->model.num_input;
 	model_info->total_input_size = 0;
-	for (i = 0; i < model_metadata->model.num_input; i++)
-		model_info->total_input_size += model_addr->input[i].sz_q;
-
+	model_info->input_info = input_info;
+	model_info->num_outputs = model_metadata->model.num_output;
 	model_info->total_output_size = 0;
-	for (i = 0; i < model_metadata->model.num_output; i++)
+	model_info->output_info = output_info;
+
+	/* Set input info */
+	for (i = 0; i < model_info->num_inputs; i++) {
+		memcpy(input_info[i].name, model_metadata->input[i].input_name,
+		       ML_INPUT_NAME_LEN);
+		input_info[i].model_input_type =
+			model_metadata->input[i].model_input_type;
+		input_info[i].shape.format =
+			model_metadata->input[i].shape.format;
+		input_info[i].shape.w = model_metadata->input[i].shape.w;
+		input_info[i].shape.x = model_metadata->input[i].shape.x;
+		input_info[i].shape.y = model_metadata->input[i].shape.y;
+		input_info[i].shape.z = model_metadata->input[i].shape.z;
+		input_info[i].size = model_addr->input[i].sz_q;
+
+		model_info->total_input_size += model_addr->input[i].sz_q;
+	}
+
+	/* Set output info */
+	for (i = 0; i < model_info->num_outputs; i++) {
+		memcpy(output_info[i].name,
+		       model_metadata->output[i].output_name,
+		       ML_OUTPUT_NAME_LEN);
+		output_info[i].model_output_type =
+			model_metadata->output[i].model_output_type;
+		output_info[i].shape.format = RTE_ML_IO_FORMAT_NCHW;
+		output_info[i].shape.w = model_metadata->output[i].size;
+		output_info[i].shape.x = 1;
+		output_info[i].shape.y = 1;
+		output_info[i].shape.z = 1;
+		output_info[i].size = model_addr->output[i].sz_q;
+
 		model_info->total_output_size += model_addr->output[i].sz_q;
+	}
 }
 
 int
@@ -1447,7 +1489,10 @@ cn10k_ml_model_create(struct rte_mldev *dev, struct rte_ml_model *model,
 	}
 
 	/* Get MZ size */
-	model_info_size = sizeof(struct rte_ml_model_info);
+	model_info_size =
+		sizeof(struct rte_ml_model_info) +
+		metadata.model.num_input * sizeof(struct rte_ml_input_info) +
+		metadata.model.num_output * sizeof(struct rte_ml_output_info);
 	model_info_size = PLT_ALIGN_CEIL(model_info_size, ML_CN10K_ALIGN_SIZE);
 
 	model_data_size = metadata.init_model.file_size +
@@ -1917,8 +1962,9 @@ cn10k_ml_model_unload(struct rte_mldev *dev, uint8_t model_id)
 
 static int
 cn10k_ml_model_info_get(struct rte_mldev *dev, uint8_t model_id,
-			struct rte_ml_model_info *model_info)
+			struct rte_ml_model_info *info)
 {
+	struct rte_ml_model_info *model_info;
 	struct cnxk_ml_config *ml_config;
 	struct cnxk_ml_model *ml_model;
 	struct cnxk_ml_dev *ml_dev;
@@ -1927,8 +1973,24 @@ cn10k_ml_model_info_get(struct rte_mldev *dev, uint8_t model_id,
 	ml_config = &ml_dev->ml_config;
 	ml_model = ml_config->ml_models[model_id];
 
-	memcpy(model_info, ml_model->model_info,
-	       sizeof(struct rte_ml_model_info));
+	model_info = PLT_PTR_CAST(ml_model->model_info);
+	memcpy(info->name, model_info->name, sizeof(info->name));
+	memcpy(info->version, model_info->version, sizeof(info->version));
+	info->index = model_info->index;
+	info->num_inputs = model_info->num_inputs;
+	info->total_input_size = model_info->total_input_size;
+	info->num_outputs = model_info->num_outputs;
+	info->total_output_size = model_info->total_output_size;
+
+	if (info->input_info != NULL)
+		memcpy(info->input_info, model_info->input_info,
+		       model_info->num_inputs *
+			       sizeof(struct rte_ml_input_info));
+
+	if (info->output_info != NULL)
+		memcpy(info->output_info, model_info->output_info,
+		       model_info->num_outputs *
+			       sizeof(struct rte_ml_output_info));
 
 	return 0;
 }
