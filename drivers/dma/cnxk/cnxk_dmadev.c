@@ -669,7 +669,8 @@ cnxk_dmadev_probe(struct rte_pci_driver *pci_drv __rte_unused,
 	dmadev->fp_obj->completed_status = cnxk_dmadev_completed_status;
 
 	if (pci_dev->id.subsystem_device_id == PCI_SUBSYSTEM_DEVID_CN10KA ||
-	    pci_dev->id.subsystem_device_id == PCI_SUBSYSTEM_DEVID_CNF10KA) {
+	    pci_dev->id.subsystem_device_id == PCI_SUBSYSTEM_DEVID_CNF10KA ||
+	    pci_dev->id.subsystem_device_id == PCI_SUBSYSTEM_DEVID_CN10KB) {
 		dmadev->dev_ops = &cn10k_dmadev_ops;
 		dmadev->fp_obj->copy = cn10k_dmadev_copy;
 		dmadev->fp_obj->copy_sg = cn10k_dmadev_copy_sg;
