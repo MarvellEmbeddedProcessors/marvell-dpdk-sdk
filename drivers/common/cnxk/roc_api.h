@@ -107,4 +107,7 @@
 /* ML */
 #include "roc_ml.h"
 
+/* HW Errata */
+#include "roc_errata.h"
+
 #endif /* _ROC_API_H_ */
