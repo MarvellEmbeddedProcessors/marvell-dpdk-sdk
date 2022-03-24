@@ -63,6 +63,7 @@ test_subdirs = [
         'meter_test',
         'bphy_irq',
         'queue_intr_test',
+        'dpdk_config_test',
 ]
 
 foreach dir:test_subdirs
