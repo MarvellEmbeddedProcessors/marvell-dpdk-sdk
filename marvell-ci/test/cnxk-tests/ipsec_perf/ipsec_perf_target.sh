@@ -248,6 +248,10 @@ function pmd_tx_launch()
 	testpmd_launch "$TPMD_TX_PREFIX" \
 		"-c 0x3800 -a $LIF1" \
 		"--nb-cores=2 --forward-mode=txonly --tx-ip=192.168.$X.1,192.168.$X.2"
+	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
+	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
+	# Ratelimit Tx to 50Gbps on LBK
+	testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
 }
 
 function pmd_tx_launch_for_inb()
@@ -255,6 +259,10 @@ function pmd_tx_launch_for_inb()
 	testpmd_launch "$TPMD_TX_PREFIX" \
 	"-c 0x3800 -a $LIF1 --vdev net_pcap0,rx_pcap=$SCRIPTPATH/pcap/enc_$1_$2.pcap,infinite_rx=1" \
 	"--nb-cores=2 --no-flush-rx"
+	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
+	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
+	# Ratelimit Tx to 50Gbps on LBK
+	testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
 }
 
 function pmd_rx_launch()
@@ -262,6 +270,8 @@ function pmd_rx_launch()
 	testpmd_launch "$TPMD_RX_PREFIX" \
 		"-c 0x700 -a $LIF4" \
 		"--nb-cores=2 --forward-mode=rxonly"
+	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
+	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl tx off 0"
 }
 
 function pmd_rx_dry_run()
@@ -270,7 +280,10 @@ function pmd_rx_dry_run()
 	local port=$2
 	local in=testpmd.in.$prefix
 
+	prev=$(testpmd_log_sz $prefix)
+	curr=$prev
 	echo "show port stats $port" >> $in
+	while [ $prev -eq $curr ]; do sleep 0.1; curr=$(testpmd_log_sz $prefix); done
 	testpmd_prompt $prefix
 }
 
@@ -281,7 +294,11 @@ function rx_stats()
 	local in=testpmd.in.$prefix
 	local out=testpmd.out.$prefix
 
+	prev=$(testpmd_log_sz $prefix)
+	curr=$prev
+
 	echo "show port stats $port" >> $in
+	while [ $prev -eq $curr ]; do sleep 0.1; curr=$(testpmd_log_sz $prefix); done
 	testpmd_prompt $prefix
 	cat $out | tail -n4 | head -n1
 }
