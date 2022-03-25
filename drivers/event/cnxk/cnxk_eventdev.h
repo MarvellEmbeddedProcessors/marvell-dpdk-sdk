@@ -57,6 +57,7 @@
 #define CN10K_GW_MODE_PREF     1
 #define CN10K_GW_MODE_PREF_WFE 2
 
+#define CNXK_SSO_FLUSH_RETRY_MAX	  0xfff
 #define CNXK_QOS_NORMALIZE(val, max, cnt) (val / ((max + cnt - 1) / cnt))
 #define CNXK_VALID_DEV_OR_ERR_RET(dev, drv_name)                               \
 	do {                                                                   \
@@ -73,8 +74,8 @@ typedef int (*cnxk_sso_unlink_t)(void *dev, void *ws, uint16_t *map,
 				 uint16_t nb_link);
 typedef void (*cnxk_handle_event_t)(void *arg, struct rte_event ev);
 typedef void (*cnxk_sso_hws_reset_t)(void *arg, void *ws);
-typedef void (*cnxk_sso_hws_flush_t)(void *ws, uint8_t queue_id, uintptr_t base,
-				     cnxk_handle_event_t fn, void *arg);
+typedef int (*cnxk_sso_hws_flush_t)(void *ws, uint8_t queue_id, uintptr_t base,
+				    cnxk_handle_event_t fn, void *arg);
 
 struct cnxk_sso_qos {
 	uint16_t queue;

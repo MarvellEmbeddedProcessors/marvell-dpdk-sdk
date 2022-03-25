@@ -117,11 +117,12 @@ cn9k_sso_hws_release(void *arg, void *hws)
 	}
 }
 
-static void
+static int
 cn9k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 			  cnxk_handle_event_t fn, void *arg)
 {
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(arg);
+	uint64_t retry = CNXK_SSO_FLUSH_RETRY_MAX;
 	struct cn9k_sso_hws_dual *dws;
 	struct cn9k_sso_hws *ws;
 	uint64_t cq_ds_cnt = 1;
@@ -159,6 +160,8 @@ cn9k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 			cnxk_sso_hws_swtag_flush(
 				ws_base + SSOW_LF_GWS_TAG,
 				ws_base + SSOW_LF_GWS_OP_SWTAG_FLUSH);
+		else if (retry-- == 0)
+			break;
 		do {
 			val = plt_read64(ws_base + SSOW_LF_GWS_PENDSTATE);
 		} while (val & BIT_ULL(56));
@@ -169,7 +172,12 @@ cn9k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 		cq_ds_cnt &= 0x3FFF3FFF0000;
 	}
 
+	if (aq_cnt || cq_ds_cnt || ds_cnt)
+		return -EAGAIN;
+
 	plt_write64(0, ws_base + SSOW_LF_GWS_OP_GWC_INVAL);
+
+	return 0;
 }
 
 static void
