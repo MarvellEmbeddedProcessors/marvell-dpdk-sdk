@@ -1,4 +1,4 @@
-L2FWD_EVENT (atomic queue) output in packets per second
+L2FWD_EVENT (ordered queue) output in packets per second
 cores, RESULT
 1, 6545441
 8, 40638571
@@ -19,7 +19,7 @@ cores, RESULT
 16, 81.992
 
 ------------------------------------------------------------------------
-PIPELINE_ATQ_TX_FIRST (ordered queue) output in packets per second
+PIPELINE_ATQ_TX_FIRST (atomic queue) output in packets per second
 cores, RESULT
 1, 9.767
 8, 71.898

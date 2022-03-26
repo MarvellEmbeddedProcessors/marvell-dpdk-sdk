@@ -11,7 +11,6 @@ IF0=${IF0:-0002:02:00.0}
 IF1=${IF1:-0002:01:00.1}
 IF2=${IF2:-0002:01:00.2}
 SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
-CPT_DEV=${CPT_DEV:-$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')}
 TOLERANCE=${TOLERANCE:-5}
 MAX_RETRY_COUNT=${MAX_RETRY_COUNT:-10}
 GENERATOR_SCRIPT=${GENERATOR_SCRIPT:-cnxk_event_perf_gen.sh}
@@ -21,8 +20,10 @@ TARGET_SSH_CMD="$TARGET_SSH_CMD -n"
 RES_SEPERATOR="------------------------------------------------------------------------"
 if [[ $PLAT == cn10k ]]; then
 	REF_FILE=${REF_FILE:-ref_numbers/cn106xx_rclk2000_sclk1000.csv}
+	CPT_DEV=${CPT_DEV:-$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')}
 else
 	REF_FILE=${REF_FILE:-ref_numbers/cn96xx_rclk2200_sclk1100.csv}
+	CPT_DEV=${CPT_DEV:-$(lspci -d :a0fe | head -1 | awk -e '{ print $1 }')}
 fi
 
 trap 'cleanup $?' EXIT
@@ -255,10 +256,10 @@ get_sched_modes()
 	test_name=$1
 
 	case $test_name in
-		L2FWD_EVENT | GW_MODE_* | VECTOR_MODE)
+		GW_MODE_* | VECTOR_MODE | PIPELINE_ATQ_TX_FIRST)
 			echo "atomic"
 			;;
-		L3FWD_EVENT | PIPELINE_ATQ_TX_FIRST)
+		L2FWD_EVENT | L3FWD_EVENT)
 			echo "ordered"
 			;;
 		PERF_ATQ | CRYPTO_ADAPTER_FWD)
@@ -300,10 +301,9 @@ run_event_perf_regression()
 	local test_info="
 	L2FWD_EVENT		dpdk-l2fwd-event	=*
 	L3FWD_EVENT		dpdk-l3fwd		L3FWD: entering lpm_event_loop_single on lcore [0-9]*
-	PERF_ATQ		dpdk-test-eventdev	0.000 mpps avg 0.000 mpps"
-	#FIXME: cleanup not terminating in time for below tests on SIGTERM
-	#PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
-	#CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+	PERF_ATQ		dpdk-test-eventdev	0.000 mpps avg 0.000 mpps
+	PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
+	CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
 	if [[ $PLAT == cn10k ]]; then
 		test_info+="
 		GW_MODE_NO_PREF		dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
