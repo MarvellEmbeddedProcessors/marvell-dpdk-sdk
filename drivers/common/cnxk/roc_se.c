@@ -88,18 +88,18 @@ cpt_ciph_type_set(roc_se_cipher_type type, struct roc_se_ctx *ctx,
 		fc_type = ROC_SE_FC_GEN;
 		break;
 	case ROC_SE_ZUC_EEA3:
-		/* No support for chained operations */
-		if (unlikely(ctx->hash_type))
-			return -1;
-		fc_type = ROC_SE_PDCP;
+		if (ctx->hash_type)
+			fc_type = ROC_SE_PDCP_CHAIN;
+		else
+			fc_type = ROC_SE_PDCP;
 		break;
 	case ROC_SE_SNOW3G_UEA2:
 		if (unlikely(key_len != 16))
 			return -1;
-		/* No support for AEAD yet */
-		if (unlikely(ctx->hash_type))
-			return -1;
-		fc_type = ROC_SE_PDCP;
+		if (ctx->hash_type)
+			fc_type = ROC_SE_PDCP_CHAIN;
+		else
+			fc_type = ROC_SE_PDCP;
 		break;
 	case ROC_SE_AES_CTR_EEA2:
 		fc_type = ROC_SE_PDCP;
@@ -202,7 +202,7 @@ cpt_pdcp_mac_len_set(struct roc_se_zuc_snow3g_ctx *zs_ctx, uint16_t mac_len)
 }
 
 static void
-cpt_pdcp_update_zuc_const(uint8_t *zuc_const, int key_len, int mac_len)
+cpt_zuc_const_update(uint8_t *zuc_const, int key_len, int mac_len)
 {
 	if (key_len == 16) {
 		memcpy(zuc_const, zuc_key128, 32);
@@ -227,15 +227,18 @@ int
 roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type,
 		    const uint8_t *key, uint16_t key_len, uint16_t mac_len)
 {
+	struct roc_se_zuc_snow3g_chain_ctx *zs_ch_ctx;
 	struct roc_se_zuc_snow3g_ctx *zs_ctx;
 	struct roc_se_kasumi_ctx *k_ctx;
 	struct roc_se_context *fctx;
+	uint8_t opcode_minor;
 	int ret;
 
 	if (se_ctx == NULL)
 		return -1;
 
 	zs_ctx = &se_ctx->se_ctx.zs_ctx;
+	zs_ch_ctx = &se_ctx->se_ctx.zs_ch_ctx;
 	k_ctx = &se_ctx->se_ctx.k_ctx;
 	fctx = &se_ctx->se_ctx.fctx;
 
@@ -243,12 +246,10 @@ roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type,
 		uint8_t *zuc_const;
 		uint32_t keyx[4];
 		uint8_t *ci_key;
+		bool chained_op =
+			se_ctx->ciph_then_auth || se_ctx->auth_then_ciph;
 
 		if (!key_len)
-			return -1;
-
-		/* No support for chained operations yet */
-		if (se_ctx->enc_cipher)
 			return -1;
 
 		if (roc_model_is_cn9k()) {
@@ -262,29 +263,57 @@ roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type,
 		/* For ZUC/SNOW3G/Kasumi */
 		switch (type) {
 		case ROC_SE_SNOW3G_UIA2:
-			zs_ctx->zuc.otk_ctx.w0.s.alg_type =
-				ROC_SE_PDCP_ALG_TYPE_SNOW3G;
-			zs_ctx->zuc.otk_ctx.w0.s.mac_len =
-				ROC_SE_PDCP_MAC_LEN_32_BIT;
-			se_ctx->pdcp_alg_type = ROC_SE_PDCP_ALG_TYPE_SNOW3G;
-			cpt_snow3g_key_gen(key, keyx);
-			memcpy(ci_key, keyx, key_len);
-			se_ctx->fc_type = ROC_SE_PDCP;
+			if (chained_op) {
+				struct roc_se_onk_zuc_chain_ctx *ctx =
+					&zs_ch_ctx->zuc.onk_ctx;
+				zs_ch_ctx->zuc.onk_ctx.w0.s.state_conf = 1;
+				ctx->w0.s.auth_type =
+					ROC_SE_PDCP_CHAIN_ALG_TYPE_SNOW3G;
+				ctx->w0.s.mac_len = mac_len;
+				ctx->w0.s.auth_key_len = key_len;
+				se_ctx->fc_type = ROC_SE_PDCP_CHAIN;
+				cpt_snow3g_key_gen(key, keyx);
+				memcpy(ctx->st.auth_key, keyx, key_len);
+			} else {
+				zs_ctx->zuc.otk_ctx.w0.s.alg_type =
+					ROC_SE_PDCP_ALG_TYPE_SNOW3G;
+				zs_ctx->zuc.otk_ctx.w0.s.mac_len =
+					ROC_SE_PDCP_MAC_LEN_32_BIT;
+				cpt_snow3g_key_gen(key, keyx);
+				memcpy(ci_key, keyx, key_len);
+				se_ctx->fc_type = ROC_SE_PDCP;
+			}
+			se_ctx->pdcp_auth_alg = ROC_SE_PDCP_ALG_TYPE_SNOW3G;
 			se_ctx->zsk_flags = 0x1;
 			break;
 		case ROC_SE_ZUC_EIA3:
-			zs_ctx->zuc.otk_ctx.w0.s.alg_type =
-				ROC_SE_PDCP_ALG_TYPE_ZUC;
-			ret = cpt_pdcp_key_type_set(zs_ctx, key_len);
-			if (ret)
-				return ret;
-			ret = cpt_pdcp_mac_len_set(zs_ctx, mac_len);
-			if (ret)
-				return ret;
-			se_ctx->pdcp_alg_type = ROC_SE_PDCP_ALG_TYPE_ZUC;
-			memcpy(ci_key, key, key_len);
-			cpt_pdcp_update_zuc_const(zuc_const, key_len, mac_len);
-			se_ctx->fc_type = ROC_SE_PDCP;
+			if (chained_op) {
+				struct roc_se_onk_zuc_chain_ctx *ctx =
+					&zs_ch_ctx->zuc.onk_ctx;
+				ctx->w0.s.state_conf = 1;
+				ctx->w0.s.auth_type =
+					ROC_SE_PDCP_CHAIN_ALG_TYPE_ZUC;
+				ctx->w0.s.mac_len = mac_len;
+				ctx->w0.s.auth_key_len = key_len;
+				memcpy(ctx->st.auth_key, key, key_len);
+				cpt_zuc_const_update(ctx->st.auth_zuc_const,
+						     key_len, mac_len);
+				se_ctx->fc_type = ROC_SE_PDCP_CHAIN;
+			} else {
+				zs_ctx->zuc.otk_ctx.w0.s.alg_type =
+					ROC_SE_PDCP_ALG_TYPE_ZUC;
+				ret = cpt_pdcp_key_type_set(zs_ctx, key_len);
+				if (ret)
+					return ret;
+				ret = cpt_pdcp_mac_len_set(zs_ctx, mac_len);
+				if (ret)
+					return ret;
+				memcpy(ci_key, key, key_len);
+				cpt_zuc_const_update(zuc_const, key_len,
+						     mac_len);
+				se_ctx->fc_type = ROC_SE_PDCP;
+			}
+			se_ctx->pdcp_auth_alg = ROC_SE_PDCP_ALG_TYPE_ZUC;
 			se_ctx->zsk_flags = 0x1;
 			break;
 		case ROC_SE_AES_CMAC_EIA2:
@@ -292,7 +321,7 @@ roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type,
 				ROC_SE_PDCP_ALG_TYPE_AES_CTR;
 			zs_ctx->zuc.otk_ctx.w0.s.mac_len =
 				ROC_SE_PDCP_MAC_LEN_32_BIT;
-			se_ctx->pdcp_alg_type = ROC_SE_PDCP_ALG_TYPE_AES_CTR;
+			se_ctx->pdcp_auth_alg = ROC_SE_PDCP_ALG_TYPE_AES_CTR;
 			memcpy(ci_key, key, key_len);
 			se_ctx->fc_type = ROC_SE_PDCP;
 			se_ctx->zsk_flags = 0x1;
@@ -315,10 +344,16 @@ roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type,
 		se_ctx->mac_len = mac_len;
 		se_ctx->hash_type = type;
 		if (roc_model_is_cn9k())
-			se_ctx->template_w4.s.opcode_minor =
-				((1 << 7) | (se_ctx->pdcp_alg_type << 5) | 1);
+			if (chained_op == true)
+				opcode_minor = se_ctx->ciph_then_auth ? 2 : 3;
+			else
+				opcode_minor =
+					((1 << 7) |
+					 (se_ctx->pdcp_auth_alg << 5) | 1);
 		else
-			se_ctx->template_w4.s.opcode_minor = ((1 << 4) | 1);
+			opcode_minor = ((1 << 4) | 1);
+
+		se_ctx->template_w4.s.opcode_minor = opcode_minor;
 		return 0;
 	}
 
@@ -361,12 +396,17 @@ int
 roc_se_ciph_key_set(struct roc_se_ctx *se_ctx, roc_se_cipher_type type,
 		    const uint8_t *key, uint16_t key_len, uint8_t *salt)
 {
+	bool chained_op = se_ctx->ciph_then_auth || se_ctx->auth_then_ciph;
 	struct roc_se_zuc_snow3g_ctx *zs_ctx = &se_ctx->se_ctx.zs_ctx;
 	struct roc_se_context *fctx = &se_ctx->se_ctx.fctx;
+	struct roc_se_zuc_snow3g_chain_ctx *zs_ch_ctx;
+	uint8_t opcode_minor;
 	uint8_t *zuc_const;
 	uint32_t keyx[4];
 	uint8_t *ci_key;
 	int ret;
+
+	zs_ch_ctx = &se_ctx->se_ctx.zs_ch_ctx;
 
 	if (roc_model_is_cn9k()) {
 		ci_key = zs_ctx->zuc.onk_ctx.ci_key;
@@ -445,32 +485,56 @@ roc_se_ciph_key_set(struct roc_se_ctx *se_ctx, roc_se_cipher_type type,
 		memcpy(fctx->hmac.ipad, &key[key_len], key_len);
 		break;
 	case ROC_SE_SNOW3G_UEA2:
-		zs_ctx->zuc.otk_ctx.w0.s.key_len = ROC_SE_AES_128_BIT;
-		zs_ctx->zuc.otk_ctx.w0.s.alg_type = ROC_SE_PDCP_ALG_TYPE_SNOW3G;
-		se_ctx->pdcp_alg_type = ROC_SE_PDCP_ALG_TYPE_SNOW3G;
-		cpt_snow3g_key_gen(key, keyx);
-		memcpy(ci_key, keyx, key_len);
+		if (chained_op == true) {
+			struct roc_se_onk_zuc_chain_ctx *ctx =
+				&zs_ch_ctx->zuc.onk_ctx;
+			zs_ch_ctx->zuc.onk_ctx.w0.s.state_conf = 1;
+			zs_ch_ctx->zuc.onk_ctx.w0.s.cipher_type =
+				ROC_SE_PDCP_CHAIN_ALG_TYPE_SNOW3G;
+			zs_ch_ctx->zuc.onk_ctx.w0.s.ci_key_len = key_len;
+			cpt_snow3g_key_gen(key, keyx);
+			memcpy(ctx->st.ci_key, keyx, key_len);
+		} else {
+			zs_ctx->zuc.otk_ctx.w0.s.key_len = ROC_SE_AES_128_BIT;
+			zs_ctx->zuc.otk_ctx.w0.s.alg_type =
+				ROC_SE_PDCP_ALG_TYPE_SNOW3G;
+			cpt_snow3g_key_gen(key, keyx);
+			memcpy(ci_key, keyx, key_len);
+		}
+		se_ctx->pdcp_ci_alg = ROC_SE_PDCP_ALG_TYPE_SNOW3G;
 		se_ctx->zsk_flags = 0;
 		goto success;
 	case ROC_SE_ZUC_EEA3:
-		ret = cpt_pdcp_key_type_set(zs_ctx, key_len);
-		if (ret)
-			return ret;
-		zs_ctx->zuc.otk_ctx.w0.s.alg_type = ROC_SE_PDCP_ALG_TYPE_ZUC;
-		se_ctx->pdcp_alg_type = ROC_SE_PDCP_ALG_TYPE_ZUC;
-		memcpy(ci_key, key, key_len);
-		if (key_len == 32)
-			memcpy(zuc_const, zuc_key256, 16);
-		else
-			memcpy(zuc_const, zuc_key128, 32);
+		if (chained_op == true) {
+			struct roc_se_onk_zuc_chain_ctx *ctx =
+				&zs_ch_ctx->zuc.onk_ctx;
+			zs_ch_ctx->zuc.onk_ctx.w0.s.state_conf = 1;
+			zs_ch_ctx->zuc.onk_ctx.w0.s.cipher_type =
+				ROC_SE_PDCP_CHAIN_ALG_TYPE_ZUC;
+			memcpy(ctx->st.ci_key, key, key_len);
+			memcpy(ctx->st.ci_zuc_const, zuc_key128, 32);
+			zs_ch_ctx->zuc.onk_ctx.w0.s.ci_key_len = key_len;
+		} else {
+			ret = cpt_pdcp_key_type_set(zs_ctx, key_len);
+			if (ret)
+				return ret;
+			zs_ctx->zuc.otk_ctx.w0.s.alg_type =
+				ROC_SE_PDCP_ALG_TYPE_ZUC;
+			memcpy(ci_key, key, key_len);
+			if (key_len == 32)
+				memcpy(zuc_const, zuc_key256, 16);
+			else
+				memcpy(zuc_const, zuc_key128, 32);
+		}
 
+		se_ctx->pdcp_ci_alg = ROC_SE_PDCP_ALG_TYPE_ZUC;
 		se_ctx->zsk_flags = 0;
 		goto success;
 	case ROC_SE_AES_CTR_EEA2:
 		zs_ctx->zuc.otk_ctx.w0.s.key_len = ROC_SE_AES_128_BIT;
 		zs_ctx->zuc.otk_ctx.w0.s.alg_type =
 			ROC_SE_PDCP_ALG_TYPE_AES_CTR;
-		se_ctx->pdcp_alg_type = ROC_SE_PDCP_ALG_TYPE_AES_CTR;
+		se_ctx->pdcp_ci_alg = ROC_SE_PDCP_ALG_TYPE_AES_CTR;
 		memcpy(ci_key, key, key_len);
 		se_ctx->zsk_flags = 0;
 		goto success;
@@ -499,11 +563,16 @@ success:
 	se_ctx->enc_cipher = type;
 	if (se_ctx->fc_type == ROC_SE_PDCP) {
 		if (roc_model_is_cn9k())
-			se_ctx->template_w4.s.opcode_minor =
-				((1 << 7) | (se_ctx->pdcp_alg_type << 5) |
-				 (se_ctx->zsk_flags & 0x7));
+			if (chained_op == true)
+				opcode_minor = se_ctx->ciph_then_auth ? 2 : 3;
+			else
+				opcode_minor =
+					((1 << 7) | (se_ctx->pdcp_ci_alg << 5) |
+					 (se_ctx->zsk_flags & 0x7));
 		else
-			se_ctx->template_w4.s.opcode_minor = ((1 << 4));
+			opcode_minor = ((1 << 4));
+
+		se_ctx->template_w4.s.opcode_minor = opcode_minor;
 	}
 	return 0;
 }

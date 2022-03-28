@@ -506,6 +506,8 @@ cnxk_sess_fill(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 
 	/* Cipher then auth */
 	if (ciph_then_auth) {
+		sess->roc_se_ctx.ciph_then_auth = 1;
+		sess->chained_op = 1;
 		if (fill_sess_cipher(c_xfrm, sess))
 			return -ENOTSUP;
 		if (fill_sess_auth(a_xfrm, sess))
@@ -526,11 +528,37 @@ cnxk_sess_fill(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 				return -ENOTSUP;
 			}
 			break;
+		case RTE_CRYPTO_AUTH_SNOW3G_UIA2:
+			if (a_xfrm->auth.op != RTE_CRYPTO_AUTH_OP_GENERATE)
+				return -ENOTSUP;
+			switch (c_xfrm->cipher.algo) {
+			case RTE_CRYPTO_CIPHER_SNOW3G_UEA2:
+				break;
+			case RTE_CRYPTO_CIPHER_ZUC_EEA3:
+				break;
+			default:
+				return -ENOTSUP;
+			}
+			break;
+		case RTE_CRYPTO_AUTH_ZUC_EIA3:
+			if (a_xfrm->auth.op != RTE_CRYPTO_AUTH_OP_GENERATE)
+				return -ENOTSUP;
+			switch (c_xfrm->cipher.algo) {
+			case RTE_CRYPTO_CIPHER_ZUC_EEA3:
+				break;
+			case RTE_CRYPTO_CIPHER_SNOW3G_UEA2:
+				break;
+			default:
+				return -ENOTSUP;
+			}
+			break;
 		default:
 			return -ENOTSUP;
 		}
 	}
 
+	sess->roc_se_ctx.auth_then_ciph = 1;
+	sess->chained_op = 1;
 	if (fill_sess_auth(a_xfrm, sess))
 		return -ENOTSUP;
 	if (fill_sess_cipher(c_xfrm, sess))
@@ -573,6 +601,7 @@ sym_session_configure(struct roc_cpt *roc_cpt, int driver_id,
 	memset(priv, 0, sizeof(struct cnxk_se_sess));
 
 	sess_priv = priv;
+	sess_priv->cpt_rev = roc_cpt->cpt_revision;
 
 	ret = cnxk_sess_fill(xform, sess_priv);
 	if (ret)
