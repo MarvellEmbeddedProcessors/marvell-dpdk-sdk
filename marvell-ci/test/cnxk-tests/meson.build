@@ -52,6 +52,7 @@ test_subdirs = [
         'flow_perf',
         'txrx_stats',
         'flow_regression',
+        'cpt_2nd_pass_flow',
         'read_config',
         'mempool_perf',
         'mac_test',
