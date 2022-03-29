@@ -15,6 +15,7 @@
 #define FLOW_RULES_MAX 128
 
 struct flow_rule_entry {
+	uint8_t is_eth;
 	uint8_t is_ipv4;
 	RTE_STD_C11
 	union {
@@ -27,8 +28,11 @@ struct flow_rule_entry {
 			struct rte_flow_item_ipv6 mask;
 		} ipv6;
 	};
+	struct rte_flow_item_mark mark_val;
 	uint16_t port;
 	uint16_t queue;
+	bool enable_count;
+	bool enable_mark;
 	struct rte_flow *flow;
 } flow_rule_tbl[FLOW_RULES_MAX];
 
@@ -64,8 +68,9 @@ ipv4_addr_cpy(rte_be32_t *spec, rte_be32_t *mask, char *token,
 	memcpy(mask, &rte_flow_item_ipv4_mask.hdr.src_addr, sizeof(ip));
 
 	*spec = ip.s_addr;
+
 	if (depth < 32)
-		*mask = *mask << (32-depth);
+		*mask = htonl(*mask << (32 - depth));
 
 	return 0;
 }
@@ -124,7 +129,7 @@ parse_flow_tokens(char **tokens, uint32_t n_tokens,
 		  struct parse_status *status)
 {
 	struct flow_rule_entry *rule;
-	uint32_t ti;
+	uint32_t ti = 0;
 
 	if (nb_flow_rule >= FLOW_RULES_MAX) {
 		printf("Too many flow rules\n");
@@ -134,16 +139,34 @@ parse_flow_tokens(char **tokens, uint32_t n_tokens,
 	rule = &flow_rule_tbl[nb_flow_rule];
 	memset(rule, 0, sizeof(*rule));
 
-	if (strcmp(tokens[0], "ipv4") == 0) {
-		rule->is_ipv4 = 1;
-	} else if (strcmp(tokens[0], "ipv6") == 0) {
-		rule->is_ipv4 = 0;
-	} else {
-		APP_CHECK(0, status, "unrecognized input \"%s\"", tokens[0]);
-		return;
+	if (strcmp(tokens[0], "mark") == 0) {
+		INCREMENT_TOKEN_INDEX(ti, n_tokens, status);
+		if (status->status < 0)
+			return;
+		APP_CHECK_TOKEN_IS_NUM(tokens, ti, status);
+		if (status->status < 0)
+			return;
+
+		rule->mark_val.id = atoi(tokens[ti]);
+		rule->enable_mark = true;
+		ti++;
+	}
+	if (strcmp(tokens[ti], "eth") == 0) {
+		rule->is_eth = true;
+		ti++;
 	}
 
-	for (ti = 1; ti < n_tokens; ti++) {
+	if (strcmp(tokens[ti], "ipv4") == 0) {
+		rule->is_ipv4 = 1;
+	} else if (strcmp(tokens[ti], "ipv6") == 0) {
+		rule->is_ipv4 = 0;
+	} else {
+		APP_CHECK(0, status, "unrecognized input \"%s\"", tokens[ti]);
+		return;
+	}
+	ti++;
+
+	for (; ti < n_tokens; ti++) {
 		if (strcmp(tokens[ti], "src") == 0) {
 			INCREMENT_TOKEN_INDEX(ti, n_tokens, status);
 			if (status->status < 0)
@@ -200,22 +223,26 @@ parse_flow_tokens(char **tokens, uint32_t n_tokens,
 
 			rule->queue = atoi(tokens[ti]);
 		}
+
+		if (strcmp(tokens[ti], "count") == 0)
+			rule->enable_count = true;
 	}
 
 	nb_flow_rule++;
 }
 
-#define MAX_RTE_FLOW_PATTERN (3)
-#define MAX_RTE_FLOW_ACTIONS (2)
+#define MAX_RTE_FLOW_PATTERN (4)
+#define MAX_RTE_FLOW_ACTIONS (3)
 
 static void
 flow_init_single(struct flow_rule_entry *rule)
 {
 	struct rte_flow_item pattern[MAX_RTE_FLOW_PATTERN] = {};
 	struct rte_flow_action action[MAX_RTE_FLOW_ACTIONS] = {};
+	struct rte_flow_item_mark mark_mask;
 	struct rte_flow_attr attr = {};
 	struct rte_flow_error err;
-	int ret;
+	int ret, pattern_idx = 0;
 
 	attr.egress = 0;
 	attr.ingress = 1;
@@ -224,21 +251,37 @@ flow_init_single(struct flow_rule_entry *rule)
 	action[0].conf = &(struct rte_flow_action_queue) {
 				.index = rule->queue,
 	};
-	action[1].type = RTE_FLOW_ACTION_TYPE_END;
 
-	pattern[0].type = RTE_FLOW_ITEM_TYPE_ETH;
-
-	if (rule->is_ipv4) {
-		pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
-		pattern[1].spec = &rule->ipv4.spec;
-		pattern[1].mask = &rule->ipv4.mask;
+	if (rule->enable_count) {
+		action[1].type = RTE_FLOW_ACTION_TYPE_COUNT;
+		action[2].type = RTE_FLOW_ACTION_TYPE_END;
 	} else {
-		pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV6;
-		pattern[1].spec = &rule->ipv6.spec;
-		pattern[1].mask = &rule->ipv6.mask;
+		action[1].type = RTE_FLOW_ACTION_TYPE_END;
 	}
 
-	pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
+	if (rule->enable_mark) {
+		mark_mask.id = UINT32_MAX;
+		pattern[pattern_idx].type = RTE_FLOW_ITEM_TYPE_MARK;
+		pattern[pattern_idx].spec = &rule->mark_val;
+		pattern[pattern_idx].mask = &mark_mask;
+		pattern_idx++;
+	}
+
+	if (rule->is_eth)
+		pattern[pattern_idx++].type = RTE_FLOW_ITEM_TYPE_ETH;
+
+	if (rule->is_ipv4) {
+		pattern[pattern_idx].type = RTE_FLOW_ITEM_TYPE_IPV4;
+		pattern[pattern_idx].spec = &rule->ipv4.spec;
+		pattern[pattern_idx].mask = &rule->ipv4.mask;
+	} else {
+		pattern[pattern_idx].type = RTE_FLOW_ITEM_TYPE_IPV6;
+		pattern[pattern_idx].spec = &rule->ipv6.spec;
+		pattern[pattern_idx].mask = &rule->ipv6.mask;
+	}
+
+	pattern_idx++;
+	pattern[pattern_idx].type = RTE_FLOW_ITEM_TYPE_END;
 
 	ret = rte_flow_validate(rule->port, &attr, pattern, action, &err);
 	if (ret < 0) {
@@ -249,6 +292,49 @@ flow_init_single(struct flow_rule_entry *rule)
 	rule->flow = rte_flow_create(rule->port, &attr, pattern, action, &err);
 	if (rule->flow == NULL)
 		RTE_LOG(ERR, IPSEC, "Flow creation return %s\n", err.message);
+}
+
+void
+flow_print_counters(void)
+{
+	struct rte_flow_query_count count_query;
+	struct rte_flow_action action;
+	struct flow_rule_entry *rule;
+	struct rte_flow_error error;
+	int i = 0, ret = 0;
+
+	action.type = RTE_FLOW_ACTION_TYPE_COUNT;
+
+	for (i = 0; i < nb_flow_rule; i++) {
+		rule = &flow_rule_tbl[i];
+		if (!rule->enable_count)
+			continue;
+
+		/* Poisoning to make sure PMDs update it in case of error. */
+		memset(&error, 0x55, sizeof(error));
+		memset(&count_query, 0, sizeof(count_query));
+		ret = rte_flow_query(rule->port, rule->flow, &action,
+				     &count_query, &error);
+		if (ret)
+			RTE_LOG(ERR, IPSEC,
+				"Failed to get flow counter "
+				" for port %u, err msg: %s\n",
+				rule->port, error.message);
+
+		if (rule->is_ipv4) {
+			printf("Flow #%3d: spec ipv4 ", i);
+			ipv4_hdr_print(&rule->ipv4.spec.hdr);
+		} else {
+			printf("Flow #%3d: spec ipv6 ", i);
+			ipv6_hdr_print(&rule->ipv6.spec.hdr);
+		}
+
+		if (rule->enable_mark)
+			printf("\t Mark Enabled");
+
+		printf("\tPort: %d, Queue: %d", rule->port, rule->queue);
+		printf("\tHits: %"PRIu64"\n", count_query.hits);
+	}
 }
 
 void
@@ -279,6 +365,11 @@ flow_init(void)
 		}
 
 		printf("\tPort: %d, Queue: %d", rule->port, rule->queue);
+
+		if (rule->enable_mark)
+			printf("\t Mark Enabled");
+		if (rule->enable_count)
+			printf("\t Counter Enabled");
 
 		if (rule->flow == NULL)
 			printf(" [UNSUPPORTED]");
