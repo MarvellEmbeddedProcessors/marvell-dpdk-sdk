@@ -48,6 +48,7 @@ test_subdirs = [
         'dpdk_test',
         'port_ctrl',
         'crypto_autotest',
+        'inline_ipsec_autotest',
         'tm_test',
         'flow_perf',
         'txrx_stats',
