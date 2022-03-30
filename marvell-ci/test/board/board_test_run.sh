@@ -12,6 +12,7 @@ SKIP_TARGET_SETUP=${SKIP_TARGET_SETUP:-}
 TARGET_BOARD=${TARGET_BOARD:-root@127.0.0.1}
 GENERATOR_BOARD=${GENERATOR_BOARD:-}
 TARGET_SSH_CMD=${TARGET_SSH_CMD:-"ssh"}
+TARGET_SCP_CMD=${TARGET_SCP_CMD:-"scp"}
 REMOTE="$TARGET_SSH_CMD $TARGET_BOARD -n"
 REMOTE_DIR=${REMOTE_DIR:-/tmp/dpdk}
 PROJECT_ROOT=${PROJECT_ROOT:-$PWD}
@@ -53,6 +54,7 @@ function target_sync()
 	$sync -e "$TARGET_SSH_CMD" -r $BUILD_DIR/* $TARGET_BOARD:$REMOTE_DIR
 	$sync -e "$TARGET_SSH_CMD" -r --exclude "marvell-ci/test/cnxk-tests/*" \
 		$PROJECT_ROOT/marvell-ci $TARGET_BOARD:$REMOTE_DIR
+	$REMOTE "sudo $TARGET_SCP_CMD -pr $FW_LOCATION/* /lib/firmware"
 
 	if [[ -n $GENERATOR_BOARD ]]; then
 		$TARGET_SSH_CMD $GENERATOR_BOARD mkdir -p $REMOTE_DIR
@@ -60,6 +62,8 @@ function target_sync()
 		$sync -e "$TARGET_SSH_CMD" \
 			$PROJECT_ROOT/marvell-ci/test/board/oxk-devbind-basic.sh \
 			$GENERATOR_BOARD:$REMOTE_DIR
+		$TARGET_SSH_CMD $GENERATOR_BOARD \
+			"sudo $TARGET_SCP_CMD -pr $FW_LOCATION/* /lib/firmware"
 	fi
 }
 
