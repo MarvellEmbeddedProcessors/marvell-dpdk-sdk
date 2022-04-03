@@ -304,9 +304,4 @@ def add_stage_node(Object s, nodes, name, stage_exec) {
 	stage_node(s, nodes, name, stage_exec)
 }
 
-def blueocean_link(Object s) {
-	def link = "http://jenkins-ip-sw-in.marvell.com/job/${env.JOB_BASE_NAME}/${env.BUILD_NUMBER}/display/redirect"
-	return link
-}
-
 return this

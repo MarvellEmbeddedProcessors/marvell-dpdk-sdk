@@ -307,7 +307,7 @@ def run(Object s) {
 			lock(env.NODE_NAME) {
 				s.utils.print_env(s)
 				stage ("Test") {
-					def link = s.utils.blueocean_link(s)
+					def link = "${env.RUN_DISPLAY_URL}"
 					def nightly_name = s.utils.get_nightly_name(s)
 
 					/* Initialisations for tests */
