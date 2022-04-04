@@ -46,6 +46,8 @@ def init_env_vars(Object s) {
 
 	s.HEAD_COMMIT = s.utils.gerrit_is_head_commit(s)
 	s.FAILING_FAST = false
+	s.TEST_STAGES_PASSED = []
+	s.TEST_STAGES_FAILED = []
 
 	s.base_tests = [
 		'test-cn96',
@@ -77,9 +79,7 @@ def init_env_vars(Object s) {
 		'skip_roc_check' : [ 'Skip ROC Files check', false ],
 		'skip_check_sanity' : [ 'Skip sanity check', false ],
 		'force_start' : [ 'Force start CI on non-regular branches', false ],
-		'nightly_test-cn96-perf' : [ 'Enables Nightly CN96 Perf tests, checks and messages. This flag will reset other flags.', false ],
-		'nightly_test-cn106-perf' : [ 'Enables Nightly CN106 Perf tests, checks and messages. This flag will reset other flags.', false ],
-		'nightly_test-asim-cn10ka' : [ 'Enables Nightly CN10ka ASIM test, checks and messages. This flag will reset other flags.', false ],
+		'nightly_test' : [ 'Enables Nightly tests, checks and messages. This flag will reset other flags.', false ],
 		'help' : [ 'Display this help message and abort the build', false ],
 	]
 
@@ -96,7 +96,6 @@ def init_env_vars(Object s) {
 def init_flags(Object s) {
 	def line_nmb = 0
 	def override_commit = false
-	def nightly_name
 
 	if (env.GERRIT_EVENT_COMMENT_TEXT) {
 		def run_flags_given = false
@@ -151,8 +150,7 @@ def init_flags(Object s) {
 	}
 
 	/* Do some per-flag logic now */
-	nightly_name = s.utils.get_nightly_name(s)
-	if (nightly_name) {
+	if (s.utils.get_flag(s, "nightly_test")) {
 		/* Nightly flags will reset other flags */
 		for (v in s.flags)
 			if (v.getKey().matches("run_.*"))
@@ -165,7 +163,8 @@ def init_flags(Object s) {
 		s.utils.set_flag(s, "disable_failfast", true)
 		s.utils.set_flag(s, "skip_add_reviewers", true)
 		s.utils.set_flag(s, "skip_roc_check", true)
-		s.utils.set_flag(s, "run_test-$nightly_name", true)
+		s.utils.set_flag(s, "run_test-cn96-perf", true)
+		s.utils.set_flag(s, "run_test-cn106-perf", true)
 	} else if (s.utils.get_flag(s, "run_all")) {
 		for (v in s.flags)
 			if (v.getKey().matches("run_.*"))

@@ -50,29 +50,12 @@ def get_boards(board_rsrc) {
 	return boards
 }
 
-def get_nightly_name(Object s) {
-	def test_name = null
-	def tests = ['cn96-perf', 'cn106-perf', 'asim-cn10ka']
-
-	/* Ensure that at max only one nightly flag is set */
-	for (t in tests) {
-		if (test_name == null) {
-			if (s.utils.get_flag(s, "nightly_test-$t"))
-				test_name = t
-		} else {
-			s.utils.set_flag(s, "nightly_test-$t", false)
-		}
-	}
-
-	return test_name
-}
-
 def message_slack(Object s, message, broadcast = false) {
 	def b = broadcast ? "1" : ""
 	try {
 		sh script : """#!/bin/bash
 			export BROADCAST=${b}
-			${s.SCRIPTS_CACHE_DIR}/message_slack.sh 'DPDK CI: ${message}'
+			${s.SCRIPTS_CACHE_DIR}/message_slack.sh '${message}'
 		"""
 	} catch (err) {
 		print "Failed to message slack [Err: $err]"

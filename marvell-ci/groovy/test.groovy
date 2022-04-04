@@ -110,10 +110,12 @@ def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_r
 					label: "Test ${test_name}"
 				)
 				s.utils.post_artifacts(test_name)
+				s.TEST_STAGES_PASSED.push(test_name)
 			} catch (err) {
 				if (s.FAILING_FAST) {
 					unstable ("Aborting as a parallel stage failed")
 				} else {
+					s.TEST_STAGES_FAILED.push(test_name)
 					if (!s.utils.get_flag(s, "disable_failfast"))
 						s.FAILING_FAST = true
 					s.utils.post_artifacts(test_name)
@@ -192,10 +194,12 @@ def prepare_asim_test_substage(Object s, tests, test_name, test_env, build_name,
 						label: "Test ${test_name}"
 					)
 					s.utils.post_artifacts(test_name)
+					s.TEST_STAGES_PASSED.push(test_name)
 				} catch (err) {
 					if (s.FAILING_FAST) {
 						unstable ("Aborting as a parallel stage failed")
 					} else {
+						s.TEST_STAGES_FAILED.push(test_name)
 						if (!s.utils.get_flag(s, "disable_failfast"))
 							s.FAILING_FAST = true
 						s.utils.post_artifacts(test_name)
@@ -307,8 +311,7 @@ def run(Object s) {
 			lock(env.NODE_NAME) {
 				s.utils.print_env(s)
 				stage ("Test") {
-					def link = "${env.RUN_DISPLAY_URL}"
-					def nightly_name = s.utils.get_nightly_name(s)
+					def failed = false
 
 					/* Initialisations for tests */
 					sh script: """#!/bin/bash -x
@@ -318,13 +321,33 @@ def run(Object s) {
 					"""
 					try {
 						parallel(tests)
-						if (nightly_name)
-							s.utils.message_slack(s, "Nightly Test ${nightly_name} Passed (${link})")
 					} catch (err) {
-						if (nightly_name)
-							s.utils.message_slack(s, "Nightly Test ${nightly_name} Failed (${link})", true)
-						error "-E- Test stages failed"
+						failed = true
 					}
+
+					/* Slack report for nightly tests */
+					if (s.utils.get_flag(s, "nightly_test")) {
+						def report
+
+						report  = "===========================\n"
+						report += "DPDK CI Nightly Test Report\n"
+						report += "===========================\n"
+						report += "\n\n"
+						report += "Link: ${env.RUN_DISPLAY_URL}\n\n\n"
+						report += "Tests Passed\n"
+						report += "------------\n"
+						for (t in s.TEST_STAGES_PASSED)
+							report += "${t}\n"
+						report += "\n\n\n"
+						report += "Tests Failed\n"
+						report += "------------\n"
+						for (t in s.TEST_STAGES_FAILED)
+							report += "${t}\n"
+						s.utils.message_slack(s, "$report", failed)
+					}
+
+					if (failed)
+						error "-E- Test stages failed"
 				}
 			}
 		}
