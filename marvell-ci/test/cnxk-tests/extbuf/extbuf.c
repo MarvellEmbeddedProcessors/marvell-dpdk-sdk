@@ -42,6 +42,7 @@
 #define RTE_TEST_RX_DESC_DEFAULT 1024
 #define PRINT_DELAY_MS		 1000
 #define MAGIC_PATTERN		 0xf00dfeed
+#define MTU			 8192
 
 #define ERR_EXIT(...)                                                          \
 	{                                                                      \
@@ -95,6 +96,7 @@ initialize(struct thread_info *tinfo)
 	struct rte_eth_txconf txq_conf;
 	struct rte_eth_rxconf rxq_conf;
 	struct rte_eth_conf port_lconf;
+	struct rte_eth_fc_conf fc_conf;
 	unsigned int nb_mbufs, portid;
 	uint16_t nb_txd, nb_rxd;
 	char name[16];
@@ -113,8 +115,7 @@ initialize(struct thread_info *tinfo)
 			    MAX_PKT_BURST + MEMPOOL_CACHE_SIZE, 8192U);
 	snprintf(name, 16, "mbuf_pool_%u", tinfo->portid);
 	tinfo->pool =
-		rte_pktmbuf_pool_create(name, nb_mbufs, MEMPOOL_CACHE_SIZE, 0,
-					RTE_MBUF_DEFAULT_BUF_SIZE,
+		rte_pktmbuf_pool_create(name, nb_mbufs, MEMPOOL_CACHE_SIZE, 0, MTU,
 					rte_socket_id());
 	if (tinfo->pool == NULL)
 		ERR_EXIT("Cannot init mbuf pool\n");
@@ -142,6 +143,16 @@ initialize(struct thread_info *tinfo)
 		ERR_EXIT("Cannot configure device: err=%d, port=%u\n", ret,
 			 portid);
 
+	/* Turn off flow control */
+	ret = rte_eth_dev_flow_ctrl_get(portid, &fc_conf);
+	if (!ret) {
+		fc_conf.mode = RTE_ETH_FC_NONE;
+		ret = rte_eth_dev_flow_ctrl_set(portid, &fc_conf);
+	}
+	if (ret < 0)
+		ERR_EXIT("Failed to turn off flow control\n");
+
+
 	nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 	nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 	ret = rte_eth_dev_adjust_nb_rx_tx_desc(portid, &nb_rxd, &nb_txd);
@@ -166,6 +177,11 @@ initialize(struct thread_info *tinfo)
 				     rte_eth_dev_socket_id(portid), &txq_conf);
 	if (ret < 0)
 		ERR_EXIT("Tx queue setup err=%d, port=%u\n", ret, portid);
+
+	/* Set MTU */
+	ret = rte_eth_dev_set_mtu(portid, MTU);
+	if (ret < 0)
+		ERR_EXIT("Failed to set MTU\n");
 
 	/* Initialize TX buffers */
 	snprintf(name, 16, "tx_buffer_%u", tinfo->portid);
@@ -271,10 +287,10 @@ static int
 launch_one_lcore_tx(void *args)
 {
 	uint64_t prev_tsc, diff_tsc, cur_tsc, drain_tsc;
+	unsigned int lcore, j, portid, extra_bytes = 0;
 	struct rte_mbuf_ext_shared_info s2, s4, s5;
 	struct rte_mbuf *m1, *m2, *m3, *m4, *m5;
 	struct thread_info *tinfo = args;
-	unsigned int lcore, j, portid;
 	uint16_t usrbuf_len;
 	uint64_t usr_addr;
 	char name[16];
@@ -389,7 +405,15 @@ launch_one_lcore_tx(void *args)
 			m4->next = m5;
 			m5->next = NULL;
 			m1->nb_segs = 5;
-			m1->pkt_len = SEG_LEN * m1->nb_segs;
+
+			m1->pkt_len = SEG_LEN * m1->nb_segs + extra_bytes;
+			if (m1->pkt_len > MTU) {
+				extra_bytes = 0;
+				m1->pkt_len = SEG_LEN * m1->nb_segs;
+			}
+			m5->data_len += extra_bytes;
+			extra_bytes++;
+
 			sent = rte_eth_tx_buffer(portid, 0, tinfo->tx_buf, m1);
 			tinfo->tx += sent;
 
