@@ -1019,8 +1019,8 @@ outb_inl_pro_spd_process(struct sp_ctx *sp,
 	struct rte_mbuf *ipsec[MAX_PKT_BURST];
 	struct rte_ipsec_session *ips;
 	uint32_t i, j, j_mis, sa_idx;
+	struct ipsec_sa *sa = NULL;
 	uint32_t ipsec_num = 0;
-	struct ipsec_sa *sa;
 	struct rte_mbuf *m;
 	uint64_t satp;
 
