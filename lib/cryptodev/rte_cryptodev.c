@@ -2254,6 +2254,39 @@ rte_cryptodev_configure_raw_dp_ctx(uint8_t dev_id, uint16_t qp_id,
 			sess_type, session_ctx, is_update);
 }
 
+int
+rte_cryptodev_session_event_mdata_set(uint8_t dev_id, void *sess,
+	enum rte_crypto_op_type op_type,
+	enum rte_crypto_op_sess_type sess_type,
+	void *ev_mdata,
+	uint16_t size)
+{
+	struct rte_cryptodev *dev;
+
+	if (sess == NULL || ev_mdata == NULL)
+		return -EINVAL;
+
+	if (!rte_cryptodev_is_valid_dev(dev_id))
+		goto skip_pmd_op;
+
+	dev = rte_cryptodev_pmd_get_dev(dev_id);
+	if (dev->dev_ops->session_ev_mdata_set == NULL)
+		goto skip_pmd_op;
+
+	return (*dev->dev_ops->session_ev_mdata_set)(dev, sess, op_type,
+			sess_type, ev_mdata);
+
+skip_pmd_op:
+	if (op_type == RTE_CRYPTO_OP_TYPE_SYMMETRIC)
+		return rte_cryptodev_sym_session_set_user_data(sess, ev_mdata,
+				size);
+	else if (op_type == RTE_CRYPTO_OP_TYPE_ASYMMETRIC) {
+		return rte_cryptodev_asym_session_set_user_data(sess, ev_mdata,
+				size);
+	} else
+		return -ENOTSUP;
+}
+
 uint32_t
 rte_cryptodev_raw_enqueue_burst(struct rte_crypto_raw_dp_ctx *ctx,
 	struct rte_crypto_sym_vec *vec, union rte_crypto_sym_ofs ofs,
