@@ -10,6 +10,8 @@ source $CNXKTESTPATH/common/pcap/pcap.env
 
 MCAST_MAC_PCAP="mcast_in.pcap"
 UCAST_MAC_PCAP="ucast_in.pcap"
+MTU_64B_PCAP="mtu_64B_in.pcap"
+MTU_1518B_PCAP="mtu_1518B_in.pcap"
 MACFLTR_PORT="0002:02:00.0"
 MACFLTR_PORT_INDEX=0
 PRFX="macfltr"
@@ -112,7 +114,7 @@ function macfltr_launch()
 
 	testpmd_launch $PRFX \
 		"-c $coremask -a $port --vdev eth_pcap0,rx_pcap=$pcapin,tx_pcap=out.pcap" \
-		"--port-topology=paired --portlist=0,1 --no-flush-rx"
+		"--port-topology=paired --portlist=0,1 --no-flush-rx --max-pkt-len=9200"
 }
 
 function macfltr_pkt_test_verify()
@@ -210,6 +212,15 @@ function macfltr_mcast_mac_cnt()
 		cut --complement -f 1 -d ":"
 }
 
+function xmit_pkts()
+{
+	testpmd_cmd $PRFX "port stop $1"
+	testpmd_cmd $PRFX "port config $1 loopback 1"
+	testpmd_cmd $PRFX "port start $1"
+	testpmd_cmd $PRFX "clear port stats all"
+	testpmd_cmd $PRFX "start"
+}
+
 # Register signal handlers.
 trap "sig_handler ERR" ERR
 trap "sig_handler INT" INT
@@ -304,7 +315,7 @@ macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $UCAST_MAC_PCAP
 
 #Test-3: verify adding unicast mac address.
 echo "**** Test-3 Verify configuring max:$NUM_MAX_UCAST_MAC unicast MAC "\
- 	"address for LMAC ****"
+	"address for LMAC ****"
 mac=0
 while [ $mac -lt $NUM_MAX_UCAST_MAC ]
 do
@@ -427,6 +438,124 @@ echo "$rx_count packets with configured mcast MAC address \
 (${MCAST_DMAC_ARR[0]}) received successful."
 ##
 
+macfltr_cleanup
+
+#Test-9: verify MTU configuration lesser than minimum.
+echo "Test-9: MTU lesser than min for port=$MACFLTR_PORT, coremask=$COREMASK"
+macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_64B_PCAP
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 30"
+sleep 1
+
+STRING=`testpmd_log $PRFX | tail -12 | grep "mtu cannot be less than 64"`
+echo $STRING
+if [[ $STRING != "mtu cannot be less than 64" ]]
+then
+	echo "Test-9: MTU configuration lesser than minimum failed"
+	exit 1
+fi
+
+echo "Test-9: Successful"
+macfltr_cleanup
+
+#Test-10: verify MTU configuration equals to minimum.
+echo "Test-10: MTU equals to minimum for port=$MACFLTR_PORT, coremask=$COREMASK"
+macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_64B_PCAP
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 64"
+sleep 1
+
+xmit_pkts $MACFLTR_PORT_INDEX
+sleep 5
+
+testpmd_cmd $PRFX "show port stats $MACFLTR_PORT_INDEX"
+sleep 5
+
+rx_count=`testpmd_port_rx_count $PRFX $MACFLTR_PORT_INDEX`
+if [[ $rx_count != 2 ]]
+then
+	echo "Test-10: MTU-test 64 bytes failed"
+	exit 1
+fi
+
+echo "Test-10: Successful"
+macfltr_cleanup
+
+#Test-11: verify MTU configuration between to minimum and maximum.
+echo "Test-11: MTU between min & max for port=$MACFLTR_PORT, coremask=$COREMASK"
+macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_1518B_PCAP
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 1518"
+sleep 1
+
+xmit_pkts $MACFLTR_PORT_INDEX
+sleep 5
+
+testpmd_cmd $PRFX "show port stats $MACFLTR_PORT_INDEX"
+sleep 5
+
+rx_count=`testpmd_port_rx_count $PRFX $MACFLTR_PORT_INDEX`
+if [[ $rx_count != 3 ]]
+then
+	echo "Test-11: MTU-test 1518 bytes failed"
+	exit 1
+fi
+
+echo "Test-11: Successful"
+macfltr_cleanup
+
+#Test-12: verify MTU configuration equals to maximum.
+echo "Test-12: MTU equals to max for port=$MACFLTR_PORT, coremask=$COREMASK"
+macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_1518B_PCAP
+
+testpmd_cmd $PRFX "port stop all"
+sleep 1
+
+testpmd_cmd $PRFX "port config $MACFLTR_PORT_INDEX rx_offload scatter on"
+sleep 1
+
+testpmd_cmd $PRFX "port start all"
+sleep 1
+
+testpmd_cmd $PRFX "show port info $MACFLTR_PORT_INDEX"
+sleep 1
+
+MAX_RX_LEN=`testpmd_log $PRFX | tail -57 | \
+	grep "Maximum configurable length of RX packet: " |\
+	cut --complement -f 1 -d ":"`
+
+MAX_RX_LEN=`expr $MAX_RX_LEN - 26`
+
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX $MAX_RX_LEN"
+sleep 1
+
+xmit_pkts $MACFLTR_PORT_INDEX
+sleep 5
+
+testpmd_cmd $PRFX "show port stats $MACFLTR_PORT_INDEX"
+sleep 5
+
+rx_count=`testpmd_port_rx_count $PRFX $MACFLTR_PORT_INDEX`
+if [[ $rx_count != 3 ]]
+then
+	echo "Test-12: MTU-test $MAX_RX_LEN bytes failed"
+	exit 1
+fi
+
+echo "Test-12: Successful"
+macfltr_cleanup
+
+#Test-13: verify MTU configuration greater than maximum.
+echo "Test-13: MTU more than max for port=$MACFLTR_PORT, coremask=$COREMASK"
+macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_1518B_PCAP
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 15000"
+sleep 1
+
+STRING=`testpmd_log $PRFX | tail -12 | grep "Set MTU failed" | cut -f 1 -d "."`
+if [[ $STRING != "Set MTU failed" ]]
+then
+	echo "Test-13: MTU configuration more than maximum failed"
+	exit 1
+fi
+
+echo "Test-13: Successful"
 
 macfltr_cleanup
 macfltr_cleanup_interface

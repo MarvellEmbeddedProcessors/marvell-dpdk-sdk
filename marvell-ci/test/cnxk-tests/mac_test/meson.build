@@ -17,6 +17,8 @@ test_dir = meson.current_build_dir()
 run_command(copy_data, test_script)
 run_command(copy_data, 'ucast_in.pcap')
 run_command(copy_data, 'mcast_in.pcap')
+run_command(copy_data, 'mtu_64B_in.pcap')
+run_command(copy_data, 'mtu_1518B_in.pcap')
 
 # Add the meson test
 test(
