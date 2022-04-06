@@ -309,16 +309,17 @@ def run(Object s) {
 					if (s.utils.get_flag(s, "nightly_test")) {
 						def report
 
-						report  = "===========================\n"
-						report += "DPDK CI Nightly Test Report\n"
-						report += "===========================\n"
-						report += "\n\n"
-						report += "Link: ${env.RUN_DISPLAY_URL}\n\n\n"
+						report  = "=======================================\n"
+						report += "${env.GERRIT_BRANCH} CI Nightly Test Report\n"
+						report += "=======================================\n"
+						report += "\n"
+						report += "Link: ${env.RUN_DISPLAY_URL}\n"
+						report += "\n"
 						report += "Tests Passed\n"
 						report += "------------\n"
 						for (t in s.TEST_STAGES_PASSED)
 							report += "${t}\n"
-						report += "\n\n\n"
+						report += "\n"
 						report += "Tests Failed\n"
 						report += "------------\n"
 						for (t in s.TEST_STAGES_FAILED)
