@@ -301,6 +301,7 @@ struct cpt_frag_info_s {
 	union {
 		uint64_t u64;
 		struct {
+			/* CPT HW swaps each 8B word implicitly */
 			union cpt_frag_info f0;
 			union cpt_frag_info f1;
 			union cpt_frag_info f2;
@@ -312,6 +313,7 @@ struct cpt_frag_info_s {
 	union {
 		uint64_t u64;
 		struct {
+			/* CPT HW swaps each 8B word implicitly */
 			uint16_t frag_size0;
 			uint16_t frag_size1;
 			uint16_t frag_size2;
