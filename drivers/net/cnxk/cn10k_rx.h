@@ -340,6 +340,9 @@ nix_sec_reassemble_frags(const struct cpt_parse_hdr_s *hdr, uint64_t cq_w1,
 	mbuf->data_len = frag_size;
 	fragx_sum += frag_size;
 
+	/* Mark frag as get */
+	RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
+
 	/* Frag-2: */
 	if (hdr->w0.num_frags > 2) {
 		frag_ptr = (uint64_t *)(finfo + 1);
@@ -353,6 +356,9 @@ nix_sec_reassemble_frags(const struct cpt_parse_hdr_s *hdr, uint64_t cq_w1,
 		*(uint64_t *)(&mbuf->rearm_data) = mbuf_init | data_off;
 		mbuf->data_len = frag_size;
 		fragx_sum += frag_size;
+
+		/* Mark frag as get */
+		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
 	}
 
 	/* Frag-3: */
@@ -367,6 +373,9 @@ nix_sec_reassemble_frags(const struct cpt_parse_hdr_s *hdr, uint64_t cq_w1,
 		*(uint64_t *)(&mbuf->rearm_data) = mbuf_init | data_off;
 		mbuf->data_len = frag_size;
 		fragx_sum += frag_size;
+
+		/* Mark frag as get */
+		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
 	}
 
 	if (inner_rx->lctype == NPC_LT_LC_IP) {
@@ -476,6 +485,12 @@ nix_sec_meta_to_mbuf_sc(uint64_t cq_w1, uint64_t cq_w5, const uint64_t sa_base,
 		*(uint64_t *)(laddr + (*loff << 3)) = (uint64_t)mbuf;
 		*loff = *loff + 1;
 
+		/* Mark meta mbuf as put */
+		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 0);
+
+		/* Mark inner mbuf as get */
+		RTE_MEMPOOL_CHECK_COOKIES(inner->pool, (void **)&inner, 1, 1);
+
 		return inner;
 	} else if (cq_w1 & BIT(11)) {
 		inner = (struct rte_mbuf *)(rte_be_to_cpu_64(hdr->wqe_ptr) -
@@ -531,44 +546,28 @@ nix_sec_meta_to_mbuf_sc(uint64_t cq_w1, uint64_t cq_w5, const uint64_t sa_base,
 
 #if defined(RTE_ARCH_ARM64)
 
-static __rte_always_inline struct rte_mbuf *
-nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t sa_base,
-		     uintptr_t laddr, uint8_t *loff, struct rte_mbuf *mbuf,
-		     uint16_t data_off, uint8x16_t *rx_desc_field1,
-		     uint64_t *ol_flags, const uint16_t flags,
-		     uint64x2_t *rearm)
+static __rte_always_inline void
+nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t inb_sa,
+		     uintptr_t cpth, struct rte_mbuf *inner,
+		     uint8x16_t *rx_desc_field1, uint64_t *ol_flags,
+		     const uint16_t flags, uint64x2_t *rearm)
 {
-	const void *__p = (void *)((uintptr_t)mbuf + (uint16_t)data_off);
-	const struct cpt_parse_hdr_s *hdr = (const struct cpt_parse_hdr_s *)__p;
+	const struct cpt_parse_hdr_s *hdr =
+		(const struct cpt_parse_hdr_s *)cpth;
 	uint64_t mbuf_init = vgetq_lane_u64(*rearm, 0);
 	struct cn10k_inb_priv_data *inb_priv;
-	struct rte_mbuf *inner;
 	uint64_t *sg, res_w1;
-	uint32_t sa_idx;
-	void *inb_sa;
 	uint16_t len;
-	uint64_t w0;
 
-	if ((flags & NIX_RX_REAS_F) && (cq_w1 & BIT(11))) {
-		w0 = hdr->w0.u64;
-		sa_idx = w0 >> 32;
+	/* Clear checksum flags */
+	*ol_flags &= ~(RTE_MBUF_F_RX_L4_CKSUM_MASK |
+		       RTE_MBUF_F_RX_IP_CKSUM_MASK);
 
+	if (flags & NIX_RX_REAS_F) {
 		/* Get SPI from CPT_PARSE_S's cookie(already swapped) */
-		w0 = hdr->w0.u64;
-		sa_idx = w0 >> 32;
-
-		inb_sa = roc_nix_inl_ot_ipsec_inb_sa(sa_base, sa_idx);
-		inb_priv = roc_nix_inl_ot_ipsec_inb_sa_sw_rsvd(inb_sa);
-
-		/* Clear checksum flags */
-		*ol_flags &= ~(RTE_MBUF_F_RX_L4_CKSUM_MASK |
-			       RTE_MBUF_F_RX_IP_CKSUM_MASK);
+		inb_priv = roc_nix_inl_ot_ipsec_inb_sa_sw_rsvd((void *)inb_sa);
 
 		if (!hdr->w0.num_frags) {
-			/* No Reassembly or inbound error */
-			inner = (struct rte_mbuf *)
-				(rte_be_to_cpu_64(hdr->wqe_ptr) -
-				 sizeof(struct rte_mbuf));
 			/* Update dynamic field with userdata */
 			*rte_security_dynfield(inner) =
 				(uint64_t)inb_priv->userdata;
@@ -579,19 +578,15 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t sa_base,
 			sg = (uint64_t *)(inner + 1);
 			res_w1 = sg[10];
 
-			/* Clear checksum flags and update security flag */
-			*ol_flags &= ~(RTE_MBUF_F_RX_L4_CKSUM_MASK |
-				       RTE_MBUF_F_RX_IP_CKSUM_MASK);
 			*ol_flags |=
 				(((res_w1 & 0xFF) == CPT_COMP_WARN) ?
 				 RTE_MBUF_F_RX_SEC_OFFLOAD :
 				 (RTE_MBUF_F_RX_SEC_OFFLOAD |
 				  RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED));
+
 			/* Calculate inner packet length */
-			len = ((res_w1 >> 16) & 0xFFFF) +
-				hdr->w2.il3_off -
-				sizeof(struct cpt_parse_hdr_s) -
-				(w0 & 0x7);
+			len = ((res_w1 >> 16) & 0xFFFF);
+			len += ((cq_w5 >> 16) & 0xFF) - (cq_w5 & 0xFF);
 			/* Update pkt_len and data_len */
 			*rx_desc_field1 =
 				vsetq_lane_u16(len, *rx_desc_field1, 2);
@@ -600,8 +595,7 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t sa_base,
 
 		} else if (!(hdr->w0.err_sum) && !(hdr->w0.reas_sts)) {
 			/* Reassembly success */
-			inner = nix_sec_reassemble_frags(hdr, cq_w1, cq_w5,
-							 mbuf_init);
+			nix_sec_reassemble_frags(hdr, cq_w1, cq_w5, mbuf_init);
 			sg = (uint64_t *)(inner + 1);
 			res_w1 = sg[10];
 
@@ -623,7 +617,7 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t sa_base,
 			*rearm = vsetq_lane_u64(mbuf_init, *rearm, 0);
 		} else {
 			/* Reassembly failure */
-			inner = nix_sec_attach_frags(hdr, inb_priv, mbuf_init);
+			nix_sec_attach_frags(hdr, inb_priv, mbuf_init);
 			*ol_flags |= inner->ol_flags;
 
 			/* Update pkt_len and data_len */
@@ -633,24 +627,8 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t sa_base,
 							 *rx_desc_field1, 4);
 		}
 
-		/* Store meta in lmtline to free
-		 * Assume all meta's from same aura.
-		 */
-		*(uint64_t *)(laddr + (*loff << 3)) = (uint64_t)mbuf;
-		*loff = *loff + 1;
-
-		/* Return inner mbuf */
-		return inner;
-
-	} else if (cq_w1 & BIT(11)) {
-		inner = (struct rte_mbuf *)(rte_be_to_cpu_64(hdr->wqe_ptr) -
-					    sizeof(struct rte_mbuf));
-		/* Get SPI from CPT_PARSE_S's cookie(already swapped) */
-		w0 = hdr->w0.u64;
-		sa_idx = w0 >> 32;
-
-		inb_sa = roc_nix_inl_ot_ipsec_inb_sa(sa_base, sa_idx);
-		inb_priv = roc_nix_inl_ot_ipsec_inb_sa_sw_rsvd(inb_sa);
+	} else {
+		inb_priv = roc_nix_inl_ot_ipsec_inb_sa_sw_rsvd((void *)inb_sa);
 
 		/* Update dynamic field with userdata */
 		*rte_security_dynfield(inner) = (uint64_t)inb_priv->userdata;
@@ -662,35 +640,21 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t sa_base,
 		res_w1 = sg[10];
 
 		/* Clear checksum flags and update security flag */
-		*ol_flags &= ~(RTE_MBUF_F_RX_L4_CKSUM_MASK | RTE_MBUF_F_RX_IP_CKSUM_MASK);
 		*ol_flags |= (((res_w1 & 0xFF) == CPT_COMP_WARN) ?
 			      RTE_MBUF_F_RX_SEC_OFFLOAD :
-			      (RTE_MBUF_F_RX_SEC_OFFLOAD | RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED));
+			      (RTE_MBUF_F_RX_SEC_OFFLOAD |
+			       RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED));
+
 		/* Calculate inner packet length */
-		len = ((res_w1 >> 16) & 0xFFFF) + hdr->w2.il3_off -
-			sizeof(struct cpt_parse_hdr_s) - (w0 & 0x7);
+		len = ((res_w1 >> 16) & 0xFFFF);
+		len += ((cq_w5 >> 16) & 0xFF) - (cq_w5 & 0xFF);
 		/* Update pkt_len and data_len */
 		*rx_desc_field1 = vsetq_lane_u16(len, *rx_desc_field1, 2);
 		*rx_desc_field1 = vsetq_lane_u16(len, *rx_desc_field1, 4);
-
-		/* Store meta in lmtline to free
-		 * Assume all meta's from same aura.
-		 */
-		*(uint64_t *)(laddr + (*loff << 3)) = (uint64_t)mbuf;
-		*loff = *loff + 1;
-
-		/* Mark meta mbuf as put */
-		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 0);
-
-		/* Mark inner mbuf as get */
-		RTE_MEMPOOL_CHECK_COOKIES(inner->pool, (void **)&inner, 1, 1);
-
-		/* Return inner mbuf */
-		return inner;
 	}
 
-	/* Return same mbuf as it is not a decrypted pkt */
-	return mbuf;
+	/* Mark inner mbuf as get */
+	RTE_MEMPOOL_CHECK_COOKIES(inner->pool, (void **)&inner, 1, 1);
 }
 #endif
 
@@ -1039,6 +1003,14 @@ nix_qinq_update(const uint64_t w2, uint64_t ol_flags, struct rte_mbuf *mbuf)
 	return ol_flags;
 }
 
+#define NIX_PUSH_META_TO_FREE(_mbuf, _laddr, _loff_p)                          \
+	do {                                                                   \
+		*(uint64_t *)((_laddr) + (*(_loff_p) << 3)) = (uint64_t)_mbuf; \
+		*(_loff_p) = *(_loff_p) + 1;                                   \
+		/* Mark meta mbuf as put */                                    \
+		RTE_MEMPOOL_CHECK_COOKIES(_mbuf->pool, (void **)&_mbuf, 1, 0); \
+	} while (0)
+
 static __rte_always_inline uint16_t
 cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 			   const uint16_t flags, void *lookup_mem,
@@ -1328,10 +1300,46 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 
 		/* Translate meta to mbuf */
 		if (flags & NIX_RX_OFFLOAD_SECURITY_F) {
-			uint64_t cq0_w5 = *(uint64_t *)(cq0 + CQE_SZ(0) + 40);
-			uint64_t cq1_w5 = *(uint64_t *)(cq0 + CQE_SZ(1) + 40);
-			uint64_t cq2_w5 = *(uint64_t *)(cq0 + CQE_SZ(2) + 40);
-			uint64_t cq3_w5 = *(uint64_t *)(cq0 + CQE_SZ(3) + 40);
+			uint64_t cq0_w5 = *CQE_PTR_OFF(cq0, 0, 40, flags);
+			uint64_t cq1_w5 = *CQE_PTR_OFF(cq0, 1, 40, flags);
+			uint64_t cq2_w5 = *CQE_PTR_OFF(cq0, 2, 40, flags);
+			uint64_t cq3_w5 = *CQE_PTR_OFF(cq0, 3, 40, flags);
+			uintptr_t cpth0 = (uintptr_t)mbuf0 + d_off;
+			uintptr_t cpth1 = (uintptr_t)mbuf1 + d_off;
+			uintptr_t cpth2 = (uintptr_t)mbuf2 + d_off;
+			uintptr_t cpth3 = (uintptr_t)mbuf3 + d_off;
+
+			uint64x2_t inner0, inner1, inner2, inner3;
+			uint64x2_t wqe01, wqe23, sa01, sa23;
+
+			inner0 = vld1q_u64((const uint64_t *)cpth0);
+			inner1 = vld1q_u64((const uint64_t *)cpth1);
+			inner2 = vld1q_u64((const uint64_t *)cpth2);
+			inner3 = vld1q_u64((const uint64_t *)cpth3);
+
+			/* Extract and reverse wqe pointers */
+			wqe01 = vzip2q_u64(inner0, inner1);
+			wqe23 = vzip2q_u64(inner2, inner3);
+			wqe01 = vrev64q_u8(wqe01);
+			wqe23 = vrev64q_u8(wqe23);
+			/* Adjust wqe pointers to point to mbuf */
+			wqe01 = vsubq_u64(wqe01,
+					  vdupq_n_u64(sizeof(struct rte_mbuf)));
+			wqe23 = vsubq_u64(wqe23,
+					  vdupq_n_u64(sizeof(struct rte_mbuf)));
+
+			/* Extract sa idx from cookie area and add to sa_base */
+			sa01 = vzip1q_u64(inner0, inner1);
+			sa23 = vzip1q_u64(inner2, inner3);
+
+			sa01 = vshrq_n_u64(sa01, 32);
+			sa23 = vshrq_n_u64(sa23, 32);
+			sa01 = vshlq_n_u64(sa01,
+					   ROC_NIX_INL_OT_IPSEC_INB_SA_SZ_LOG2);
+			sa23 = vshlq_n_u64(sa23,
+					   ROC_NIX_INL_OT_IPSEC_INB_SA_SZ_LOG2);
+			sa01 = vaddq_u64(sa01, vdupq_n_u64(sa_base));
+			sa23 = vaddq_u64(sa23, vdupq_n_u64(sa_base));
 
 			/* Initialize rearm data when reassembly is enabled as
 			 * data offset might change.
@@ -1344,25 +1352,61 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 			}
 
 			/* Checksum ol_flags will be cleared if mbuf is meta */
-			mbuf0 = nix_sec_meta_to_mbuf(cq0_w1, cq0_w5, sa_base, laddr,
-						     &loff, mbuf0, d_off, &f0,
-						     &ol_flags0, flags, &rearm0);
-			mbuf01 = vsetq_lane_u64((uint64_t)mbuf0, mbuf01, 0);
+			if (cq0_w1 & BIT(11)) {
+				uintptr_t wqe = vgetq_lane_u64(wqe01, 0);
+				uintptr_t sa = vgetq_lane_u64(sa01, 0);
 
-			mbuf1 = nix_sec_meta_to_mbuf(cq1_w1, cq1_w5, sa_base, laddr,
-						     &loff, mbuf1, d_off, &f1,
-						     &ol_flags1, flags, &rearm1);
-			mbuf01 = vsetq_lane_u64((uint64_t)mbuf1, mbuf01, 1);
+				/* Free meta to aura */
+				NIX_PUSH_META_TO_FREE(mbuf0, laddr, &loff);
+				mbuf01 = vsetq_lane_u64(wqe, mbuf01, 0);
+				mbuf0 = (struct rte_mbuf *)wqe;
 
-			mbuf2 = nix_sec_meta_to_mbuf(cq2_w1, cq2_w5, sa_base, laddr,
-						     &loff, mbuf2, d_off, &f2,
-						     &ol_flags2, flags, &rearm2);
-			mbuf23 = vsetq_lane_u64((uint64_t)mbuf2, mbuf23, 0);
+				nix_sec_meta_to_mbuf(cq0_w1, cq0_w5, sa, cpth0,
+						     mbuf0, &f0, &ol_flags0,
+						     flags, &rearm0);
+			}
 
-			mbuf3 = nix_sec_meta_to_mbuf(cq3_w1, cq3_w5, sa_base, laddr,
-						     &loff, mbuf3, d_off, &f3,
-						     &ol_flags3, flags, &rearm3);
-			mbuf23 = vsetq_lane_u64((uint64_t)mbuf3, mbuf23, 1);
+			if (cq1_w1 & BIT(11)) {
+				uintptr_t wqe = vgetq_lane_u64(wqe01, 1);
+				uintptr_t sa = vgetq_lane_u64(sa01, 1);
+
+				/* Free meta to aura */
+				NIX_PUSH_META_TO_FREE(mbuf1, laddr, &loff);
+				mbuf01 = vsetq_lane_u64(wqe, mbuf01, 1);
+				mbuf1 = (struct rte_mbuf *)wqe;
+
+				nix_sec_meta_to_mbuf(cq1_w1, cq1_w5, sa, cpth1,
+						     mbuf1, &f1, &ol_flags1,
+						     flags, &rearm1);
+			}
+
+			if (cq2_w1 & BIT(11)) {
+				uintptr_t wqe = vgetq_lane_u64(wqe23, 0);
+				uintptr_t sa = vgetq_lane_u64(sa23, 0);
+
+				/* Free meta to aura */
+				NIX_PUSH_META_TO_FREE(mbuf2, laddr, &loff);
+				mbuf23 = vsetq_lane_u64(wqe, mbuf23, 0);
+				mbuf2 = (struct rte_mbuf *)wqe;
+
+				nix_sec_meta_to_mbuf(cq2_w1, cq2_w5, sa, cpth2,
+						     mbuf2, &f2, &ol_flags2,
+						     flags, &rearm2);
+			}
+
+			if (cq3_w1 & BIT(11)) {
+				uintptr_t wqe = vgetq_lane_u64(wqe23, 1);
+				uintptr_t sa = vgetq_lane_u64(sa23, 1);
+
+				/* Free meta to aura */
+				NIX_PUSH_META_TO_FREE(mbuf3, laddr, &loff);
+				mbuf23 = vsetq_lane_u64(wqe, mbuf23, 1);
+				mbuf3 = (struct rte_mbuf *)wqe;
+
+				nix_sec_meta_to_mbuf(cq3_w1, cq3_w5, sa, cpth3,
+						     mbuf3, &f3, &ol_flags3,
+						     flags, &rearm3);
+			}
 		}
 
 		if (flags & NIX_RX_OFFLOAD_VLAN_STRIP_F) {
