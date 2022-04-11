@@ -79,7 +79,7 @@ def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_r
 					cd ${src_dir}/
 					export TARGET_BOARD=${target_board}
 					export GENERATOR_BOARD=${gen_board}
-					timeout --foreground -v -s 3 -k 30 60m \
+					timeout --foreground -v -s 3 -k 30 90m \
 						./marvell-ci/test/test.sh \
 						-t ${src_dir}/marvell-ci/test/env/${test_env} \
 						-r ${build_dir} \

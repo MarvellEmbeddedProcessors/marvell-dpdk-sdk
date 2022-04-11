@@ -10,7 +10,7 @@ REMOTE="ssh -o ServerAliveInterval=30 $TARGET_BOARD -n"
 REMOTE_DIR=${REMOTE_DIR:-/tmp/dpdk}
 PROJROOT=${PROJROOT:-$PWD}
 BUILD_DIR=${BUILD_DIR:-$PWD/build}
-TMO=30m
+TMO=60m
 
 function test_init()
 {
