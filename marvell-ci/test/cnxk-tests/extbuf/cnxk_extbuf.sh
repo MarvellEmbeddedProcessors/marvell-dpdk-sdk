@@ -15,11 +15,12 @@ TX_LOG=tx.txt
 rm -rf $RX_LOG
 rm -rf $TX_LOG
 
-timeout 15 stdbuf -o 0 ./cnxk-extbuf \
+stdbuf -o 0 ./cnxk-extbuf \
 	--file-prefix rx \
 	-c 0x3 \
 	-a 0002:01:00.2 \
 	-- \
+	--max-pkts 100 \
 	--rx > $RX_LOG &
 
 echo "================================"
@@ -40,7 +41,7 @@ echo "================================"
 	-c 0x5 \
 	-a 0002:01:00.1 \
 	-- \
-	--max-tx 100 > $TX_LOG
+	--max-pkts 100 > $TX_LOG
 
 echo "================================"
 echo "Waiting for RX to complete"
