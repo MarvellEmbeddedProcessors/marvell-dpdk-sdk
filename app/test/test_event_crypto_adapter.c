@@ -215,8 +215,8 @@ send_recv_ev(struct rte_event *ev)
 #endif
 		rte_pktmbuf_free(op->sym->m_src);
 	} else {
-#if PKT_TRACE
 		uint8_t *data_expected = NULL, *data_received = NULL;
+		uint32_t data_size;
 
 		data_expected = modex_test_case.reminder.data;
 		data_received = op->asym->modex.result.data;
@@ -224,7 +224,6 @@ send_recv_ev(struct rte_event *ev)
 		ret = memcmp(data_expected, data_received, data_size);
 		TEST_ASSERT_EQUAL(ret, 0,
 				"Data mismatch for asym crypto adapter\n");
-#endif
 		rte_free(op->asym->modex.result.data);
 	}
 	rte_crypto_op_free(op);
@@ -315,8 +314,10 @@ test_op_forward_mode(uint8_t session_less)
 			m_data.request_info.queue_pair_id =
 				request_info.queue_pair_id;
 			m_data.response_info.event = response_info.event;
-			rte_cryptodev_sym_session_set_user_data(sess,
-						&m_data, sizeof(m_data));
+			rte_cryptodev_session_event_mdata_set(TEST_CDEV_ID,
+					sess, RTE_CRYPTO_OP_TYPE_SYMMETRIC,
+					RTE_CRYPTO_OP_WITH_SESSION,
+					&m_data, sizeof(m_data));
 		}
 
 		rte_crypto_op_attach_sym_session(op, sess);
@@ -518,8 +519,10 @@ test_asym_op_forward_mode(uint8_t session_less)
 			m_data.request_info.queue_pair_id =
 				request_info.queue_pair_id;
 			m_data.response_info.event = response_info.event;
-			rte_cryptodev_asym_session_set_user_data(sess,
-						&m_data, sizeof(m_data));
+			rte_cryptodev_session_event_mdata_set(TEST_CDEV_ID,
+					sess, RTE_CRYPTO_OP_TYPE_ASYMMETRIC,
+					RTE_CRYPTO_OP_WITH_SESSION,
+					&m_data, sizeof(m_data));
 		}
 
 		rte_crypto_op_attach_asym_session(op, sess);
@@ -624,8 +627,8 @@ send_op_recv_ev(struct rte_crypto_op *op)
 #endif
 		rte_pktmbuf_free(recv_op->sym->m_src);
 	} else {
-#if PKT_TRACE
 		uint8_t *data_expected = NULL, *data_received = NULL;
+		uint32_t data_size;
 
 		data_expected = modex_test_case.reminder.data;
 		data_received = op->asym->modex.result.data;
@@ -633,7 +636,6 @@ send_op_recv_ev(struct rte_crypto_op *op)
 		ret = memcmp(data_expected, data_received, data_size);
 		TEST_ASSERT_EQUAL(ret, 0,
 				"Data mismatch for asym crypto adapter\n");
-#endif
 		rte_free(op->asym->modex.result.data);
 	}
 	rte_crypto_op_free(recv_op);
@@ -684,8 +686,10 @@ test_op_new_mode(uint8_t session_less)
 		if (cap & RTE_EVENT_CRYPTO_ADAPTER_CAP_SESSION_PRIVATE_DATA) {
 			/* Fill in private user data information */
 			m_data.response_info.event = response_info.event;
-			rte_cryptodev_sym_session_set_user_data(sess,
-						&m_data, sizeof(m_data));
+			rte_cryptodev_session_event_mdata_set(TEST_CDEV_ID,
+					sess, RTE_CRYPTO_OP_TYPE_SYMMETRIC,
+					RTE_CRYPTO_OP_WITH_SESSION,
+					&m_data, sizeof(m_data));
 		}
 		ret = rte_cryptodev_sym_session_init(TEST_CDEV_ID, sess,
 				&cipher_xform, params.session_priv_mpool);
@@ -843,8 +847,10 @@ test_asym_op_new_mode(uint8_t session_less)
 		if (cap & RTE_EVENT_CRYPTO_ADAPTER_CAP_SESSION_PRIVATE_DATA) {
 			/* Fill in private user data information */
 			m_data.response_info.event = response_info.event;
-			rte_cryptodev_asym_session_set_user_data(sess,
-						&m_data, sizeof(m_data));
+			rte_cryptodev_session_event_mdata_set(TEST_CDEV_ID,
+					sess, RTE_CRYPTO_OP_TYPE_ASYMMETRIC,
+					RTE_CRYPTO_OP_WITH_SESSION,
+					&m_data, sizeof(m_data));
 		}
 		ret = rte_cryptodev_asym_session_init(TEST_CDEV_ID, sess,
 				&xform_tc, params.session_priv_mpool);
