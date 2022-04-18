@@ -24,7 +24,7 @@
 #include "telemetry_internal.h"
 
 #define MAX_CMD_LEN 56
-#define MAX_OUTPUT_LEN (1024 * 16)
+#define MAX_OUTPUT_LEN (1024 * 64)
 #define MAX_CONNECTIONS 10
 
 #ifndef RTE_EXEC_ENV_WINDOWS
