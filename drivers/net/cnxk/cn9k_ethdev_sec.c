@@ -196,8 +196,8 @@ cn9k_eth_sec_session_create(void *device,
 		/* Get Inbound SA from NIX_RX_IPSEC_SA_BASE. Assume no inline
 		 * device always for CN9K.
 		 */
-		inb_sa = (struct roc_onf_ipsec_inb_sa *)roc_nix_inl_inb_sa_get(
-			nix, false, ipsec->spi);
+		inb_sa = (struct roc_onf_ipsec_inb_sa *)
+			 roc_nix_inl_inb_sa_get(nix, false, ipsec->spi);
 		if (!inb_sa) {
 			snprintf(tbuf, sizeof(tbuf),
 				 "Failed to create ingress sa");

@@ -415,8 +415,8 @@ cn10k_eth_sec_sso_work_cb(uint64_t *gw, void *args, uint32_t soft_exp_event)
 				desc.subtype =
 					RTE_ETH_EVENT_IPSEC_SA_BYTE_EXPIRY;
 			eth_dev = &rte_eth_devices[soft_exp_event >> 8];
-			rte_eth_dev_callback_process(
-				eth_dev, RTE_ETH_EVENT_IPSEC, &desc);
+			rte_eth_dev_callback_process(eth_dev,
+				RTE_ETH_EVENT_IPSEC, &desc);
 		} else {
 			plt_err("Unknown event gw[0] = 0x%016lx, gw[1] = 0x%016lx",
 				gw[0], gw[1]);

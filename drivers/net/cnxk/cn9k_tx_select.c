@@ -26,36 +26,36 @@ cn9k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 
 	const eth_tx_burst_t nix_eth_tx_burst[NIX_TX_OFFLOAD_MAX] = {
-#define T(name, sz, flags) [flags] = cn9k_nix_xmit_pkts_##name,
+#define T(name, sz, flags)[flags] = cn9k_nix_xmit_pkts_##name,
 		NIX_TX_FASTPATH_MODES
 #undef T
 	};
 
 	const eth_tx_burst_t nix_eth_tx_burst_mseg[NIX_TX_OFFLOAD_MAX] = {
-#define T(name, sz, flags) [flags] = cn9k_nix_xmit_pkts_mseg_##name,
+#define T(name, sz, flags)[flags] = cn9k_nix_xmit_pkts_mseg_##name,
 		NIX_TX_FASTPATH_MODES
 #undef T
 	};
 
 	const eth_tx_burst_t nix_eth_tx_vec_burst[NIX_TX_OFFLOAD_MAX] = {
-#define T(name, sz, flags) [flags] = cn9k_nix_xmit_pkts_vec_##name,
+#define T(name, sz, flags)[flags] = cn9k_nix_xmit_pkts_vec_##name,
 		NIX_TX_FASTPATH_MODES
 #undef T
 	};
 
 	const eth_tx_burst_t nix_eth_tx_vec_burst_mseg[NIX_TX_OFFLOAD_MAX] = {
-#define T(name, sz, flags) [flags] = cn9k_nix_xmit_pkts_vec_mseg_##name,
+#define T(name, sz, flags)[flags] = cn9k_nix_xmit_pkts_vec_mseg_##name,
 		NIX_TX_FASTPATH_MODES
 #undef T
 	};
 
 	if (dev->scalar_ena || dev->tx_mark) {
 		pick_tx_func(eth_dev, nix_eth_tx_burst);
-		if (dev->tx_offloads & DEV_TX_OFFLOAD_MULTI_SEGS)
+		if (dev->tx_offloads & RTE_ETH_TX_OFFLOAD_MULTI_SEGS)
 			pick_tx_func(eth_dev, nix_eth_tx_burst_mseg);
 	} else {
 		pick_tx_func(eth_dev, nix_eth_tx_vec_burst);
-		if (dev->tx_offloads & DEV_TX_OFFLOAD_MULTI_SEGS)
+		if (dev->tx_offloads & RTE_ETH_TX_OFFLOAD_MULTI_SEGS)
 			pick_tx_func(eth_dev, nix_eth_tx_vec_burst_mseg);
 	}
 

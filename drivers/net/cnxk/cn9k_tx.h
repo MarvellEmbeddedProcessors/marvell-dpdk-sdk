@@ -358,7 +358,7 @@ cn9k_nix_xmit_prepare_tstamp(struct cn9k_eth_txq *txq, uint64_t *cmd,
 		/* Packets for which PKT_TX_IEEE1588_TMST is not set, tx tstamp
 		 * should not be recorded, hence changing the alg type to
 		 * NIX_SENDMEMALG_SUB and also changing send mem addr field to
-		 * next 8 bytes as it corrpt the actual tx tstamp registered
+		 * next 8 bytes as it corrupts the actual Tx tstamp registered
 		 * address.
 		 */
 		send_mem->w0.cn9k.subdc = NIX_SUBDC_MEM;
@@ -366,7 +366,7 @@ cn9k_nix_xmit_prepare_tstamp(struct cn9k_eth_txq *txq, uint64_t *cmd,
 			NIX_SENDMEMALG_SETTSTMP + (is_ol_tstamp << 3);
 
 		send_mem->addr = (rte_iova_t)(((uint64_t *)txq->ts_mem) +
-					      (is_ol_tstamp));
+				(is_ol_tstamp));
 	}
 }
 
@@ -1611,7 +1611,7 @@ cn9k_nix_xmit_pkts_vector(void *tx_queue, struct rte_mbuf **tx_pkts,
 		}
 
 		if (flags & NIX_TX_OFFLOAD_TSTAMP_F) {
-			/* Tx ol_flag for timestam. */
+			/* Tx ol_flag for timestamp. */
 			const uint64x2_t olf = {RTE_MBUF_F_TX_IEEE1588_TMST,
 						RTE_MBUF_F_TX_IEEE1588_TMST};
 			/* Set send mem alg to SUB. */
@@ -2099,13 +2099,10 @@ cn9k_nix_xmit_pkts_vector(void *tx_queue, struct rte_mbuf **tx_pkts,
 #define T(name, sz, flags)                                                     \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_xmit_pkts_##name(           \
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_xmit_pkts_mseg_##name(      \
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_xmit_pkts_vec_##name(       \
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_xmit_pkts_vec_mseg_##name(  \
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts);
 
@@ -2117,10 +2114,9 @@ NIX_TX_FASTPATH_MODES
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts)      \
 	{                                                                      \
 		uint64_t cmd[sz];                                              \
-                                                                               \
 		/* For TSO inner checksum is a must */                         \
-		if (((flags)&NIX_TX_OFFLOAD_TSO_F) &&                          \
-		    !((flags)&NIX_TX_OFFLOAD_L3_L4_CSUM_F))                    \
+		if (((flags) & NIX_TX_OFFLOAD_TSO_F) &&                        \
+		    !((flags) & NIX_TX_OFFLOAD_L3_L4_CSUM_F))                  \
 			return 0;                                              \
 		return cn9k_nix_xmit_pkts(tx_queue, tx_pkts, pkts, cmd,        \
 					  flags);                              \
@@ -2131,10 +2127,9 @@ NIX_TX_FASTPATH_MODES
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts)      \
 	{                                                                      \
 		uint64_t cmd[(sz) + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];           \
-                                                                               \
 		/* For TSO inner checksum is a must */                         \
-		if (((flags)&NIX_TX_OFFLOAD_TSO_F) &&                          \
-		    !((flags)&NIX_TX_OFFLOAD_L3_L4_CSUM_F))                    \
+		if (((flags) & NIX_TX_OFFLOAD_TSO_F) &&                        \
+		    !((flags) & NIX_TX_OFFLOAD_L3_L4_CSUM_F))                  \
 			return 0;                                              \
 		return cn9k_nix_xmit_pkts_mseg(tx_queue, tx_pkts, pkts, cmd,   \
 					       (flags) | NIX_TX_MULTI_SEG_F);  \
@@ -2145,10 +2140,9 @@ NIX_TX_FASTPATH_MODES
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts)      \
 	{                                                                      \
 		uint64_t cmd[sz];                                              \
-                                                                               \
 		/* For TSO inner checksum is a must */                         \
-		if (((flags)&NIX_TX_OFFLOAD_TSO_F) &&                          \
-		    !((flags)&NIX_TX_OFFLOAD_L3_L4_CSUM_F))                    \
+		if (((flags) & NIX_TX_OFFLOAD_TSO_F) &&                        \
+		    !((flags) & NIX_TX_OFFLOAD_L3_L4_CSUM_F))                  \
 			return 0;                                              \
 		return cn9k_nix_xmit_pkts_vector(tx_queue, tx_pkts, pkts, cmd, \
 						 (flags));                     \
@@ -2159,10 +2153,9 @@ NIX_TX_FASTPATH_MODES
 		void *tx_queue, struct rte_mbuf **tx_pkts, uint16_t pkts)      \
 	{                                                                      \
 		uint64_t cmd[(sz) + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];           \
-                                                                               \
 		/* For TSO inner checksum is a must */                         \
-		if (((flags)&NIX_TX_OFFLOAD_TSO_F) &&                          \
-		    !((flags)&NIX_TX_OFFLOAD_L3_L4_CSUM_F))                    \
+		if (((flags) & NIX_TX_OFFLOAD_TSO_F) &&                        \
+		    !((flags) & NIX_TX_OFFLOAD_L3_L4_CSUM_F))                  \
 			return 0;                                              \
 		return cn9k_nix_xmit_pkts_vector(tx_queue, tx_pkts, pkts, cmd, \
 						 (flags) |                     \

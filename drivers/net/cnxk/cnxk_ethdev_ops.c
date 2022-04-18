@@ -69,7 +69,6 @@ cnxk_nix_info_get(struct rte_eth_dev *eth_dev, struct rte_eth_dev_info *devinfo)
 	devinfo->dev_capa = RTE_ETH_DEV_CAPA_RUNTIME_RX_QUEUE_SETUP |
 			    RTE_ETH_DEV_CAPA_RUNTIME_TX_QUEUE_SETUP |
 			    RTE_ETH_DEV_CAPA_FLOW_RULE_KEEP;
-
 	return 0;
 }
 
@@ -341,8 +340,10 @@ int
 cnxk_nix_priority_flow_ctrl_queue_config(struct rte_eth_dev *eth_dev,
 					 struct rte_eth_pfc_queue_conf *pfc_conf)
 {
-	struct cnxk_pfc_cfg conf = {0};
+	struct cnxk_pfc_cfg conf;
 	int rc;
+
+	memset(&conf, 0, sizeof(struct cnxk_pfc_cfg));
 
 	conf.fc_cfg.mode = pfc_conf->mode;
 
@@ -1065,8 +1066,8 @@ nix_priority_flow_ctrl_configure(struct rte_eth_dev *eth_dev,
 	}
 
 	mode = conf->fc_cfg.mode;
-	rx_pause = (mode == RTE_FC_FULL) || (mode == RTE_FC_RX_PAUSE);
-	tx_pause = (mode == RTE_FC_FULL) || (mode == RTE_FC_TX_PAUSE);
+	rx_pause = (mode == RTE_ETH_FC_FULL) || (mode == RTE_ETH_FC_RX_PAUSE);
+	tx_pause = (mode == RTE_ETH_FC_FULL) || (mode == RTE_ETH_FC_TX_PAUSE);
 
 	if (data->rx_queues == NULL || data->tx_queues == NULL) {
 		rc = 0;

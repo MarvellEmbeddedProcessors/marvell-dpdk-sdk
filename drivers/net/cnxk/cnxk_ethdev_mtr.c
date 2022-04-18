@@ -197,8 +197,8 @@ cnxk_nix_mtr_capabilities_get(struct rte_eth_dev *dev,
 
 	if (!capa)
 		return -rte_mtr_error_set(error, EINVAL,
-					  RTE_MTR_ERROR_TYPE_MTR_PARAMS, NULL,
-					  "NULL input parameter");
+				RTE_MTR_ERROR_TYPE_MTR_PARAMS, NULL,
+				"NULL input parameter");
 
 	rc = roc_nix_bpf_count_get(nix, lvl_mask, count);
 	if (rc)
@@ -294,7 +294,7 @@ cnxk_nix_mtr_profile_delete(struct rte_eth_dev *eth_dev, uint32_t profile_id,
 static int
 update_mtr_err(uint32_t act_color, struct rte_mtr_error *error, bool action)
 {
-	const char *str;
+	const char *str = NULL;
 	switch (act_color) {
 	case RTE_COLOR_GREEN:
 		if (action) {

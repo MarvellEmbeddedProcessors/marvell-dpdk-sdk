@@ -465,7 +465,6 @@ cn10k_nix_timesync_read_tx_timestamp(struct rte_eth_dev *eth_dev,
 	return 0;
 }
 
-
 static int
 cn10k_nix_dev_start(struct rte_eth_dev *eth_dev)
 {
@@ -514,6 +513,55 @@ cn10k_nix_rx_metadata_negotiate(struct rte_eth_dev *eth_dev, uint64_t *features)
 	cn10k_eth_set_rx_function(eth_dev);
 
 	return 0;
+}
+
+static int
+cn10k_nix_reassembly_capability_get(struct rte_eth_dev *eth_dev,
+		struct rte_eth_ip_reassembly_params *reassembly_capa)
+{
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+	int rc = -ENOTSUP;
+	RTE_SET_USED(eth_dev);
+
+	if (dev->rx_offloads & RTE_ETH_RX_OFFLOAD_SECURITY) {
+		reassembly_capa->timeout_ms = 60 * 1000;
+		reassembly_capa->max_frags = 4;
+		reassembly_capa->flags = RTE_ETH_DEV_REASSEMBLY_F_IPV4 |
+					 RTE_ETH_DEV_REASSEMBLY_F_IPV6;
+		rc = 0;
+	}
+
+	return rc;
+}
+
+static int
+cn10k_nix_reassembly_conf_get(struct rte_eth_dev *eth_dev,
+		struct rte_eth_ip_reassembly_params *conf)
+{
+	RTE_SET_USED(eth_dev);
+	RTE_SET_USED(conf);
+	return -ENOTSUP;
+}
+
+static int
+cn10k_nix_reassembly_conf_set(struct rte_eth_dev *eth_dev,
+		const struct rte_eth_ip_reassembly_params *conf)
+{
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+	int rc = 0;
+
+	if (!conf->flags) {
+		/* Clear offload flags on disable */
+		dev->rx_offload_flags &= ~NIX_RX_REAS_F;
+		return 0;
+	}
+
+	rc = roc_nix_reassembly_configure(conf->timeout_ms,
+				conf->max_frags);
+	if (!rc && dev->rx_offloads & RTE_ETH_RX_OFFLOAD_SECURITY)
+		dev->rx_offload_flags |= NIX_RX_REAS_F;
+
+	return rc;
 }
 
 static int
@@ -625,54 +673,6 @@ cn10k_nix_tm_mark_ip_dscp(struct rte_eth_dev *eth_dev, int mark_green,
 	}
 	cn10k_eth_set_tx_function(eth_dev);
 exit:
-	return rc;
-}
-
-static int
-cn10k_nix_reassembly_capability_get(struct rte_eth_dev *eth_dev,
-		struct rte_eth_ip_reassembly_params *reassembly_capa)
-{
-	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-	int rc = -ENOTSUP;
-	RTE_SET_USED(eth_dev);
-
-	if (dev->rx_offloads & DEV_RX_OFFLOAD_SECURITY) {
-		reassembly_capa->timeout_ms = 60 * 1000;
-		reassembly_capa->max_frags = 4;
-		reassembly_capa->flags = RTE_ETH_DEV_REASSEMBLY_F_IPV4 |
-					 RTE_ETH_DEV_REASSEMBLY_F_IPV6;
-		rc = 0;
-	}
-
-	return rc;
-}
-
-static int
-cn10k_nix_reassembly_conf_get(struct rte_eth_dev *eth_dev,
-		struct rte_eth_ip_reassembly_params *conf)
-{
-	RTE_SET_USED(eth_dev);
-	RTE_SET_USED(conf);
-	return -ENOTSUP;
-}
-
-static int
-cn10k_nix_reassembly_conf_set(struct rte_eth_dev *eth_dev,
-		const struct rte_eth_ip_reassembly_params *conf)
-{
-	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-	int rc = 0;
-
-	if (!conf->flags) {
-		/* Clear offload flags on disable */
-		dev->rx_offload_flags &= ~NIX_RX_REAS_F;
-		return 0;
-	}
-	rc = roc_nix_reassembly_configure(conf->timeout_ms,
-				conf->max_frags);
-	if (!rc && dev->rx_offloads & DEV_RX_OFFLOAD_SECURITY)
-		dev->rx_offload_flags |= NIX_RX_REAS_F;
-
 	return rc;
 }
 

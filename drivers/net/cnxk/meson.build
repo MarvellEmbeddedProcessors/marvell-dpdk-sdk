@@ -182,7 +182,6 @@ sources += files(
         'tx/cn10k/tx_112_127_vec_mseg.c',
 )
 
-
 deps += ['bus_pci', 'cryptodev', 'eventdev', 'security']
 deps += ['common_cnxk', 'mempool_cnxk']
 

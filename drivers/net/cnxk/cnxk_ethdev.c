@@ -189,7 +189,7 @@ nix_meter_fini(struct cnxk_eth_dev *dev)
 	struct roc_nix *nix = &dev->nix;
 	struct roc_nix_rq *rq;
 	uint32_t i;
-	int rc;
+	int rc = 0;
 
 	RTE_TAILQ_FOREACH_SAFE(mtr, fms, next, next_mtr) {
 		for (i = 0; i < mtr->rq_num; i++) {
@@ -963,10 +963,8 @@ tx_queue_release:
 	for (i = 0; i < eth_dev->data->nb_tx_queues; i++)
 		dev_ops->tx_queue_release(eth_dev, i);
 fail:
-	if (tx_qconf)
-		free(tx_qconf);
-	if (rx_qconf)
-		free(rx_qconf);
+	free(tx_qconf);
+	free(rx_qconf);
 
 	return rc;
 }
@@ -1788,9 +1786,9 @@ cnxk_eth_dev_uninit(struct rte_eth_dev *eth_dev, bool reset)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 	const struct eth_dev_ops *dev_ops = eth_dev->dev_ops;
-	struct rte_eth_pfc_queue_conf pfc_conf = {0};
-	struct rte_eth_fc_conf fc_conf = {0};
+	struct rte_eth_pfc_queue_conf pfc_conf;
 	struct roc_nix *nix = &dev->nix;
+	struct rte_eth_fc_conf fc_conf;
 	int rc, i;
 
 	/* Disable switch hdr pkind */
@@ -1809,6 +1807,8 @@ cnxk_eth_dev_uninit(struct rte_eth_dev *eth_dev, bool reset)
 	roc_nix_npc_rx_ena_dis(nix, false);
 
 	/* Restore 802.3 Flow control configuration */
+	memset(&pfc_conf, 0, sizeof(struct rte_eth_pfc_queue_conf));
+	memset(&fc_conf, 0, sizeof(struct rte_eth_fc_conf));
 	fc_conf.mode = RTE_ETH_FC_NONE;
 	rc = cnxk_nix_flow_ctrl_set(eth_dev, &fc_conf);
 

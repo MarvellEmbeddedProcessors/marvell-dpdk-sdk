@@ -1063,13 +1063,10 @@ cn9k_nix_recv_pkts_vector(void *rx_queue, struct rte_mbuf **rx_pkts,
 #define R(name, flags)                                                         \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_recv_pkts_##name(           \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_recv_pkts_mseg_##name(      \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_recv_pkts_vec_##name(       \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);     \
-                                                                               \
 	uint16_t __rte_noinline __rte_hot cn9k_nix_recv_pkts_vec_mseg_##name(  \
 		void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts);
 
