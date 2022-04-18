@@ -14,6 +14,15 @@ run_command(copy_data, 'cnxk_fwd_gen.sh')
 run_command(copy_data, 'ref_numbers/rclk2200_sclk1100.cn96.testpmd')
 run_command(copy_data, 'ref_numbers/rclk2200_sclk1100.cn96.l2fwd')
 run_command(copy_data, 'ref_numbers/rclk2200_sclk1100.cn96.l3fwd')
+run_command(copy_data, 'ref_numbers/rclk2000_sclk1000.cn106.testpmd')
+run_command(copy_data, 'ref_numbers/rclk2000_sclk1000.cn106.l2fwd')
+run_command(copy_data, 'ref_numbers/rclk2000_sclk1000.cn106.l3fwd')
+run_command(copy_data, 'ref_numbers/rclk2200_sclk1000.cn106.testpmd')
+run_command(copy_data, 'ref_numbers/rclk2200_sclk1000.cn106.l2fwd')
+run_command(copy_data, 'ref_numbers/rclk2200_sclk1000.cn106.l3fwd')
+run_command(copy_data, 'ref_numbers/rclk2500_sclk1000.cn106.testpmd')
+run_command(copy_data, 'ref_numbers/rclk2500_sclk1000.cn106.l2fwd')
+run_command(copy_data, 'ref_numbers/rclk2500_sclk1000.cn106.l3fwd')
 # Add the meson test
 test(test_name,
     cnxk_test_script_wrapper,

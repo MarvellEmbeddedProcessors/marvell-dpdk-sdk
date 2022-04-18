@@ -105,11 +105,17 @@ trap "sig_handler QUIT" QUIT
 trap "sig_handler EXIT" EXIT
 
 # Get CPU PART NUMBER
-PARTNUM=$(grep -m 1 'CPU part' /proc/cpuinfo | grep -o '0x0[a-b][0-3]$')
+PARTNUM_106XX=0xd49
+PARTNUM=$(grep -m 1 'CPU part' /proc/cpuinfo | awk -F': ' '{print $2}')
 if [[ $PARTNUM == $PARTNUM_98XX ]]; then
 	HW="cn98"
 else
-	HW="cn96"
+	if [[ $PARTNUM == $PARTNUM_106XX ]]; then
+		HW="cn106"
+		TOLERANCE=$(echo "$TOLERANCE - 3" | bc)
+	else
+		HW="cn96"
+	fi
 fi
 
 # get chip number and RCLK
@@ -121,7 +127,12 @@ function get_system_info()
 	local div=1000000
 
 	sysclk_dir="/sys/kernel/debug/clk"
-	fp_rclk="$sysclk_dir/rclk/clk_rate"
+	if [[ $PARTNUM == $PARTNUM_106XX ]]; then
+		fp_rclk="$sysclk_dir/coreclk/clk_rate"
+	else
+		fp_rclk="$sysclk_dir/rclk/clk_rate"
+	fi
+
 	fp_sclk="$sysclk_dir/sclk/clk_rate"
 
 	if $SUDO test -f "$fp_rclk"; then
@@ -196,14 +207,16 @@ testpmd_pps_local() {
 	echo "show port stats all" >>$FWD_PERF_IN
 	sleep 1
 	echo "show port stats all" >>$FWD_PERF_IN
+	sleep 1
+	echo "show port stats all" >>$FWD_PERF_IN
 	while ! (tail -n1 $FWD_PERF_OUT | grep -q "testpmd> $")
 	do
 		sleep 0.1
 		continue;
 	done
 
-	pps=`cat $FWD_PERF_OUT | tail -16 | \
-		grep "Rx-pps:" | awk -e '{ print $2 }'`
+	pps=`cat $FWD_PERF_OUT | \
+		grep "Rx-pps:" | awk -e '{print $2}' | tail -2`
 	for i in $pps
 	do
 		rx_pps=$((rx_pps + i))
