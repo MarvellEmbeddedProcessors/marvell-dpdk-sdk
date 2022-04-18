@@ -55,6 +55,7 @@
 #define ROC_NIX_INL_MAX_SOFT_EXP_RNGS                                          \
 	(PLT_MAX_ETHPORTS * ROC_NIX_SOFT_EXP_PER_PORT_MAX_RINGS)
 
+/* Reassembly configuration */
 #define ROC_NIX_INL_REAS_ACTIVE_LIMIT	  0xFFF
 #define ROC_NIX_INL_REAS_ACTIVE_THRESHOLD 10
 #define ROC_NIX_INL_REAS_ZOMBIE_LIMIT	  0xFFF

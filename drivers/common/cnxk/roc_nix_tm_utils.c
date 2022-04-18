@@ -253,7 +253,7 @@ nix_tm_shaper_rate_conv_exact(uint64_t value, uint64_t *exponent_p,
 
 /* With zero accuracy we will tune parameters as defined by HW,
  * non zero accuracy will keep the parameters close to lower values
- * and make sure long term shaper rate will not exceed requested rate.
+ * and make sure long-term shaper rate will not exceed the requested rate.
  */
 uint64_t
 nix_tm_shaper_rate_conv(uint64_t value, uint64_t *exponent_p,

@@ -5,7 +5,7 @@
 #include "roc_api.h"
 #include "roc_priv.h"
 
-uint32_t soft_exp_consumer_cnt = 0;
+uint32_t soft_exp_consumer_cnt;
 
 PLT_STATIC_ASSERT(ROC_NIX_INL_ONF_IPSEC_INB_SA_SZ ==
 		  1UL << ROC_NIX_INL_ONF_IPSEC_INB_SA_SZ_LOG2);
@@ -158,8 +158,6 @@ roc_nix_inl_inb_spi_range(struct roc_nix *roc_nix, bool inb_inl_dev,
 
 	inl_dev = idev->nix_inl_dev;
 	if (inb_inl_dev) {
-		if (inl_dev == NULL)
-			goto exit;
 		min = inl_dev->ipsec_in_min_spi;
 		max = inl_dev->ipsec_in_max_spi;
 		mask = inl_dev->inb_spi_mask;
