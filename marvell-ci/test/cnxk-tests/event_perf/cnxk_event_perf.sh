@@ -142,6 +142,7 @@ record_pps()
 			printf "$(exec_testpmd_cmd rx_pps)\n" >> $out_file
 			;;
 		dpdk-test-eventdev)
+			sleep 20 # avg need more time to stabilize
 			pps=$(sed -n "s/.\+ mpps avg \([0-9\.]\+\) mpps/\1/p" $test_log \
 				| sed "s/[^[:print:]].*//")
 			printf "$pps\n" >> $out_file
@@ -195,7 +196,7 @@ measure_test_perf()
 			exec_testpmd_cmd "start"
 		fi
 
-		sleep 15 # run test for 15 sec
+		sleep 10 # run test for 10 sec
 		record_pps $test_bin $test_log $out_file
 
 		if gen_needed $test_name; then

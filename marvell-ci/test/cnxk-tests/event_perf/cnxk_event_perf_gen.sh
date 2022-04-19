@@ -23,8 +23,10 @@ launch_testpmd()
 	local fwd_cores=$(($(grep -c ^processor /proc/cpuinfo) - 1))
 	testpmd_launch $PRFX \
 		"-l 0-$fwd_cores -a $IF0" \
-		"--nb-cores=$fwd_cores --rxq=$fwd_cores --txq=$fwd_cores --forward-mode=flowgen" \
+		"--nb-cores=$fwd_cores --rxq=$fwd_cores --txq=$fwd_cores \
+		--forward-mode=flowgen --flowgen-flows=100" \
 		</dev/null 2>/dev/null &
+	sleep 1
 	testpmd_cmd $PRFX "set flow_ctrl rx off 0"
 	testpmd_cmd $PRFX "set flow_ctrl tx off 0"
 
@@ -36,12 +38,12 @@ case $TESTPMD_OP in
 		;;
 	start)
 		testpmd_cmd $PRFX "start tx_first 64"
-		testpmd_cmd $PRFX "show port stats all"
 		;;
 	stop)
-		testpmd_cmd $PRFX "show port stats all"
 		testpmd_cmd $PRFX "stop";;
 	rx_pps)
+		testpmd_cmd $PRFX "show port stats all"
+		sleep 5
 		testpmd_cmd $PRFX "show port stats all"
 		val=`testpmd_log $PRFX | tail -4 | grep -ao 'Rx-pps: .*' \
 			| awk -e '{print $2}'`
