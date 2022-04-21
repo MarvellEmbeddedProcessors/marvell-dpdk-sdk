@@ -1244,14 +1244,6 @@ cperf_options_check(struct cperf_options *options)
 					" options: encrypt and generate.\n");
 			return -EINVAL;
 		}
-	} else if (options->op_type == CPERF_AUTH_THEN_CIPHER) {
-		if (options->cipher_op != RTE_CRYPTO_CIPHER_OP_DECRYPT &&
-				options->auth_op !=
-				RTE_CRYPTO_AUTH_OP_VERIFY) {
-			RTE_LOG(ERR, USER1, "Option auth then cipher must use"
-					" options: decrypt and verify.\n");
-			return -EINVAL;
-		}
 	}
 
 	if (options->op_type == CPERF_CIPHER_ONLY ||
