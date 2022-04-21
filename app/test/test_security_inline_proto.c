@@ -51,6 +51,10 @@ extern struct ipsec_test_data pkt_aes_128_cbc_null;
 extern struct ipsec_test_data pkt_null_aes_xcbc;
 extern struct ipsec_test_data pkt_aes_128_cbc_hmac_sha384;
 extern struct ipsec_test_data pkt_aes_128_cbc_hmac_sha512;
+extern struct ipsec_test_data pkt_3des_cbc_hmac_sha256;
+extern struct ipsec_test_data pkt_3des_cbc_hmac_sha384;
+extern struct ipsec_test_data pkt_3des_cbc_hmac_sha512;
+extern struct ipsec_test_data pkt_3des_cbc_hmac_sha256_v6;
 
 static struct rte_mempool *mbufpool;
 static struct rte_mempool *sess_pool;
@@ -2461,6 +2465,21 @@ static struct unit_test_suite inline_ipsec_testsuite  = {
 			test_ipsec_inline_proto_known_vec,
 			&pkt_aes_128_cbc_hmac_sha512),
 		TEST_CASE_NAMED_WITH_DATA(
+			"Outbound known vector (ESP tunnel mode IPv4 3DES-CBC HMAC-SHA256 [16B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec,
+			&pkt_3des_cbc_hmac_sha256),
+		TEST_CASE_NAMED_WITH_DATA(
+			"Outbound known vector (ESP tunnel mode IPv4 3DES-CBC HMAC-SHA384 [24B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec,
+			&pkt_3des_cbc_hmac_sha384),
+		TEST_CASE_NAMED_WITH_DATA(
+			"Outbound known vector (ESP tunnel mode IPv4 3DES-CBC HMAC-SHA512 [32B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec,
+			&pkt_3des_cbc_hmac_sha512),
+		TEST_CASE_NAMED_WITH_DATA(
 			"Outbound known vector (ESP tunnel mode IPv6 AES-GCM 128)",
 			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
 			test_ipsec_inline_proto_known_vec, &pkt_aes_256_gcm_v6),
@@ -2469,6 +2488,11 @@ static struct unit_test_suite inline_ipsec_testsuite  = {
 			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
 			test_ipsec_inline_proto_known_vec,
 			&pkt_aes_128_cbc_hmac_sha256_v6),
+		TEST_CASE_NAMED_WITH_DATA(
+			"Outbound known vector (ESP tunnel mode IPv6 3DES-CBC HMAC-SHA256 [16B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec,
+			&pkt_3des_cbc_hmac_sha256_v6),
 		TEST_CASE_NAMED_WITH_DATA(
 			"Outbound known vector (ESP tunnel mode IPv4 NULL AES-XCBC-MAC [12B ICV])",
 			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
@@ -2513,6 +2537,21 @@ static struct unit_test_suite inline_ipsec_testsuite  = {
 			test_ipsec_inline_proto_known_vec_inb,
 			&pkt_aes_128_cbc_hmac_sha512),
 		TEST_CASE_NAMED_WITH_DATA(
+			"Inbound known vector (ESP tunnel mode IPv4 3DES-CBC HMAC-SHA256 [16B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec_inb,
+			&pkt_3des_cbc_hmac_sha256),
+		TEST_CASE_NAMED_WITH_DATA(
+			"Inbound known vector (ESP tunnel mode IPv4 3DES-CBC HMAC-SHA384 [24B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec_inb,
+			&pkt_3des_cbc_hmac_sha384),
+		TEST_CASE_NAMED_WITH_DATA(
+			"Inbound known vector (ESP tunnel mode IPv4 3DES-CBC HMAC-SHA512 [32B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec_inb,
+			&pkt_3des_cbc_hmac_sha512),
+		TEST_CASE_NAMED_WITH_DATA(
 			"Inbound known vector (ESP tunnel mode IPv6 AES-GCM 128)",
 			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
 			test_ipsec_inline_proto_known_vec_inb, &pkt_aes_256_gcm_v6),
@@ -2521,6 +2560,11 @@ static struct unit_test_suite inline_ipsec_testsuite  = {
 			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
 			test_ipsec_inline_proto_known_vec_inb,
 			&pkt_aes_128_cbc_hmac_sha256_v6),
+		TEST_CASE_NAMED_WITH_DATA(
+			"Inbound known vector (ESP tunnel mode IPv6 3DES-CBC HMAC-SHA256 [16B ICV])",
+			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
+			test_ipsec_inline_proto_known_vec_inb,
+			&pkt_3des_cbc_hmac_sha256_v6),
 		TEST_CASE_NAMED_WITH_DATA(
 			"Inbound known vector (ESP tunnel mode IPv4 NULL AES-XCBC-MAC [12B ICV])",
 			ut_setup_inline_ipsec, ut_teardown_inline_ipsec,
