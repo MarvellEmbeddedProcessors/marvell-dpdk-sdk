@@ -674,7 +674,7 @@ cn9k_ipsec_xform_verify(struct rte_security_ipsec_xform *ipsec,
 
 			if ((cipher->algo == RTE_CRYPTO_CIPHER_AES_CBC) &&
 			    (auth->algo == RTE_CRYPTO_AUTH_SHA256_HMAC)) {
-				plt_err("Transport mode AES-CBC SHA1 HMAC 256 is not supported");
+				plt_err("Transport mode AES-CBC SHA2 HMAC 256 is not supported");
 				return -ENOTSUP;
 			}
 
