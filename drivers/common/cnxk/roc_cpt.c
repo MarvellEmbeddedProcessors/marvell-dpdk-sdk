@@ -959,7 +959,7 @@ roc_cpt_ctx_write(struct roc_cpt_lf *lf, void *sa_dptr, void *sa_cptr,
 	io_addr = lf->io_addr | ROC_CN10K_CPT_INST_DW_M1 << 4;
 
 	roc_lmt_submit_steorl(lmt_arg, io_addr);
-	plt_wmb();
+	plt_io_wmb();
 
 	/* Use 1 min timeout for the poll */
 	const uint64_t timeout = plt_tsc_cycles() + 60 * plt_tsc_hz();
