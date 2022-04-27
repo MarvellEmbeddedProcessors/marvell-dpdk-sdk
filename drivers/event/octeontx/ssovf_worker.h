@@ -180,9 +180,11 @@ ssows_get_work(struct ssows *ws, struct rte_event *ev, const uint16_t flag)
 
 	if (get_work1) {
 		if (ev->event_type == RTE_EVENT_TYPE_ETHDEV) {
+			uint16_t port = (ev->event >> 20) & 0x7F;
+
+			ev->sub_event_type = 0;
 			ev->mbuf = ssovf_octeontx_wqe_to_pkt(
-			     get_work1, (ev->event >> 20) & 0x7F, flag,
-			     ws->lookup_mem);
+				get_work1, port, flag, ws->lookup_mem);
 		} else if (ev->event_type == RTE_EVENT_TYPE_CRYPTODEV) {
 			get_work1 = otx_crypto_adapter_dequeue(get_work1);
 			ev->u64 = get_work1;
