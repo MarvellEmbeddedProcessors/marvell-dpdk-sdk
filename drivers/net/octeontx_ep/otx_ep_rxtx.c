@@ -961,6 +961,13 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	droq_pkt->l3_len = hdr_lens.l3_len;
 	droq_pkt->l4_len = hdr_lens.l4_len;
 
+	if (is_otx2_ep_vf(otx_ep->chip_id) &&
+		droq_pkt->pkt_len > OTX2_EP_MAX_RX_PKT_LEN) {
+		/* Due to hw errata NIX cannot send over 16K packets to SDP */
+		rte_pktmbuf_free(droq_pkt);
+		goto oq_read_fail;
+	}
+
 	if (droq_pkt->nb_segs > 1 &&
 	    !(otx_ep->rx_offloads & RTE_ETH_RX_OFFLOAD_SCATTER)) {
 		rte_pktmbuf_free(droq_pkt);
@@ -1000,6 +1007,7 @@ otx_ep_recv_pkts(void *rx_queue,
 	struct rte_mbuf *oq_pkt;
 
 	uint32_t pkts = 0;
+	uint32_t valid_pkts = 0;
 	uint32_t new_pkts = 0;
 	int next_fetch;
 
@@ -1027,14 +1035,15 @@ otx_ep_recv_pkts(void *rx_queue,
 				    "last_pkt_count %" PRIu64 "new_pkts %d.\n",
 				   droq->pkts_pending, droq->last_pkt_count,
 				   new_pkts);
-			droq->pkts_pending -= pkts;
 			droq->stats.rx_err++;
-			goto finish;
+			continue;
+		} else {
+			rx_pkts[valid_pkts] = oq_pkt;
+			valid_pkts++;
+			/* Stats */
+			droq->stats.pkts_received++;
+			droq->stats.bytes_received += oq_pkt->pkt_len;
 		}
-		rx_pkts[pkts] = oq_pkt;
-		/* Stats */
-		droq->stats.pkts_received++;
-		droq->stats.bytes_received += oq_pkt->pkt_len;
 	}
 	droq->pkts_pending -= pkts;
 
@@ -1061,6 +1070,5 @@ update_credit:
 
 		rte_write32(0, droq->pkts_credit_reg);
 	}
-finish:
-	return pkts;
+	return valid_pkts;
 }
