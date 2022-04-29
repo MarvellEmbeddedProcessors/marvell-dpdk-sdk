@@ -23,33 +23,13 @@
 #define ROC_NIX_INL_ONF_IPSEC_OUTB_SA_SZ_LOG2 8
 
 /* OT INB HW area */
-#ifndef ROC_NIX_INL_OT_IPSEC_AR_WIN_SZ_MAX
-#define ROC_NIX_INL_OT_IPSEC_AR_WIN_SZ_MAX 4096u
-#endif
-#define ROC_NIX_INL_OT_IPSEC_AR_WINBITS_SZ                                     \
-	(PLT_ALIGN_CEIL(ROC_NIX_INL_OT_IPSEC_AR_WIN_SZ_MAX,                    \
-			BITS_PER_LONG_LONG) /                                  \
-	 BITS_PER_LONG_LONG)
-#define __ROC_NIX_INL_OT_IPSEC_INB_HW_SZ                                       \
-	(offsetof(struct roc_ot_ipsec_inb_sa, ctx.ar_winbits) +                \
-	 sizeof(uint64_t) * ROC_NIX_INL_OT_IPSEC_AR_WINBITS_SZ)
 #define ROC_NIX_INL_OT_IPSEC_INB_HW_SZ                                         \
-	PLT_ALIGN(__ROC_NIX_INL_OT_IPSEC_INB_HW_SZ, ROC_ALIGN)
+	PLT_ALIGN(sizeof(struct roc_ot_ipsec_inb_sa), ROC_ALIGN)
 /* OT INB SW reserved area */
-#ifndef ROC_NIX_INL_INB_POST_PROCESS
-#define ROC_NIX_INL_INB_POST_PROCESS 1
-#endif
-#if ROC_NIX_INL_INB_POST_PROCESS == 0
-#define ROC_NIX_INL_OT_IPSEC_INB_SW_RSVD 0
-#else
 #define ROC_NIX_INL_OT_IPSEC_INB_SW_RSVD 128
-#endif
-
 #define ROC_NIX_INL_OT_IPSEC_INB_SA_SZ                                         \
-	(1UL << (64 - __builtin_clzll(ROC_NIX_INL_OT_IPSEC_INB_HW_SZ +         \
-				      ROC_NIX_INL_OT_IPSEC_INB_SW_RSVD - 1)))
-#define ROC_NIX_INL_OT_IPSEC_INB_SA_SZ_LOG2                                    \
-	__builtin_ctzll(ROC_NIX_INL_OT_IPSEC_INB_SA_SZ)
+	(ROC_NIX_INL_OT_IPSEC_INB_HW_SZ + ROC_NIX_INL_OT_IPSEC_INB_SW_RSVD)
+#define ROC_NIX_INL_OT_IPSEC_INB_SA_SZ_LOG2 10
 
 /* OT OUTB HW area */
 #define ROC_NIX_INL_OT_IPSEC_OUTB_HW_SZ                                        \
