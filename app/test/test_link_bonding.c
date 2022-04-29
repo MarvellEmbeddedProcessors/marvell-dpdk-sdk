@@ -4636,7 +4636,7 @@ test_tlb_verify_slave_link_status_change_failover(void)
 		TEST_ASSERT_EQUAL(rte_eth_tx_burst(
 				test_params->bonded_port_id, 0, &pkt_burst[0][0], burst_size), burst_size,
 				"rte_eth_tx_burst failed\n");
-		rte_delay_us(11000);
+		rte_delay_us(12000);
 	}
 
 	rte_eth_stats_get(test_params->slave_port_ids[0], &port_stats);
