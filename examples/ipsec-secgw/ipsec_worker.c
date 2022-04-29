@@ -1233,15 +1233,15 @@ ipsec_poll_mode_wrkr_inl_pr_ss(void)
 {
 	const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1)
 			/ US_PER_S * BURST_TX_DRAIN_US;
+	uint16_t sa_out_portid = 0, sa_out_proto = 0;
 	struct rte_mbuf *pkts[MAX_PKT_BURST], *pkt;
 	uint64_t prev_tsc, diff_tsc, cur_tsc;
-	struct rte_ipsec_session *ips;
+	struct rte_ipsec_session *ips = NULL;
 	struct lcore_rx_queue *rxql;
+	struct ipsec_sa *sa = NULL;
 	struct lcore_conf *qconf;
-	struct ipsec_traffic trf;
 	struct sa_ctx *sa_out;
 	uint32_t i, nb_rx, j;
-	struct ipsec_sa *sa;
 	int32_t socket_id;
 	uint32_t lcore_id;
 	uint16_t portid;
@@ -1255,8 +1255,15 @@ ipsec_poll_mode_wrkr_inl_pr_ss(void)
 
 	/* Get SA info */
 	sa_out = socket_ctx[socket_id].sa_out;
-	sa = &sa_out->sa[single_sa_idx];
-	ips = ipsec_get_primary_session(sa);
+	if (sa_out && single_sa_idx < sa_out->nb_sa) {
+		sa = &sa_out->sa[single_sa_idx];
+		ips = ipsec_get_primary_session(sa);
+		sa_out_portid = sa->portid;
+		if (sa->flags & IP6_TUNNEL)
+			sa_out_proto = IPPROTO_IPV6;
+		else
+			sa_out_proto = IPPROTO_IP;
+	}
 
 	qconf->frag.pool_indir = socket_ctx[socket_id].mbuf_pool_indir;
 
@@ -1320,34 +1327,21 @@ ipsec_poll_mode_wrkr_inl_pr_ss(void)
 				continue;
 			}
 
-			/* Prepare packets for outbound */
-			prepare_traffic(rxql[i].sec_ctx, pkts, &trf, nb_rx);
-
-			/* Drop any IPsec traffic */
-			free_pkts(trf.ipsec.pkts, trf.ipsec.num);
-
-			rte_ipsec_pkt_process(ips, trf.ip4.pkts,
-					      trf.ip4.num);
-			rte_ipsec_pkt_process(ips, trf.ip6.pkts,
-					      trf.ip6.num);
-			portid = sa->portid;
-
-			/* Send v4 pkts out */
-			for (j = 0; j < trf.ip4.num; j++) {
-				pkt = trf.ip4.pkts[j];
-
-				rte_pktmbuf_prepend(pkt, RTE_ETHER_HDR_LEN);
-				pkt->l2_len = RTE_ETHER_HDR_LEN;
-				send_single_packet(pkt, portid, IPPROTO_IP);
+			/* Free packets if there are no outbound sessions */
+			if (unlikely(!ips)) {
+				rte_pktmbuf_free_bulk(pkts, nb_rx);
+				continue;
 			}
 
-			/* Send v6 pkts out */
-			for (j = 0; j < trf.ip6.num; j++) {
-				pkt = trf.ip6.pkts[j];
+			rte_ipsec_pkt_process(ips, pkts, nb_rx);
 
-				rte_pktmbuf_prepend(pkt, RTE_ETHER_HDR_LEN);
+			/* Send pkts out */
+			for (j = 0; j < nb_rx; j++) {
+				pkt = pkts[j];
+
 				pkt->l2_len = RTE_ETHER_HDR_LEN;
-				send_single_packet(pkt, portid, IPPROTO_IPV6);
+				send_single_packet(pkt, sa_out_portid,
+						   sa_out_proto);
 			}
 		}
 	}
