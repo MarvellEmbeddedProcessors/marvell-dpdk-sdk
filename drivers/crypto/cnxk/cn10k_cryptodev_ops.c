@@ -194,6 +194,8 @@ cn10k_cpt_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
 	struct cnxk_cpt_qp *qp = qptr;
 	struct pending_queue *pend_q;
 	struct cpt_inst_s *inst;
+	union cpt_fc_write_s fc;
+	uint64_t *fc_addr;
 	uint16_t lmt_id;
 	uint64_t head;
 	int ret, i;
@@ -211,6 +213,9 @@ cn10k_cpt_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
 
 	lmt_base = qp->lmtline.lmt_base;
 	io_addr = qp->lmtline.io_addr;
+	fc_addr = qp->lmtline.fc_addr;
+
+	const uint32_t fc_thresh = qp->lmtline.fc_thresh;
 
 	ROC_LMT_BASE_ID_GET(lmt_base, lmt_id);
 	inst = (struct cpt_inst_s *)lmt_base;
@@ -229,6 +234,13 @@ again:
 		}
 
 		pending_queue_advance(&head, pq_mask);
+	}
+
+	fc.u64[0] = __atomic_load_n(fc_addr, __ATOMIC_RELAXED);
+	if (unlikely(fc.s.qsize > fc_thresh)) {
+		pending_queue_retreat(&head, pq_mask, i);
+		i = 0;
+		goto pend_q_commit;
 	}
 
 	if (i > PKTS_PER_STEORL) {
@@ -385,7 +397,9 @@ cn10k_cpt_crypto_adapter_enqueue(uintptr_t base, struct rte_crypto_op *op)
 	struct cpt_inflight_req *infl_req;
 	uint64_t lmt_base, lmt_arg, w2;
 	struct cpt_inst_s *inst;
+	union cpt_fc_write_s fc;
 	struct cnxk_cpt_qp *qp;
+	uint64_t *fc_addr;
 	uint16_t lmt_id;
 	int ret;
 
@@ -407,6 +421,10 @@ cn10k_cpt_crypto_adapter_enqueue(uintptr_t base, struct rte_crypto_op *op)
 	infl_req->op_flags = 0;
 
 	lmt_base = qp->lmtline.lmt_base;
+	fc_addr = qp->lmtline.fc_addr;
+
+	const uint32_t fc_thresh = qp->lmtline.fc_thresh;
+
 	ROC_LMT_BASE_ID_GET(lmt_base, lmt_id);
 	inst = (struct cpt_inst_s *)lmt_base;
 
@@ -425,7 +443,8 @@ cn10k_cpt_crypto_adapter_enqueue(uintptr_t base, struct rte_crypto_op *op)
 	inst->w2.u64 = w2;
 	inst->w3.u64 = CNXK_CPT_INST_W3(1, infl_req);
 
-	if (roc_cpt_is_iq_full(&qp->lf)) {
+	fc.u64[0] = __atomic_load_n(fc_addr, __ATOMIC_RELAXED);
+	if (unlikely(fc.s.qsize > fc_thresh)) {
 		rte_mempool_put(qp->ca.req_mp, infl_req);
 		rte_errno = EAGAIN;
 		return 0;

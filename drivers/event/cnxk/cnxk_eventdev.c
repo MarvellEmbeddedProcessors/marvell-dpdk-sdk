@@ -26,6 +26,15 @@ crypto_adapter_qp_setup(const struct rte_cryptodev *cdev,
 
 	qp->ca.enabled = true;
 
+	/*
+	 * Update CPT FC threshold. Decrement by hardware burst size to allow
+	 * simultaneous enqueue from all available cores.
+	 */
+	if (roc_model_is_cn10k())
+		qp->lmtline.fc_thresh -= rte_lcore_count() * 32;
+	else
+		qp->lmtline.fc_thresh -= rte_lcore_count() * 2;
+
 	return 0;
 }
 
@@ -69,8 +78,17 @@ cnxk_crypto_adapter_qp_add(const struct rte_eventdev *event_dev,
 static int
 crypto_adapter_qp_free(struct cnxk_cpt_qp *qp)
 {
+	int ret;
+
 	rte_mempool_free(qp->ca.req_mp);
 	qp->ca.enabled = false;
+
+	ret = roc_cpt_lmtline_init(qp->lf.roc_cpt, &qp->lmtline, qp->lf.lf_id);
+	if (ret < 0) {
+		plt_err("Could not reset lmtline for queue pair %d",
+			qp->lf.lf_id);
+		return ret;
+	}
 
 	return 0;
 }
