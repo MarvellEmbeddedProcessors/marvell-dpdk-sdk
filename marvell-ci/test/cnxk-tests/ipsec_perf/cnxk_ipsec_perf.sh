@@ -71,11 +71,24 @@ fi
 CFG=(
 	"ep0_lookaside_crypto.cfg"
 	"ep0_lookaside_protocol.cfg"
-	"ep0_inline_protocol.cfg"
-	"ep0_inline_protocol.cfg"
-	"ep0_inline_protocol.cfg"
-	"ep0_inline_protocol.cfg"
-	"ep0_inline_protocol.cfg"
+	# Inline protocol Outbound config files
+	"ep0_inline_protocol_ob.cfg"
+	"ep0_inline_protocol_ob.cfg"
+	"ep0_inline_protocol_ob.cfg"
+	"ep0_inline_protocol_ob.cfg"
+	"ep0_inline_protocol_ob.cfg"
+)
+
+#Inline Protocol inbound specific config files
+# Sequence is align with TYPE
+IP_IB_CFG=(
+	""
+	""
+	"ep0_inline_protocol_ib.cfg"
+	"ep0_inline_protocol_ib.cfg"
+	"ep0_inline_protocol_ib.cfg"
+	"ep0_inline_protocol_ib.cfg"
+	"ep0_inline_protocol_ib.cfg"
 )
 
 # Specific config files for Perf cases with Inline Protocol Single-SA
@@ -231,24 +244,24 @@ function run_ipsec_secgw_inb()
 			case "$Y" in
 				2)
 					# Inline Protocol Event Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
 					;;
 				3)
 					# Inline Protocol Event Vector Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192'
 					;;
 				4)
 					# Inline Protocol Poll Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
 					;;
 				5)
 					# Inline Protocol Event Vector Perf Mode (Single-SA)
-					run_test '$env -f ${CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192 --single-sa 0'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192 --single-sa 0'
 					IS_RXPPS_TXTPMD=1
 					;;
 				6)
 					# Inline Protocol Poll Perf Mode (Single-SA)
-					run_test '$env -f ${CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
 					IS_RXPPS_TXTPMD=1
 					;;
 			esac
