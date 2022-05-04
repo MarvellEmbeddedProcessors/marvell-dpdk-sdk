@@ -377,9 +377,16 @@ test_eventdev_queue_attr_priority(void)
 static int
 test_eventdev_queue_attr_priority_runtime(void)
 {
+	uint32_t queue_count, queue_req, prio, deq_cnt;
 	struct rte_event_queue_conf qconf;
+	struct rte_event_port_conf pconf;
 	struct rte_event_dev_info info;
-	uint32_t queue_count;
+	struct rte_event event = {
+		.op = RTE_EVENT_OP_NEW,
+		.event_type = RTE_EVENT_TYPE_CPU,
+		.sched_type = RTE_SCHED_TYPE_ATOMIC,
+		.u64 = 0xbad,
+	};
 	int i, ret;
 
 	ret = rte_event_dev_info_get(TEST_DEV_ID, &info);
@@ -393,30 +400,66 @@ test_eventdev_queue_attr_priority_runtime(void)
 				    &queue_count),
 			    "Queue count get failed");
 
-	for (i = 0; i < (int)queue_count; i++) {
+	/* Need at least 2 queues to test LOW and HIGH priority. */
+	TEST_ASSERT(queue_count > 1, "Not enough queues(2)");
+	queue_req = 2;
+
+	for (i = 0; i < (int)queue_req; i++) {
 		ret = rte_event_queue_default_conf_get(TEST_DEV_ID, i, &qconf);
 		TEST_ASSERT_SUCCESS(ret, "Failed to get queue%d def conf", i);
 		ret = rte_event_queue_setup(TEST_DEV_ID, i, &qconf);
 		TEST_ASSERT_SUCCESS(ret, "Failed to setup queue%d", i);
 	}
 
-	for (i = 0; i < (int)queue_count; i++) {
-		uint32_t attr_val, tmp;
+	TEST_ASSERT_SUCCESS(
+		rte_event_queue_attr_set(TEST_DEV_ID, 0,
+					 RTE_EVENT_QUEUE_ATTR_PRIORITY,
+					 RTE_EVENT_DEV_PRIORITY_LOWEST),
+		"Queue0 priority set failed");
+	TEST_ASSERT_SUCCESS(
+		rte_event_queue_attr_set(TEST_DEV_ID, 1,
+					 RTE_EVENT_QUEUE_ATTR_PRIORITY,
+					 RTE_EVENT_DEV_PRIORITY_HIGHEST),
+		"Queue1 priority set failed");
 
-		attr_val = i % RTE_EVENT_DEV_PRIORITY_LOWEST;
-		TEST_ASSERT_SUCCESS(
-			rte_event_queue_attr_set(TEST_DEV_ID, i,
-						 RTE_EVENT_QUEUE_ATTR_PRIORITY,
-						 attr_val),
-			"Queue priority set failed");
-		TEST_ASSERT_SUCCESS(
-			rte_event_queue_attr_get(TEST_DEV_ID, i,
-						 RTE_EVENT_QUEUE_ATTR_PRIORITY,
-						 &tmp),
-			"Queue priority get failed");
-		TEST_ASSERT_EQUAL(tmp, attr_val,
-				  "Wrong priority value for queue%d", i);
+	/* Setup event port 0 */
+	ret = rte_event_port_default_conf_get(TEST_DEV_ID, 0, &pconf);
+	TEST_ASSERT_SUCCESS(ret, "Failed to get port0 info");
+	ret = rte_event_port_setup(TEST_DEV_ID, 0, &pconf);
+	TEST_ASSERT_SUCCESS(ret, "Failed to setup port0");
+	ret = rte_event_port_link(TEST_DEV_ID, 0, NULL, NULL, 0);
+	TEST_ASSERT(ret == (int)queue_count, "Failed to link port, device %d",
+		    TEST_DEV_ID);
+
+	ret = rte_event_dev_start(TEST_DEV_ID);
+	TEST_ASSERT_SUCCESS(ret, "Failed to start device%d", TEST_DEV_ID);
+
+	for (i = 0; i < (int)queue_req; i++) {
+		event.queue_id = i;
+		while (rte_event_enqueue_burst(TEST_DEV_ID, 0, &event, 1) != 1)
+			rte_pause();
 	}
+
+	prio = RTE_EVENT_DEV_PRIORITY_HIGHEST;
+	deq_cnt = 0;
+	while (deq_cnt < queue_req) {
+		uint32_t queue_prio;
+
+		if (rte_event_dequeue_burst(TEST_DEV_ID, 0, &event, 1, 0) == 0)
+			continue;
+
+		TEST_ASSERT_SUCCESS(
+			rte_event_queue_attr_get(TEST_DEV_ID, event.queue_id,
+						 RTE_EVENT_QUEUE_ATTR_PRIORITY,
+						 &queue_prio),
+			"Queue priority get failed");
+		TEST_ASSERT(queue_prio >= prio,
+			    "Received event from lower priority queue first");
+		prio = queue_prio;
+		deq_cnt++;
+	}
+
+	rte_event_dev_stop(TEST_DEV_ID);
 
 	return TEST_SUCCESS;
 }
