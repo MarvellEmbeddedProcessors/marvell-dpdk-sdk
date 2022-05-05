@@ -281,7 +281,8 @@ soc_cn10k = {
     ],
     'part_number': '0xd49',
     'extra_march_features': ['crypto'],
-    'numa': false
+    'numa': false,
+    'sve': false
 }
 
 soc_dpaa = {
