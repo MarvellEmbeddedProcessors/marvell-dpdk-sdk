@@ -607,7 +607,8 @@ if (cc.get_define('__ARM_NEON', args: machine_args) != '' or
     compile_time_cpuflags += ['RTE_CPUFLAG_NEON']
 endif
 
-if cc.get_define('__ARM_FEATURE_SVE', args: machine_args) != ''
+if (cc.get_define('__ARM_FEATURE_SVE', args: machine_args) != '' and
+    soc_config.get('sve', true))
     compile_time_cpuflags += ['RTE_CPUFLAG_SVE']
     if (cc.check_header('arm_sve.h'))
         dpdk_conf.set('RTE_HAS_SVE_ACLE', 1)
