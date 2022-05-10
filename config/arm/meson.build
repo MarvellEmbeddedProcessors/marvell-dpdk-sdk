@@ -282,7 +282,7 @@ soc_cn10k = {
     'part_number': '0xd49',
     'extra_march_features': ['crypto'],
     'numa': false,
-    'sve': false
+    'sve_acle': false
 }
 
 soc_dpaa = {
@@ -608,10 +608,9 @@ if (cc.get_define('__ARM_NEON', args: machine_args) != '' or
     compile_time_cpuflags += ['RTE_CPUFLAG_NEON']
 endif
 
-if (cc.get_define('__ARM_FEATURE_SVE', args: machine_args) != '' and
-    soc_config.get('sve', true))
+if cc.get_define('__ARM_FEATURE_SVE', args: machine_args) != ''
     compile_time_cpuflags += ['RTE_CPUFLAG_SVE']
-    if (cc.check_header('arm_sve.h'))
+    if (cc.check_header('arm_sve.h') and soc_config.get('sve_acle', true))
         dpdk_conf.set('RTE_HAS_SVE_ACLE', 1)
     endif
 endif
