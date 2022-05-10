@@ -22,8 +22,7 @@ def add_doc_build_stage(Object s, nodes)
 				mkdir -p ${ci_logdir}
 				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/
 				cd ${src_dir}
-				MAKE_J=\$(nproc --all)
-				MAKE_J=\$((MAKE_J / 2))
+				MAKE_J=2
 
 				./marvell-ci/build/build.sh \
 					-b ./marvell-ci/build/env/x86-gcc.env \
@@ -96,8 +95,7 @@ def add_klocwork_stage(Object s, nodes)
 				mkdir -p ${ci_logdir}
 				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/curr/
 				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/prev/
-				MAKE_J=\$(nproc --all)
-				MAKE_J=\$((MAKE_J / 2))
+				MAKE_J=2
 
 				export PATH=${s.TOOLCHAIN_DIR}/bin:/home/jenkins/klocwork/kwbin/bin:$PATH
 
@@ -213,8 +211,7 @@ def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinko
 				export PKG_CACHE_DIR=${s.DEPS_SRC_CACHE_DIR}
 				export CFLAGS="${copt}"
 				export LDFLAGS="${clinkopt}"
-				MAKE_J=\$(nproc --all)
-				MAKE_J=\$((MAKE_J / 4))
+				MAKE_J=2
 				./marvell-ci/build/build.sh \
 					-b ./marvell-ci/build/env/${arch}-${compiler}.env \
 					-r ${build_dir} \
