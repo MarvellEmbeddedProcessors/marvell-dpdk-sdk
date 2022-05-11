@@ -119,6 +119,8 @@ TN=(
 	"Inline Protocol: Poll Perf Mode (Single-SA)"
 )
 
+Failed_tests=""
+
 function get_system_info()
 {
 	local sysclk_dir
@@ -419,8 +421,11 @@ function outb_perf()
 	local avg_pps
 	local pktsz
 	local tcnt
+	local algo
 	local rn
 	local i
+
+	[[ $X = 1 ]] && algo="aes-cbc_sha1-hmac" || algo="aes-gcm"
 
 	rn=0
 	for pktsz in ${PKT_LIST[@]}
@@ -467,7 +472,7 @@ function outb_perf()
 		done
 		if [[ $tcnt -gt $MAX_TRY_CNT ]]; then
 			echo "Test Failed"
-			exit 1
+			Failed_tests="$Failed_tests \"${TN[$Y]} outbound $algo pktsize:$pktsz\""
 		fi
 		((++rn))
 	done
@@ -479,8 +484,11 @@ function inb_perf()
 	local avg_pps
 	local pktsz
 	local tcnt
+	local algo
 	local rn
 	local i
+
+	[[ $X = 1 ]] && algo="aes-cbc_sha1-hmac" || algo="aes-gcm"
 
 	rn=0
 	for pktsz in ${PKT_LIST[@]}
@@ -529,7 +537,8 @@ function inb_perf()
 		done
 		if [[ $tcnt -gt $MAX_TRY_CNT ]]; then
 			echo "Test Failed"
-			exit 1
+			testpmd_quit "$TPMD_TX_PREFIX"
+			Failed_tests="$Failed_tests \"${TN[$Y]} inbound $algo pktsize:$pktsz\""
 		fi
 		((++rn))
 	done
@@ -741,7 +750,7 @@ Y=0
 
 while [ $Y -lt $NUM_MODES ]; do
 	if [[ $IS_CN10K -eq 0 && $Y -gt 2 ]]; then
-		exit 0
+		break
 	fi
 	echo ""
 	echo "Test: ${TN[$Y]}"
@@ -789,6 +798,7 @@ while [ $Y -lt $NUM_MODES ]; do
 
 	echo ""
 	# Inbound
+	X=1
 	run_ipsec_secgw_inb
 	pmd_rx_launch
 	aes_cbc_sha1_hmac_inb
@@ -797,11 +807,18 @@ while [ $Y -lt $NUM_MODES ]; do
 	sleep $WS
 
 	echo ""
+	X=2
 	pmd_rx_launch
 	aes_gcm_inb
 	testpmd_quit "$TPMD_RX_PREFIX"
 	ipsec_exit
 	((++Y))
 done
+
+echo ""
+if [[ -n $Failed_tests ]]; then
+	echo "FAILURE: Test(s) [$Failed_tests] failed"
+	exit 1
+fi
 
 exit 0
