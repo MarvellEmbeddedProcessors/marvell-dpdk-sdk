@@ -238,37 +238,29 @@ def print_env(Object s) {
 	"""
 }
 
-
-def stage_node(Object s, nodes, name, stage_exec, run_on_he = true, strict_he = false) {
+def stage_node(Object s, nodes, name, stage_exec) {
 	def node_def
 
 	node_def = {
 		stage (name) {
 			def completed = false
 
-			if (run_on_he) {
-				/*
-				 * Try to first run on a high-end (HE) machine. If its not
-				 * available, then switch back to normal servers unless
-				 * it was asked to strictly run on HE machines.
-				 */
-				lock(label: "DEV_CI_DATAPLANE_ASIM", variable: "mc", quantity:'1',
-				     skipIfLocked : !strict_he) {
-					println "Locked HE machine is ${env.mc.trim()}"
-					def mc_details="${env.mc.trim()} 22"
-					def tokens = mc_details.split()
-					def mc_ip = tokens[0]
-					node ("$mc_ip") {
-						lock(env.NODE_NAME) { /* Only for debugging */
-							print_env(s)
-							stage_exec()
-						}
+			lock(label: "DEV_CI_DATAPLANE_ASIM", variable: "mc", quantity:'1',
+				     skipIfLocked : true) {
+				println "Locked ASIM machine is ${env.mc.trim()}"
+				def mc_details="${env.mc.trim()} 22"
+				def tokens = mc_details.split()
+				def mc_ip = tokens[0]
+				node ("$mc_ip") {
+					lock(env.NODE_NAME) { /* Only for debugging */
+						print_env(s)
+						stage_exec()
 					}
-					completed = true
 				}
+				completed = true
 			}
 			if (!completed) {
-				/* High end machine was not available, run on any other available
+				/* ASIM machine was not available, run on any other available
 				 * machine */
 				node (s.NODE_LABEL_ME) {
 					lock(env.NODE_NAME) { /* Only for debugging */
@@ -281,18 +273,6 @@ def stage_node(Object s, nodes, name, stage_exec, run_on_he = true, strict_he = 
 	}
 
 	nodes.put(name, node_def)
-}
-
-def add_stage_node_he(Object s, nodes, name, stage_exec) {
-	stage_node(s, nodes, name, stage_exec, true, true)
-}
-
-def add_stage_node_me(Object s, nodes, name, stage_exec) {
-	stage_node(s, nodes, name, stage_exec, false)
-}
-
-def add_stage_node(Object s, nodes, name, stage_exec) {
-	stage_node(s, nodes, name, stage_exec)
 }
 
 return this

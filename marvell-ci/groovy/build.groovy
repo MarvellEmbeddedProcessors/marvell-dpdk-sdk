@@ -70,7 +70,7 @@ def add_doc_build_stage(Object s, nodes)
 		s.utils.post_artifacts(build_name)
 	}
 
-	utils.add_stage_node(s, nodes, build_name, stg)
+	utils.stage_node(s, nodes, build_name, stg)
 }
 
 def add_klocwork_stage(Object s, nodes)
@@ -150,7 +150,7 @@ def add_klocwork_stage(Object s, nodes)
 		}
 	}
 
-	utils.add_stage_node(s, nodes, build_name, stg)
+	utils.stage_node(s, nodes, build_name, stg)
 }
 
 def get_build_params(build_name, compiler, libtype, copt, clinkopt, arch, extra_args)
@@ -247,12 +247,7 @@ def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinko
 		}
 	}
 
-	if (strict_he)
-		utils.add_stage_node_he(s, nodes, name, stg)
-	else if (strict_me)
-		utils.add_stage_node_me(s, nodes, name, stg)
-	else
-		utils.add_stage_node(s, nodes, name, stg)
+	utils.stage_node(s, nodes, name, stg)
 }
 
 def prepare_build_stages(Object s, nodes, compilers, libtypes, copts, clinkopts, archs, extra_args,
