@@ -1171,6 +1171,13 @@ perf_opt_dump(struct evt_options *opt, uint8_t nb_queues)
 	evt_dump("prod_enq_burst_sz", "%d", opt->prod_enq_burst_sz);
 }
 
+static void
+perf_event_port_flush(uint8_t dev_id __rte_unused, struct rte_event ev,
+		      void *args)
+{
+	rte_mempool_put(args, ev.event_ptr);
+}
+
 void
 perf_worker_cleanup(struct rte_mempool *const pool, uint8_t dev_id,
 		    uint8_t port_id, struct rte_event events[], uint16_t nb_enq,
@@ -1186,6 +1193,7 @@ perf_worker_cleanup(struct rte_mempool *const pool, uint8_t dev_id,
 			events[i].op = RTE_EVENT_OP_RELEASE;
 		rte_event_enqueue_burst(dev_id, port_id, events, nb_deq);
 	}
+	rte_event_port_quiesce(dev_id, port_id, perf_event_port_flush, pool);
 }
 
 void
