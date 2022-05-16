@@ -89,6 +89,10 @@
 #define OTX_EP_R_OUT_CTL_IMODE        (1ull << 23)
 
 #define PCI_DEVID_OCTEONTX_EP_VF 0xa303
+static inline int is_otx_ep_vf(uint16_t chip_id)
+{
+	return (chip_id == PCI_DEVID_OCTEONTX_EP_VF);
+}
 
 /* this is a static value set by SLI PF driver in octeon
  * No handshake is available

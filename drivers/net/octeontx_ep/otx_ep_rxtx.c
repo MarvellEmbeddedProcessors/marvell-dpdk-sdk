@@ -10,6 +10,7 @@
 #include <rte_io.h>
 #include <rte_net.h>
 #include <ethdev_pci.h>
+#include "common/cnxk/roc_api.h"
 
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
@@ -19,6 +20,7 @@
 /* SDP_LENGTH_S specifies packet length and is of 8-byte size */
 #define INFO_SIZE 8
 #define DROQ_REFILL_THRESHOLD 16
+#define OTX2_SDP_REQUEST_ISM	(0x1ULL << 63)
 
 /* These arrays indexed by otx_ep_device->sdp_packet_mode */
 static uint8_t front_size[2] = {OTX2_EP_FSZ_NIC, OTX2_EP_FSZ_LOOP};
@@ -86,6 +88,7 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 	const struct otx_ep_config *conf;
 	struct otx_ep_instr_queue *iq;
 	uint32_t q_size;
+	int ret;
 
 	conf = otx_ep->conf;
 	iq = otx_ep->instr_queue[iq_no];
@@ -145,7 +148,9 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 	iq->iqcmd_64B = (conf->iq.instr_type == 64);
 
 	/* Set up IQ registers */
-	otx_ep->fn_list.setup_iq_regs(otx_ep, iq_no);
+	ret = otx_ep->fn_list.setup_iq_regs(otx_ep, iq_no);
+	if (ret)
+		return ret;
 
 	return 0;
 
@@ -276,6 +281,7 @@ otx_ep_init_droq(struct otx_ep_device *otx_ep, uint32_t q_no,
 	uint32_t c_refill_threshold;
 	struct otx_ep_droq *droq;
 	uint32_t desc_ring_size;
+	int ret;
 
 	otx_ep_info("OQ[%d] Init start\n", q_no);
 
@@ -323,7 +329,9 @@ otx_ep_init_droq(struct otx_ep_device *otx_ep, uint32_t q_no,
 	droq->refill_threshold = c_refill_threshold;
 
 	/* Set up OQ registers */
-	otx_ep->fn_list.setup_oq_regs(otx_ep, q_no);
+	ret = otx_ep->fn_list.setup_oq_regs(otx_ep, q_no);
+	if (ret)
+		return ret;
 
 	otx_ep->io_qmask.oq |= (1ull << q_no);
 
@@ -411,15 +419,32 @@ otx_ep_iqreq_add(struct otx_ep_instr_queue *iq, void *buf,
 static uint32_t
 otx_vf_update_read_index(struct otx_ep_instr_queue *iq)
 {
-	uint32_t new_idx = rte_read32(iq->inst_cnt_reg);
-	if (unlikely(new_idx == 0xFFFFFFFFU))
-		rte_write32(new_idx, iq->inst_cnt_reg);
+	uint32_t val;
+
+	/*
+	 * Batch subtractions from the HW counter to reduce PCIe traffic
+	 * This adds an extra local variable, but almost halves the
+	 * number of PCIe writes.
+	 */
+	val = *iq->inst_cnt_ism;
+	iq->inst_cnt += val - iq->inst_cnt_ism_prev;
+	iq->inst_cnt_ism_prev = val;
+
+	if (val > (uint32_t)(1 << 31)) {
+		/*
+		 * Only subtract the packet count in the HW counter
+		 * when count above halfway to saturation.
+		 */
+		rte_write32(val, iq->inst_cnt_reg);
+		*iq->inst_cnt_ism = 0;
+		iq->inst_cnt_ism_prev = 0;
+	}
+	rte_write64(OTX2_SDP_REQUEST_ISM, iq->inst_cnt_reg);
+
 	/* Modulo of the new index with the IQ size will give us
 	 * the new index.
 	 */
-	new_idx &= (iq->nb_desc - 1);
-
-	return new_idx;
+	return iq->inst_cnt & (iq->nb_desc - 1);
 }
 
 static void
@@ -968,6 +993,12 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		goto oq_read_fail;
 	}
 
+	if ((droq_pkt->pkt_len > (RTE_ETHER_MAX_LEN + OTX_CUST_DATA_LEN)) &&
+	    !(otx_ep->rx_offloads & DEV_RX_OFFLOAD_JUMBO_FRAME)) {
+		rte_pktmbuf_free(droq_pkt);
+		goto oq_read_fail;
+	}
+
 	if (droq_pkt->nb_segs > 1 &&
 	    !(otx_ep->rx_offloads & RTE_ETH_RX_OFFLOAD_SCATTER)) {
 		rte_pktmbuf_free(droq_pkt);
@@ -983,13 +1014,29 @@ oq_read_fail:
 static inline uint32_t
 otx_ep_check_droq_pkts(struct otx_ep_droq *droq)
 {
-	volatile uint64_t pkt_count;
 	uint32_t new_pkts;
+	uint32_t val;
 
-	/* Latest available OQ packets */
-	pkt_count = rte_read32(droq->pkts_sent_reg);
-	rte_write32(pkt_count, droq->pkts_sent_reg);
-	new_pkts = pkt_count;
+	/*
+	 * Batch subtractions from the HW counter to reduce PCIe traffic
+	 * This adds an extra local variable, but almost halves the
+	 * number of PCIe writes.
+	 */
+	val = *droq->pkts_sent_ism;
+	new_pkts = val - droq->pkts_sent_ism_prev;
+	droq->pkts_sent_ism_prev = val;
+
+	if (val > (uint32_t)(1 << 31)) {
+		/*
+		 * Only subtract the packet count in the HW counter
+		 * when count above halfway to saturation.
+		 */
+		rte_write32(val, droq->pkts_sent_reg);
+		*droq->pkts_sent_ism = 0;
+		droq->pkts_sent_ism_prev = 0;
+	}
+	rte_write64(OTX2_SDP_REQUEST_ISM, droq->pkts_sent_reg);
+
 	droq->pkts_pending += new_pkts;
 	return new_pkts;
 }
@@ -1035,6 +1082,7 @@ otx_ep_recv_pkts(void *rx_queue,
 				    "last_pkt_count %" PRIu64 "new_pkts %d.\n",
 				   droq->pkts_pending, droq->last_pkt_count,
 				   new_pkts);
+			droq->pkts_pending -= pkts;
 			droq->stats.rx_err++;
 			continue;
 		} else {
