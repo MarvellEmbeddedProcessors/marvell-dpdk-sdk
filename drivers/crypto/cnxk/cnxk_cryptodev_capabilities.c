@@ -1109,10 +1109,6 @@ static void
 cn10k_crypto_caps_update(struct rte_cryptodev_capabilities cnxk_caps[])
 {
 
-#define ZUC_256_DISABLE
-#ifdef ZUC_256_DISABLE
-	RTE_SET_USED(cnxk_caps);
-#else
 	struct rte_cryptodev_capabilities *caps;
 	int i = 0;
 
@@ -1139,7 +1135,6 @@ cn10k_crypto_caps_update(struct rte_cryptodev_capabilities cnxk_caps[])
 			caps->sym.auth.iv_size.increment = 1;
 		}
 	}
-#endif
 }
 
 static void
