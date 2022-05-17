@@ -81,8 +81,8 @@ cn9k_ipsec_outb_sa_create(struct cnxk_cpt_qp *qp,
 	ctx_len = ret;
 	opcode = ROC_IE_ON_MAJOR_OP_WRITE_IPSEC_OUTBOUND;
 	egrp = roc_cpt->eng_grp[CPT_ENG_TYPE_IE];
-	ret = roc_on_cpt_ctx_write(&qp->lf, (void *)&sa->out_sa, opcode,
-				   ctx_len, egrp);
+	ret = roc_on_cpt_ctx_write(&qp->lf, rte_mempool_virt2iova(&sa->out_sa),
+				   opcode, ctx_len, egrp);
 
 	if (ret)
 		return ret;
@@ -170,8 +170,8 @@ cn9k_ipsec_inb_sa_create(struct cnxk_cpt_qp *qp,
 	ctx_len = ret;
 	opcode = ROC_IE_ON_MAJOR_OP_WRITE_IPSEC_INBOUND;
 	egrp = roc_cpt->eng_grp[CPT_ENG_TYPE_IE];
-	ret = roc_on_cpt_ctx_write(&qp->lf, (void *)&sa->in_sa, opcode, ctx_len,
-				   egrp);
+	ret = roc_on_cpt_ctx_write(&qp->lf, rte_mempool_virt2iova(&sa->in_sa),
+				   opcode, ctx_len, egrp);
 	if (ret)
 		return ret;
 
