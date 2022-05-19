@@ -53,6 +53,7 @@ ipsec_mb_create(struct rte_vdev_device *vdev,
 	const char *name, *args;
 	int retval;
 
+#ifdef __x86_64__
 	if (vector_mode == IPSEC_MB_NOT_SUPPORTED) {
 		/* Check CPU for supported vector instruction set */
 		if (rte_cpu_get_flag_enabled(RTE_CPUFLAG_AVX512F))
@@ -64,6 +65,7 @@ ipsec_mb_create(struct rte_vdev_device *vdev,
 		else
 			vector_mode = IPSEC_MB_SSE;
 	}
+#endif
 
 	init_params.private_data_size = sizeof(struct ipsec_mb_dev_private) +
 		pmd_data->internals_priv_size;
