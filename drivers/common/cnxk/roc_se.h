@@ -248,11 +248,9 @@ struct roc_se_onk_zuc_chain_ctx {
 			uint8_t auth_lfsr_state[64];
 		};
 		struct {
-			uint8_t ci_key[16];
-			uint8_t rsvd1[16];
+			uint8_t ci_key[32];
 			uint8_t ci_zuc_const[32];
-			uint8_t auth_key[16];
-			uint8_t rsvd2[16];
+			uint8_t auth_key[32];
 			uint8_t auth_zuc_const[32];
 		};
 	} st;
@@ -318,8 +316,12 @@ PLT_STATIC_ASSERT((offsetof(struct roc_se_fc_params, aad_buf) % 128) == 0);
 #define ROC_SE_PDCP_ALG_TYPE_ZUC	  0
 #define ROC_SE_PDCP_ALG_TYPE_SNOW3G	  1
 #define ROC_SE_PDCP_ALG_TYPE_AES_CTR	  2
+#define ROC_SE_PDCP_ALG_TYPE_AES_CMAC	  3
 #define ROC_SE_PDCP_CHAIN_ALG_TYPE_SNOW3G 1
 #define ROC_SE_PDCP_CHAIN_ALG_TYPE_ZUC	  3
+
+#define ROC_SE_PDCP_CHAIN_CTX_LFSR   0
+#define ROC_SE_PDCP_CHAIN_CTX_KEY_IV 1
 
 struct roc_se_ctx {
 	/* Below fields are accessed by sw */
