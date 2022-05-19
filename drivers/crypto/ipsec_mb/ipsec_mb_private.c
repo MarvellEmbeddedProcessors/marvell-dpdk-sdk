@@ -53,7 +53,7 @@ ipsec_mb_create(struct rte_vdev_device *vdev,
 	const char *name, *args;
 	int retval;
 
-#ifdef __x86_64__
+#ifdef RTE_ARCH_X86_64
 	if (vector_mode == IPSEC_MB_NOT_SUPPORTED) {
 		/* Check CPU for supported vector instruction set */
 		if (rte_cpu_get_flag_enabled(RTE_CPUFLAG_AVX512F))
