@@ -1431,6 +1431,8 @@ inline_ipsec_testsuite_teardown(void)
 			printf("rte_eth_dev_reset: err=%s, port=%u\n",
 			       rte_strerror(-ret), port_id);
 	}
+	rte_free(tx_pkts_burst);
+	rte_free(rx_pkts_burst);
 }
 
 static int
@@ -1932,7 +1934,7 @@ test_ipsec_inline_pkt_replay(const void *test_data, const uint64_t esn[],
 	flags.antireplay = true;
 
 	for (i = 0; i < nb_pkts; i++) {
-		memcpy(&td_outb[i], test_data, sizeof(td_outb));
+		memcpy(&td_outb[i], test_data, sizeof(td_outb[0]));
 		td_outb[i].ipsec_xform.options.iv_gen_disable = 1;
 		td_outb[i].ipsec_xform.replay_win_sz = winsz;
 		td_outb[i].ipsec_xform.options.esn = esn_en;
