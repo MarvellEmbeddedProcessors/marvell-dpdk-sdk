@@ -283,6 +283,7 @@ function ipsec_exit()
 	while (ps -ef | grep dpdk-ipsec-secgw | grep -q $IPSEC_PREFIX); do
 		continue
 	done
+	sleep 7
 }
 
 function sig_handler()
@@ -440,7 +441,6 @@ function outb_perf()
 			if [[ $tcnt -gt 1 ]]; then
 				# Restart ipsec-secgw
 				ipsec_exit
-				sleep $WS
 				echo "Restart ipsec-secgw"
 				run_ipsec_secgw
 			fi
@@ -504,7 +504,6 @@ function inb_perf()
 			if [[ $tcnt -gt 1 ]]; then
 				# Restart ipsec-secgw
 				ipsec_exit
-				sleep $WS
 				echo "Restart ipsec-secgw"
 				run_ipsec_secgw_inb
 			fi
@@ -781,7 +780,6 @@ while [ $Y -lt $NUM_MODES ]; do
 	if [[ $Y -gt 4 ]]; then
 		# Restart ipsec-secgw for Inline Protocol Single-SA tests with new config
 		ipsec_exit
-		sleep $WS
 		echo "Restart ipsec-secgw"
 		# Select perf config file for Inline protocol Single-SA perf tests
 		perf_cfg=1
@@ -794,7 +792,6 @@ while [ $Y -lt $NUM_MODES ]; do
 	testpmd_quit "$TPMD_TX_PREFIX"
 	testpmd_quit "$TPMD_RX_PREFIX"
 	ipsec_exit
-	sleep $WS
 
 	echo ""
 	# Inbound
