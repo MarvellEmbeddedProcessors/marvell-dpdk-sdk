@@ -322,17 +322,16 @@ cnxk_sso_queue_setup(struct rte_eventdev *event_dev, uint8_t queue_id,
 	uint8_t priority, weight, affinity;
 
 	/* Default weight and affinity */
-	dev->mlt_prio[queue_id].weight = RTE_EVENT_QUEUE_WEIGHT_HIGHEST;
+	dev->mlt_prio[queue_id].weight = RTE_EVENT_QUEUE_WEIGHT_LOWEST;
 	dev->mlt_prio[queue_id].affinity = RTE_EVENT_QUEUE_AFFINITY_HIGHEST;
 
-	/* Normalize <0-255> */
-	priority = CNXK_QOS_NORMALIZE(queue_conf->priority,
+	priority = CNXK_QOS_NORMALIZE(queue_conf->priority, 0,
 				      RTE_EVENT_DEV_PRIORITY_LOWEST,
 				      CNXK_SSO_PRIORITY_CNT);
-	weight = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].weight,
-				    RTE_EVENT_QUEUE_WEIGHT_HIGHEST,
-				    CNXK_SSO_WEIGHT_CNT);
-	affinity = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].affinity,
+	weight = CNXK_QOS_NORMALIZE(
+		dev->mlt_prio[queue_id].weight, CNXK_SSO_WEIGHT_MIN,
+		RTE_EVENT_QUEUE_WEIGHT_HIGHEST, CNXK_SSO_WEIGHT_CNT);
+	affinity = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].affinity, 0,
 				      RTE_EVENT_QUEUE_AFFINITY_HIGHEST,
 				      CNXK_SSO_AFFINITY_CNT);
 
@@ -356,9 +355,12 @@ cnxk_sso_queue_attribute_get(struct rte_eventdev *event_dev, uint8_t queue_id,
 {
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
 
-	*attr_value = attr_id == RTE_EVENT_QUEUE_ATTR_WEIGHT ?
-			      dev->mlt_prio[queue_id].weight :
-			      dev->mlt_prio[queue_id].affinity;
+	if (attr_id == RTE_EVENT_QUEUE_ATTR_WEIGHT)
+		*attr_value = dev->mlt_prio[queue_id].weight;
+	else if (attr_id == RTE_EVENT_QUEUE_ATTR_AFFINITY)
+		*attr_value = dev->mlt_prio[queue_id].affinity;
+	else
+		return -EINVAL;
 
 	return 0;
 }
@@ -383,18 +385,25 @@ cnxk_sso_queue_attribute_set(struct rte_eventdev *event_dev, uint8_t queue_id,
 	case RTE_EVENT_QUEUE_ATTR_AFFINITY:
 		dev->mlt_prio[queue_id].affinity = attr_value;
 		break;
+	case RTE_EVENT_QUEUE_ATTR_NB_ATOMIC_FLOWS:
+	case RTE_EVENT_QUEUE_ATTR_NB_ATOMIC_ORDER_SEQUENCES:
+	case RTE_EVENT_QUEUE_ATTR_EVENT_QUEUE_CFG:
+	case RTE_EVENT_QUEUE_ATTR_SCHEDULE_TYPE:
+		/* FALLTHROUGH */
+		plt_sso_dbg("Unsupported attribute id %u", attr_id);
+		return -ENOTSUP;
 	default:
-		plt_sso_dbg("Ignore setting attribute id %u", attr_id);
-		return 0;
+		plt_err("Invalid attribute id %u", attr_id);
+		return -EINVAL;
 	}
 
-	priority = CNXK_QOS_NORMALIZE(conf->priority,
+	priority = CNXK_QOS_NORMALIZE(conf->priority, 0,
 				      RTE_EVENT_DEV_PRIORITY_LOWEST,
 				      CNXK_SSO_PRIORITY_CNT);
-	weight = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].weight,
-				    RTE_EVENT_QUEUE_WEIGHT_HIGHEST,
-				    CNXK_SSO_WEIGHT_CNT);
-	affinity = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].affinity,
+	weight = CNXK_QOS_NORMALIZE(
+		dev->mlt_prio[queue_id].weight, CNXK_SSO_WEIGHT_MIN,
+		RTE_EVENT_QUEUE_WEIGHT_HIGHEST, CNXK_SSO_WEIGHT_CNT);
+	affinity = CNXK_QOS_NORMALIZE(dev->mlt_prio[queue_id].affinity, 0,
 				      RTE_EVENT_QUEUE_AFFINITY_HIGHEST,
 				      CNXK_SSO_AFFINITY_CNT);
 

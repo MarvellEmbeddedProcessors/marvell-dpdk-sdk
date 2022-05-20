@@ -38,9 +38,11 @@
 #define CNXK_SSO_XAQ_CACHE_CNT (0x7)
 #define CNXK_SSO_XAQ_SLACK     (8)
 #define CNXK_SSO_WQE_SG_PTR    (9)
-#define CNXK_SSO_PRIORITY_CNT  (8)
-#define CNXK_SSO_WEIGHT_CNT    (64)
-#define CNXK_SSO_AFFINITY_CNT  (16)
+#define CNXK_SSO_PRIORITY_CNT  (0x8)
+#define CNXK_SSO_WEIGHT_MAX    (0x3f)
+#define CNXK_SSO_WEIGHT_MIN    (0x3)
+#define CNXK_SSO_WEIGHT_CNT    (CNXK_SSO_WEIGHT_MAX - CNXK_SSO_WEIGHT_MIN + 1)
+#define CNXK_SSO_AFFINITY_CNT  (0x10)
 
 #define CNXK_TT_FROM_TAG(x)	    (((x) >> 32) & SSO_TT_EMPTY)
 #define CNXK_TT_FROM_EVENT(x)	    (((x) >> 38) & SSO_TT_EMPTY)
@@ -57,8 +59,10 @@
 #define CN10K_GW_MODE_PREF     1
 #define CN10K_GW_MODE_PREF_WFE 2
 
-#define CNXK_SSO_FLUSH_RETRY_MAX	  0xfff
-#define CNXK_QOS_NORMALIZE(val, max, cnt) (val / ((max + cnt - 1) / cnt))
+#define CNXK_QOS_NORMALIZE(val, min, max, cnt)                                 \
+	(min + val / ((max + cnt - 1) / cnt))
+#define CNXK_SSO_FLUSH_RETRY_MAX 0xfff
+
 #define CNXK_VALID_DEV_OR_ERR_RET(dev, drv_name)                               \
 	do {                                                                   \
 		if (strncmp(dev->driver->name, drv_name, strlen(drv_name)))    \
