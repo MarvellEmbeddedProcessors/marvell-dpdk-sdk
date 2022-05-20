@@ -11,6 +11,7 @@
 #include <rte_cpuflags.h>
 
 #include <openssl/hmac.h>
+#include <openssl/cmac.h>
 #include <openssl/evp.h>
 
 #include "openssl_pmd_private.h"
@@ -567,6 +568,29 @@ openssl_set_session_auth_parameters(struct openssl_session *sess,
 						xform->auth.key.data);
 		break;
 
+	case RTE_CRYPTO_AUTH_AES_CMAC:
+		sess->auth.mode = OPENSSL_AUTH_AS_CMAC;
+		sess->auth.cmac.ctx = CMAC_CTX_new();
+		switch (xform->auth.key.length) {
+		case 16:
+			sess->auth.cmac.evp_algo = EVP_aes_128_cbc();
+			break;
+		case 24:
+			sess->auth.cmac.evp_algo = EVP_aes_192_cbc();
+			break;
+		case 32:
+			sess->auth.cmac.evp_algo = EVP_aes_256_cbc();
+			break;
+		default:
+			return -EINVAL;
+		}
+		if (CMAC_Init(sess->auth.cmac.ctx,
+			      xform->auth.key.data,
+			      xform->auth.key.length,
+			      sess->auth.cmac.evp_algo, NULL) != 1)
+			return -EINVAL;
+		break;
+
 	case RTE_CRYPTO_AUTH_MD5:
 	case RTE_CRYPTO_AUTH_SHA1:
 	case RTE_CRYPTO_AUTH_SHA224:
@@ -724,6 +748,9 @@ openssl_reset_session(struct openssl_session *sess)
 	case OPENSSL_AUTH_AS_HMAC:
 		EVP_PKEY_free(sess->auth.hmac.pkey);
 		HMAC_CTX_free(sess->auth.hmac.ctx);
+		break;
+	case OPENSSL_AUTH_AS_CMAC:
+		CMAC_CTX_free(sess->auth.cmac.ctx);
 		break;
 	default:
 		break;
@@ -1262,6 +1289,58 @@ process_auth_err:
 	return -EINVAL;
 }
 
+/** Process standard openssl auth algorithms with cmac */
+static int
+process_openssl_auth_cmac(struct rte_mbuf *mbuf_src, uint8_t *dst, int offset,
+		int srclen, CMAC_CTX *ctx)
+{
+	unsigned int dstlen;
+	struct rte_mbuf *m;
+	int l, n = srclen;
+	uint8_t *src;
+
+	for (m = mbuf_src; m != NULL && offset > rte_pktmbuf_data_len(m);
+			m = m->next)
+		offset -= rte_pktmbuf_data_len(m);
+
+	if (m == 0)
+		goto process_auth_err;
+
+	src = rte_pktmbuf_mtod_offset(m, uint8_t *, offset);
+
+	l = rte_pktmbuf_data_len(m) - offset;
+	if (srclen <= l) {
+		if (CMAC_Update(ctx, (unsigned char *)src, srclen) != 1)
+			goto process_auth_err;
+		goto process_auth_final;
+	}
+
+	if (CMAC_Update(ctx, (unsigned char *)src, l) != 1)
+		goto process_auth_err;
+
+	n -= l;
+
+	for (m = m->next; (m != NULL) && (n > 0); m = m->next) {
+		src = rte_pktmbuf_mtod(m, uint8_t *);
+		l = rte_pktmbuf_data_len(m) < n ? rte_pktmbuf_data_len(m) : n;
+		if (CMAC_Update(ctx, (unsigned char *)src, l) != 1)
+			goto process_auth_err;
+		n -= l;
+	}
+
+process_auth_final:
+	if (CMAC_Final(ctx, dst, (size_t *)&dstlen) != 1)
+		goto process_auth_err;
+
+	CMAC_CTX_cleanup(ctx);
+
+	return 0;
+
+process_auth_err:
+	OPENSSL_LOG(ERR, "Process openssl cmac auth failed");
+	return -EINVAL;
+}
+
 /** Process standard openssl auth algorithms with hmac */
 static int
 process_openssl_auth_hmac(struct rte_mbuf *mbuf_src, uint8_t *dst, int offset,
@@ -1558,6 +1637,7 @@ process_openssl_auth_op(struct openssl_qp *qp, struct rte_crypto_op *op,
 	int srclen, status;
 	EVP_MD_CTX *ctx_a;
 	HMAC_CTX *ctx_h;
+	CMAC_CTX *ctx_c;
 
 	srclen = op->sym->auth.data.length;
 
@@ -1579,6 +1659,14 @@ process_openssl_auth_op(struct openssl_qp *qp, struct rte_crypto_op *op,
 				op->sym->auth.data.offset, srclen,
 				ctx_h);
 		HMAC_CTX_free(ctx_h);
+		break;
+	case OPENSSL_AUTH_AS_CMAC:
+		ctx_c = CMAC_CTX_new();
+		CMAC_CTX_copy(ctx_c, sess->auth.cmac.ctx);
+		status = process_openssl_auth_cmac(mbuf_src, dst,
+				op->sym->auth.data.offset, srclen,
+				ctx_c);
+		CMAC_CTX_free(ctx_c);
 		break;
 	default:
 		status = -1;
