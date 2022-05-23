@@ -12,6 +12,9 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <sys/queue.h>
+#ifdef RTE_EXEC_ENV_LINUX
+#include <malloc.h>
+#endif
 
 #include <rte_fbarray.h>
 #include <rte_memory.h>
@@ -1117,6 +1120,12 @@ fail:
 #define EAL_ACTIVE_MEMSEG_LIST_REQ	"/eal/active_memseg_list"
 #define EAL_ELEMENT_LIST_REQ		"/eal/elem_list"
 #define EAL_ELEMENT_INFO_REQ		"/eal/elem_info"
+
+#ifdef RTE_EXEC_ENV_LINUX
+#define SYSMEMORY_LIST_REQ		"/sysmem/sys_heap_list"
+#define SYSMEMORY_INFO_REQ		"/sysmem/sys_heap_info"
+#endif
+
 #define ADDR_STR			15
 
 
@@ -1715,6 +1724,318 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 	return 0;
 }
 
+#ifdef RTE_EXEC_ENV_LINUX
+#define MAX_SYS_MEM_ARENAS	128
+#define MAX_TAG_CHAR		128
+
+/* Memory size are in bytes. */
+struct mem_stats {
+	uint64_t fast_count; /* Number of free blocks in fast bin. */
+	uint64_t fast_size;  /* Size in bytes of free blocks in fast bin. */
+	uint64_t rest_count; /* Number of free blocks in bin. */
+	uint64_t rest_size;  /* Size in bytes of free blocks in bin. */
+	uint64_t mmap_count; /* Number of mmap blocks. */
+	uint64_t mmap_size;  /* Size in bytes of mmap'd memory. */
+	uint64_t curr_size;  /* Size in bytes allocated by system. */
+	uint64_t heap_size;  /* Heap size in bytes. */
+	uint64_t heap_count; /* Number of heaps. */
+};
+
+struct rte_heap_mem_stats {
+	unsigned int num_active_arena;
+	struct mem_stats stats[MAX_SYS_MEM_ARENAS];
+};
+
+/* This function shall be called to parse only attributes.
+ * Parsing of the "tags" shall be done by the caller.
+ */
+static int
+parse_attr(char *buf, uint32_t *i, char *attr, const char *key)
+{
+	int j = 0;
+	int keymatch = 0;
+
+	attr[j] = '\0';
+
+	while ((buf[*i] != '>') && (j < MAX_TAG_CHAR)) {
+		/* Ignore spaces. */
+		if (buf[*i] == ' ') {
+			attr[j] = '\0';
+			j = 0;
+			(*i)++;
+			continue;
+		}
+
+		/* Attribute key */
+		if (buf[*i] == '=') {
+			attr[j] = '\0';
+			j = 0;
+			(*i)++;
+
+			/* If the key is matched, extract the value. */
+			if (strncmp(attr, key, strlen(key)) != 0)
+				continue;
+			else
+				keymatch = 1;
+		}
+
+		/* Attribute value */
+		if ((buf[*i] == '"') && (keymatch == 1)) {
+			j = 0;
+			(*i)++;
+
+			while ((buf[*i] != '"') && (j < MAX_TAG_CHAR))
+				attr[(j)++] = buf[(*i)++];
+			attr[j] = '\0';
+			(*i)++;
+			return 0;
+		}
+
+		keymatch = 0;
+		attr[(j)++] = buf[(*i)++];
+	}
+
+	(*i)++;
+	return -1;
+}
+
+/* Get the system memory stats into buffer by calling malloc_info().
+ * malloc_info() returns the stats in XML format. Parse the XML to extract
+ * number of heaps, size of each heap, free memory in heap.
+ */
+static int
+parse_heap_mem_stats(struct rte_heap_mem_stats *heap_stats)
+{
+	char tag[MAX_TAG_CHAR] = {0};
+	int old_mem_index = -1;
+	int mem_index = -1;
+	uint32_t i = 0;
+	uint32_t j = 0;
+	size_t length;
+	char *buf;
+	FILE *fp;
+	int ret;
+
+	/* buf is dynamically allocated by open_memstream. */
+	fp = open_memstream(&buf, &length);
+	if (fp == NULL) {
+		RTE_LOG(DEBUG, EAL, "Error: Failed to open memory stream\n");
+		return -1;
+	}
+
+	/* Gets system memory stat's XML format. */
+	ret = malloc_info(0, fp);
+	fclose(fp);
+
+	if (ret != 0) {
+		RTE_LOG(DEBUG, EAL, "Error: malloc_info returned error\n");
+		return -1;
+	}
+
+	while (i < length) {
+		j = 0;
+		tag[j] = '\0';
+
+		/* Ignore newline and spaces. */
+		if ((buf[i] == '\n') || (buf[i] == ' ') || (buf[i] == '/') ||
+		    (buf[i] == '>')) {
+			i++;
+			continue;
+		}
+
+		if (buf[i] == '<') {
+			i++;
+			while ((buf[i] != ' ') && (buf[i] != '>') &&
+			       (j < MAX_TAG_CHAR)) {
+				tag[j++] = buf[i++];
+			}
+
+			if (strncmp(tag, "heap", strlen("heap")) == 0) {
+				old_mem_index = mem_index++;
+				if (mem_index >= MAX_SYS_MEM_ARENAS) {
+					RTE_LOG(DEBUG, EAL, "Memory arena "
+						"exceeded max limit: %d",
+						MAX_SYS_MEM_ARENAS);
+					goto done;
+				}
+				heap_stats->num_active_arena++;
+			}
+
+			continue;
+		}
+
+		if (mem_index < 0) {
+			i++;
+			continue;
+		}
+
+		if (parse_attr(buf, &i, tag, "type") < 0)
+			continue;
+
+		if (strncmp(tag, "fast", strlen("fast")) == 0) {
+			/* For total of all arenas, "heap" tag is not present
+			 * in xml. Below check is to handle that scenarios.
+			 *
+			 * FIXME: mem_index increment shall be independent of
+			 * the tag.
+			 */
+			if (old_mem_index == mem_index) {
+				mem_index++;
+				if (mem_index >= MAX_SYS_MEM_ARENAS) {
+					RTE_LOG(DEBUG, EAL, "Memory arena "
+						"exceeded max limit: %d\n",
+						MAX_SYS_MEM_ARENAS);
+					goto done;
+				}
+				heap_stats->num_active_arena++;
+			}
+			old_mem_index = mem_index;
+
+			if (parse_attr(buf, &i, tag, "count") == 0)
+				heap_stats->stats[mem_index].fast_count =
+							strtoul(tag, NULL, 10);
+			if (parse_attr(buf, &i, tag, "size") == 0)
+				heap_stats->stats[mem_index].fast_size =
+							strtoul(tag, NULL, 10);
+			continue;
+		}
+
+		if (strncmp(tag, "rest", strlen("rest")) == 0) {
+			if (parse_attr(buf, &i, tag, "count") == 0)
+				heap_stats->stats[mem_index].rest_count =
+							strtoul(tag, NULL, 10);
+			if (parse_attr(buf, &i, tag, "size") == 0)
+				heap_stats->stats[mem_index].rest_size =
+							strtoul(tag, NULL, 10);
+			continue;
+		}
+
+		if (strncmp(tag, "current", strlen("current")) == 0) {
+			if (parse_attr(buf, &i, tag, "size") == 0)
+				heap_stats->stats[mem_index].curr_size =
+							strtoul(tag, NULL, 10);
+			continue;
+		}
+
+		if (strncmp(tag, "total", strlen("total")) == 0) {
+			if (parse_attr(buf, &i, tag, "size") == 0)
+				heap_stats->stats[mem_index].heap_size =
+							strtoul(tag, NULL, 10);
+			continue;
+		}
+
+		if (strncmp(tag, "subheaps", strlen("subheaps")) == 0) {
+			if (parse_attr(buf, &i, tag, "size") == 0)
+				heap_stats->stats[mem_index].heap_count =
+							strtoul(tag, NULL, 10);
+			continue;
+		}
+
+		if (strncmp(tag, "mmap", strlen("mmap")) == 0) {
+			if (parse_attr(buf, &i, tag, "count") == 0)
+				heap_stats->stats[mem_index].mmap_count =
+							strtoul(tag, NULL, 10);
+			if (parse_attr(buf, &i, tag, "size") == 0)
+				heap_stats->stats[mem_index].mmap_size =
+							strtoul(tag, NULL, 10);
+			continue;
+		}
+
+		i++;
+	}
+
+done:
+	/* All done! Let's free the buf. */
+	free(buf);
+	return 0;
+}
+
+static int
+handle_sysmem_list_request(const char *cmd __rte_unused,
+			   const char *params __rte_unused,
+			   struct rte_tel_data *d)
+{
+	struct rte_heap_mem_stats heap_mem_stats;
+	unsigned int num_arena;
+	unsigned int i;
+
+	memset(&heap_mem_stats, 0, sizeof(struct rte_heap_mem_stats));
+	if (parse_heap_mem_stats(&heap_mem_stats) != 0)
+		return -1;
+
+	/* Note:
+	 * Total active arenas are (num_active_arena - 1). The last entry in
+	 * the array is total of all arenas.
+	 */
+	num_arena = heap_mem_stats.num_active_arena;
+
+	rte_tel_data_start_array(d, RTE_TEL_INT_VAL);
+	for (i = 0; i < num_arena; i++)
+		rte_tel_data_add_array_int(d, i);
+
+	return 0;
+}
+
+static int
+handle_sysmem_info_request(const char *cmd __rte_unused, const char *params,
+			   struct rte_tel_data *d)
+{
+	struct rte_heap_mem_stats heap_mem_stats;
+	unsigned int arena_id;
+	uint64_t free_size;
+	uint64_t free_count;
+	uint64_t allocated_size;
+
+	if (params == NULL || strlen(params) == 0 || !isdigit(*params))
+		return -1;
+
+	arena_id = (unsigned int)strtoul(params, NULL, 10);
+	if (arena_id > UINT32_MAX)
+		return -1;
+
+	if (arena_id >= MAX_SYS_MEM_ARENAS)
+		return -1;
+
+	memset(&heap_mem_stats, 0, sizeof(struct rte_heap_mem_stats));
+	if (parse_heap_mem_stats(&heap_mem_stats) != 0)
+		return -1;
+
+	if (arena_id >= heap_mem_stats.num_active_arena) {
+		RTE_LOG(DEBUG, EAL, "Memory arena exceeded max limit: %d\n",
+			MAX_SYS_MEM_ARENAS);
+		return -1;
+	}
+
+	/* Fast and rest account for the total free memory. */
+	free_size = heap_mem_stats.stats[arena_id].fast_size +
+		    heap_mem_stats.stats[arena_id].rest_size;
+
+	free_count = heap_mem_stats.stats[arena_id].fast_count +
+		     heap_mem_stats.stats[arena_id].rest_count;
+
+	/* (System memory - free size) = allocated memory size. */
+	allocated_size = heap_mem_stats.stats[arena_id].curr_size - free_size;
+
+	rte_tel_data_start_dict(d);
+	rte_tel_data_add_dict_int(d, "Arena_id", arena_id);
+	rte_tel_data_add_dict_int(d, "Allocated_size", allocated_size);
+	rte_tel_data_add_dict_u64(d, "Free_count", free_count);
+	rte_tel_data_add_dict_u64(d, "Free_size", free_size);
+	rte_tel_data_add_dict_u64(d, "Curr_size",
+				  heap_mem_stats.stats[arena_id].curr_size);
+	rte_tel_data_add_dict_u64(d, "Mmap_count",
+				  heap_mem_stats.stats[arena_id].mmap_count);
+	rte_tel_data_add_dict_u64(d, "Mmap_size",
+				  heap_mem_stats.stats[arena_id].mmap_size);
+	rte_tel_data_add_dict_u64(d, "Heap_count",
+				  heap_mem_stats.stats[arena_id].heap_count);
+	rte_tel_data_add_dict_u64(d, "Heap_size",
+				  heap_mem_stats.stats[arena_id].heap_size);
+
+	return 0;
+}
+#endif
+
 RTE_INIT(memory_telemetry)
 {
 	rte_telemetry_register_cmd(
@@ -1744,5 +2065,14 @@ RTE_INIT(memory_telemetry)
 	rte_telemetry_register_cmd(EAL_ELEMENT_INFO_REQ,
 			handle_eal_element_info_request,
 			"Returns element information. Parameters: int elem_id");
+
+#ifdef RTE_EXEC_ENV_LINUX
+	rte_telemetry_register_cmd(SYSMEMORY_LIST_REQ,
+			handle_sysmem_list_request,
+			"Returns element information. Takes no parameters");
+	rte_telemetry_register_cmd(SYSMEMORY_INFO_REQ,
+			handle_sysmem_info_request,
+			"Returns element information. Parameters: int arena_id");
+#endif
 }
 #endif
