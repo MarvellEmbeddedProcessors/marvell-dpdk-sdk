@@ -674,6 +674,10 @@ cn10k_sso_hws_event_tx(struct cn10k_sso_hws *ws, struct rte_event *ev,
 	}
 
 	m = ev->mbuf;
+	txq = cn10k_sso_hws_xtract_meta(m, txq_data);
+	if ((((txq)->nb_sqb_bufs_adj - *(txq)->fc_mem)
+	     << (txq)->sqes_per_sqb_log2) <= 0)
+		return 0;
 	cn10k_sso_tx_one(ws, m, cmd, lmt_id, lmt_addr, ev->sched_type, txq_data,
 			 flags);
 
