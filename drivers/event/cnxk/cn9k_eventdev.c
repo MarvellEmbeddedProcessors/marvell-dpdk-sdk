@@ -123,6 +123,7 @@ cn9k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 {
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(arg);
 	uint64_t retry = CNXK_SSO_FLUSH_RETRY_MAX;
+	struct cnxk_timesync_info *tstamp;
 	struct cn9k_sso_hws_dual *dws;
 	struct cn9k_sso_hws *ws;
 	uint64_t cq_ds_cnt = 1;
@@ -131,6 +132,7 @@ cn9k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 	struct rte_event ev;
 	uintptr_t ws_base;
 	uint64_t val, req;
+	void *lookup_mem;
 
 	plt_write64(0, base + SSO_LF_GGRP_QCTL);
 
@@ -146,20 +148,23 @@ cn9k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 	if (dev->dual_ws) {
 		dws = hws;
 		ws_base = dws->base[0];
+		lookup_mem = dws->lookup_mem;
+		tstamp = dws->tstamp;
 	} else {
 		ws = hws;
 		ws_base = ws->base;
+		lookup_mem = ws->lookup_mem;
+		tstamp = ws->tstamp;
 	}
 
 	while (aq_cnt || cq_ds_cnt || ds_cnt) {
 		plt_write64(req, ws_base + SSOW_LF_GWS_OP_GET_WORK0);
-		cn9k_sso_hws_get_work_empty(ws_base, &ev);
+		cn9k_sso_hws_get_work_empty(ws_base, &ev, dev->rx_offloads,
+					    lookup_mem, tstamp);
 		if (fn != NULL && ev.u64 != 0)
 			fn(arg, ev);
 		if (ev.sched_type != SSO_TT_EMPTY)
-			cnxk_sso_hws_swtag_flush(
-				ws_base + SSOW_LF_GWS_TAG,
-				ws_base + SSOW_LF_GWS_OP_SWTAG_FLUSH);
+			cnxk_sso_hws_swtag_flush(ws_base);
 		else if (retry-- == 0)
 			break;
 		do {
@@ -1168,9 +1173,6 @@ static struct eventdev_ops cn9k_sso_dev_ops = {
 	.eth_tx_adapter_caps_get = cn9k_sso_tx_adapter_caps_get,
 	.eth_tx_adapter_queue_add = cn9k_sso_tx_adapter_queue_add,
 	.eth_tx_adapter_queue_del = cn9k_sso_tx_adapter_queue_del,
-	.eth_tx_adapter_start = cnxk_sso_tx_adapter_start,
-	.eth_tx_adapter_stop = cnxk_sso_tx_adapter_stop,
-	.eth_tx_adapter_free = cnxk_sso_tx_adapter_free,
 
 	.timer_adapter_caps_get = cnxk_tim_caps_get,
 

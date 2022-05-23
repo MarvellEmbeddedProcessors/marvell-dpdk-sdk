@@ -134,13 +134,14 @@ cn10k_sso_hws_flush_events(void *hws, uint8_t queue_id, uintptr_t base,
 
 	while (aq_cnt || cq_ds_cnt || ds_cnt) {
 		plt_write64(req, ws->base + SSOW_LF_GWS_OP_GET_WORK0);
-		cn10k_sso_hws_get_work_empty(ws, &ev);
+		cn10k_sso_hws_get_work_empty(
+			ws, &ev,
+			(NIX_RX_OFFLOAD_MAX - 1) | NIX_RX_REAS_F |
+				NIX_RX_MULTI_SEG_F | CPT_RX_WQE_F);
 		if (fn != NULL && ev.u64 != 0)
 			fn(arg, ev);
 		if (ev.sched_type != SSO_TT_EMPTY)
-			cnxk_sso_hws_swtag_flush(
-				ws->base + SSOW_LF_GWS_WQE0,
-				ws->base + SSOW_LF_GWS_OP_SWTAG_FLUSH);
+			cnxk_sso_hws_swtag_flush(ws->base);
 		else if (retry-- == 0)
 			break;
 		do {

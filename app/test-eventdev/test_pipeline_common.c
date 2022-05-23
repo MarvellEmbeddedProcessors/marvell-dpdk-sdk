@@ -486,9 +486,9 @@ pipeline_event_rx_adapter_setup(struct evt_options *opt, uint8_t stride,
 		unsigned int nb_elem = (opt->pool_sz / opt->vector_size) << 1;
 
 		nb_elem = RTE_MAX(512U, nb_elem);
-		nb_elem += evt_nr_active_lcores(opt->wlcores) * 16;
+		nb_elem += evt_nr_active_lcores(opt->wlcores) * 32;
 		vector_pool = rte_event_vector_pool_create(
-			"vector_pool", nb_elem, 16, opt->vector_size,
+			"vector_pool", nb_elem, 32, opt->vector_size,
 			opt->socket_id);
 		if (vector_pool == NULL) {
 			evt_err("failed to create event vector pool");
