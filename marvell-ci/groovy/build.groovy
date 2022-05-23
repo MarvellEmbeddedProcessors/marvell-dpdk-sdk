@@ -337,19 +337,20 @@ def prepare_builds(Object s, nodes) {
 	/* CN9k Debug Build */
 	if (!s.utils.get_flag(s, "skip_build") ||
 	    (!s.utils.get_flag(s, "skip_test") && s.utils.get_flag(s, "run_test-cn9k-debug")))
-		add_build_stage(s, nodes, "test-cn9k-debug-build", 'gcc-marvell', 'static', '-O0',
+		add_build_stage(s, nodes, "test-cn9k-debug-build", 'gcc-marvell',
+			'static', '-O0 -DRTE_ENABLE_ASSERT',
 			'', 'cn9k',
-			"-Dexamples=all --buildtype=debug --werror -Dc_args='-DRTE_ENABLE_ASSERT'",
-			'', false, true, false)
+			"-Dexamples=all --buildtype=debug --werror",
+			'', false)
 
 	/* CN10k Debug Build */
 	if (s.ENABLE_CN10K && (!s.utils.get_flag(s, "skip_build") ||
 	    (!s.utils.get_flag(s, "skip_test") && (s.utils.get_flag(s, "run_test-cn10k-debug") ||
 		(s.utils.get_flag(s, "run_test-asim-cn10ka-debug"))))))
 		add_build_stage(s, nodes, "test-cn10k-debug-build", 'gcc-marvell',
-			'static', '-O0', '', 'cn10k',
-			"-Dexamples=all --buildtype=debug --werror -Dc_args='-DRTE_ENABLE_ASSERT'",
-			'', false, true, false)
+			'static', '-O0 -DRTE_ENABLE_ASSERT', '', 'cn10k',
+			"-Dexamples=all --buildtype=debug --werror",
+			'', false)
 
 }
 

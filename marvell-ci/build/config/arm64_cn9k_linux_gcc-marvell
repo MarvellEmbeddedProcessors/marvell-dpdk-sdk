@@ -15,3 +15,5 @@ endian = 'little'
 
 [properties]
 platform = 'cn9k'
+
+[built-in options]

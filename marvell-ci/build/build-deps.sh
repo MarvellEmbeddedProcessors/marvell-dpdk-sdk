@@ -65,6 +65,40 @@ function setup_libpcap()
 	popd
 }
 
+function setup_ipsec_mb()
+{
+	local patch="0001-enable-cross-compilation.patch"
+
+	mkdir -p $BUILD_ROOT/ipsec_mb
+
+	pushd $BUILD_ROOT/ipsec_mb
+	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/main/ipsec-mb-main.tar.gz
+	tar -zxvf ipsec-mb-main.tar.gz --strip-components=1
+	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch
+	SHARED=n CC=aarch64-marvell-linux-gnu-gcc \
+		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT
+	SHARED=n CC=aarch64-marvell-linux-gnu-gcc \
+		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT install
+	popd
+}
+
+function setup_openssl()
+{
+	mkdir -p $BUILD_ROOT/libopenssl
+
+	pushd $BUILD_ROOT/libopenssl
+	fetch_dep https://www.openssl.org/source/openssl-1.1.1g.tar.gz
+	tar -zxvf openssl-1.1.1g.tar.gz --strip-components=1
+	./Configure --cross-compile-prefix=aarch64-marvell-linux-gnu- \
+		--openssldir=etc/ssl \
+		--prefix=$INSTALL_ROOT \
+		shared \
+		linux-aarch64
+	make -j${MAKE_J}
+	make install -j${MAKE_J}
+	popd
+}
+
 SCRIPT_NAME="$(basename "$0")"
 if ! OPTS=$(getopt \
 	-o "i:r:j:p:h" \
@@ -112,4 +146,6 @@ fi
 cd $PROJECT_ROOT
 
 setup_libpcap
+setup_ipsec_mb
+setup_openssl
 
