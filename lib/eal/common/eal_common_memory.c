@@ -1115,11 +1115,11 @@ fail:
 #define EAL_MEMZONE_INFO_REQ		"/eal/memzone_info"
 #define EAL_HEAP_LIST_REQ		"/eal/heap_list"
 #define EAL_HEAP_INFO_REQ		"/eal/heap_info"
-#define EAL_MEMSEG_REQ			"/eal/memseg_list"
+#define EAL_MEMSEG_LIST_ARR_REQ		"/eal/memseg_list_array"
+#define EAL_MEMSEG_LIST_INFO_REQ	"/eal/memseg_list_info"
 #define EAL_MEMSEG_INFO_REQ		"/eal/memseg_info"
-#define EAL_ACTIVE_MEMSEG_LIST_REQ	"/eal/active_memseg_list"
-#define EAL_ELEMENT_LIST_REQ		"/eal/elem_list"
-#define EAL_ELEMENT_INFO_REQ		"/eal/elem_info"
+#define EAL_ELEMENT_LIST_REQ		"/eal/element_list"
+#define EAL_ELEMENT_INFO_REQ		"/eal/element_info"
 
 #ifdef RTE_EXEC_ENV_LINUX
 #define SYSMEMORY_LIST_REQ		"/sysmem/sys_heap_list"
@@ -1276,9 +1276,9 @@ handle_eal_memzone_list_request(const char *cmd __rte_unused,
 }
 
 static int
-handle_eal_active_memseg_request(const char *cmd __rte_unused,
-				 const char *params __rte_unused,
-				 struct rte_tel_data *d)
+handle_eal_memseg_list_array_request(const char *cmd __rte_unused,
+				     const char *params __rte_unused,
+				     struct rte_tel_data *d)
 {
 	struct rte_mem_config *mcfg;
 	int i;
@@ -1301,8 +1301,8 @@ handle_eal_active_memseg_request(const char *cmd __rte_unused,
 }
 
 static int
-handle_eal_memseg_request(const char *cmd __rte_unused, const char *params,
-			  struct rte_tel_data *d)
+handle_eal_memseg_list_info_request(const char *cmd __rte_unused,
+				    const char *params, struct rte_tel_data *d)
 {
 	struct rte_mem_config *mcfg;
 	struct rte_memseg_list *msl;
@@ -1316,7 +1316,7 @@ handle_eal_memseg_request(const char *cmd __rte_unused, const char *params,
 	if (strncasecmp(params, "help", strlen(params)) == 0) {
 		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
 		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<memseg-list-id>", EAL_MEMSEG_REQ);
+			 "%s,<memseg-list-id>", EAL_MEMSEG_LIST_INFO_REQ);
 		rte_tel_data_string(d, buff);
 		return 0;
 	}
@@ -1363,7 +1363,7 @@ handle_eal_memseg_info_request(const char *cmd __rte_unused,
 	uint32_t ms_list_idx = 0;
 	uint32_t ms_idx = 0;
 	uint32_t msl_len;
-	char dlim[2] = ":";
+	char dlim[2] = ",";
 	char *token;
 	char *params_args;
 
@@ -1373,7 +1373,7 @@ handle_eal_memseg_info_request(const char *cmd __rte_unused,
 	if (strncasecmp(params, "help", strlen(params)) == 0) {
 		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
 		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<memseg-list-id>:<memseg-id>",
+			 "%s,<memseg-list-id>,<memseg-id>",
 			 EAL_MEMSEG_INFO_REQ);
 		rte_tel_data_string(d, buff);
 		return 0;
@@ -1456,7 +1456,7 @@ handle_eal_element_list_request(const char *cmd __rte_unused,
 	uint32_t ms_list_idx = 0;
 	uint32_t heap_id = 0;
 	uint32_t ms_idx = 0;
-	char dlim[2] = ":";
+	char dlim[2] = ",";
 	int elem_count = 0;
 	char *token;
 	char *params_args;
@@ -1467,7 +1467,7 @@ handle_eal_element_list_request(const char *cmd __rte_unused,
 	if (strncasecmp(params, "help", strlen(params)) == 0) {
 		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
 		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<heap-id>:<memseg-list-id>:<memseg-id>",
+			 "%s,<heap-id>,<memseg-list-id>,<memseg-id>",
 			 EAL_ELEMENT_LIST_REQ);
 		rte_tel_data_string(d, buff);
 		return 0;
@@ -1567,8 +1567,7 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 	uint32_t ms_idx = 0;
 	uint32_t start_elem = 0, end_elem = 0;
 	uint32_t count = 0, elem_count = 0;
-	char dlim[2] = ":";
-	char dlim2[2] = "-";
+	char dlim[2] = ",";
 	char str[ADDR_STR];
 	char *params_args;
 	char *token;
@@ -1579,8 +1578,8 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 	if (strncasecmp(params, "help", strlen(params)) == 0) {
 		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
 		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<heap-id>:<memseg-list-id>:<memseg-id>:"
-			 "<elem-start-id>-<elem-end-id>",
+			 "%s,<heap-id>,<memseg-list-id>,<memseg-id>,"
+			 "<elem-start-id>,<elem-end-id>",
 			 EAL_ELEMENT_INFO_REQ);
 		rte_tel_data_string(d, buff);
 		return 0;
@@ -1622,7 +1621,7 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 
 	ms_idx = strtoul(token, NULL, 10);
 
-	token = strtok(NULL, dlim2);
+	token = strtok(NULL, dlim);
 	if (token == NULL || !isdigit(*token)) {
 		free(params_args);
 		return -1;
@@ -1630,7 +1629,7 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 
 	start_elem = strtoul(token, NULL, 10);
 
-	token = strtok(NULL, dlim2);
+	token = strtok(NULL, dlim);
 	if (token == NULL || !isdigit(*token)) {
 		free(params_args);
 		return -1;
@@ -1703,7 +1702,7 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 			 "Pad" : "Error");
 		rte_tel_data_add_dict_string(c, "element_state", str);
 
-		snprintf(str, ADDR_STR, "%s.%u", "elem_info", count);
+		snprintf(str, ADDR_STR, "%s.%u", "element", count);
 		if (rte_tel_data_add_dict_container(d, str, c, 0) != 0) {
 			rte_tel_data_free(c);
 			break;
@@ -2051,20 +2050,22 @@ RTE_INIT(memory_telemetry)
 			EAL_HEAP_INFO_REQ, handle_eal_heap_info_request,
 			"Returns malloc heap stats. Parameters: int heap_id");
 	rte_telemetry_register_cmd(
-			EAL_MEMSEG_REQ, handle_eal_memseg_request,
-			"Returns hugepage list. Parameters: int hp_list_id");
-	rte_telemetry_register_cmd(
-			EAL_ACTIVE_MEMSEG_LIST_REQ, handle_eal_active_memseg_request,
+			EAL_MEMSEG_LIST_ARR_REQ,
+			handle_eal_memseg_list_array_request,
 			"Returns hugepage list. Takes no parameters");
 	rte_telemetry_register_cmd(
+			EAL_MEMSEG_LIST_INFO_REQ,
+			handle_eal_memseg_list_info_request,
+			"Returns memseg list. Parameters: int memseg_list_id");
+	rte_telemetry_register_cmd(
 			EAL_MEMSEG_INFO_REQ, handle_eal_memseg_info_request,
-			"Returns hugepage information. Parameters: int hp_id");
+			"Returns memseg info. Parameter: int memseg_list_id,int memseg_id");
 	rte_telemetry_register_cmd(EAL_ELEMENT_LIST_REQ,
 			handle_eal_element_list_request,
-			"Returns element information. Takes no parameters");
+			"Returns element info. Parameters: int heap_id, int memseg_list_id, int memseg_id");
 	rte_telemetry_register_cmd(EAL_ELEMENT_INFO_REQ,
 			handle_eal_element_info_request,
-			"Returns element information. Parameters: int elem_id");
+			"Returns element info. Parameters: int heap_id, memseg_list_id, memseg_id, start_elem_id, end_elem_id");
 
 #ifdef RTE_EXEC_ENV_LINUX
 	rte_telemetry_register_cmd(SYSMEMORY_LIST_REQ,
