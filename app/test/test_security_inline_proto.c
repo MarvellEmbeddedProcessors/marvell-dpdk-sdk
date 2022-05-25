@@ -62,6 +62,12 @@ test_inline_ipsec_sg(void)
 #define ENCAP_DECAP_BURST_SZ		33
 #define APP_REASS_TIMEOUT		10
 
+#define SKIP_ON_CN9K() do { \
+	if (rte_cryptodev_device_count_by_driver( \
+		rte_cryptodev_driver_id_get("crypto_cn9k")) > 0) \
+		return TEST_SKIPPED; \
+} while (0)
+
 extern struct ipsec_test_data pkt_aes_128_gcm;
 extern struct ipsec_test_data pkt_aes_192_gcm;
 extern struct ipsec_test_data pkt_aes_256_gcm;
@@ -2291,6 +2297,8 @@ test_ipsec_inline_proto_ipv4_set_dscp_0_inner_1(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
 
+	SKIP_ON_CN9K();
+
 	memset(&flags, 0, sizeof(flags));
 
 	flags.dscp = TEST_IPSEC_SET_DSCP_0_INNER_1;
@@ -2303,6 +2311,8 @@ static int
 test_ipsec_inline_proto_ipv4_set_dscp_1_inner_0(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
+
+	SKIP_ON_CN9K();
 
 	memset(&flags, 0, sizeof(flags));
 
@@ -2347,6 +2357,8 @@ test_ipsec_inline_proto_ipv6_set_dscp_0_inner_1(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
 
+	SKIP_ON_CN9K();
+
 	memset(&flags, 0, sizeof(flags));
 
 	flags.ipv6 = true;
@@ -2361,6 +2373,8 @@ static int
 test_ipsec_inline_proto_ipv6_set_dscp_1_inner_0(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
+
+	SKIP_ON_CN9K();
 
 	memset(&flags, 0, sizeof(flags));
 
@@ -2471,8 +2485,12 @@ test_ipsec_inline_proto_sa_pkt_soft_expiry(const void *data __rte_unused)
 		.sa_expiry_pkts_soft = true,
 		.plaintext_len = plaintext_len,
 	};
+
+	SKIP_ON_CN9K();
+
 	return test_ipsec_inline_proto_all(&flags);
 }
+
 static int
 test_ipsec_inline_proto_sa_byte_soft_expiry(const void *data __rte_unused)
 {
@@ -2480,6 +2498,9 @@ test_ipsec_inline_proto_sa_byte_soft_expiry(const void *data __rte_unused)
 		.sa_expiry_bytes_soft = true,
 		.plaintext_len = plaintext_len,
 	};
+
+	SKIP_ON_CN9K();
+
 	return test_ipsec_inline_proto_all(&flags);
 }
 
