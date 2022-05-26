@@ -94,7 +94,7 @@ pdcp_iv_copy(uint8_t *iv_d, uint8_t *iv_s, const uint8_t pdcp_alg_type,
 			cpt_pack_iv(iv_s, iv_d);
 	} else {
 		/* AES-CMAC EIA2, microcode expects 16B zeroized IV */
-		for (j = 0; j < 4; j++)
+		for (j = 0; j < 16; j++)
 			iv_d[j] = 0;
 	}
 }
