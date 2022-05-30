@@ -86,9 +86,9 @@ otx_ep_link_update(struct rte_eth_dev *eth_dev, int wait_to_complete)
 		return 0;
 
 	link.link_speed = ETH_SPEED_NUM_10G;
-	link.link_duplex = 1;
-	link.link_autoneg = 0;
-	link.link_status = 1;
+	link.link_duplex = ETH_LINK_FULL_DUPLEX;
+	link.link_autoneg = ETH_LINK_AUTONEG;
+	link.link_status = ETH_LINK_UP;
 
 	return rte_eth_linkstatus_set(eth_dev, &link);
 }
@@ -574,6 +574,7 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 		return 0;
 
 	otx_ep_parse_parameters(eth_dev);
+	rte_eth_copy_pci_info(eth_dev, pdev);
 
 	otx_epvf->eth_dev = eth_dev;
 	otx_epvf->port_id = eth_dev->data->port_id;
