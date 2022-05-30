@@ -1969,6 +1969,9 @@ fips_test_one_test_group(void)
 	case FIPS_TEST_ALGO_AES_GCM:
 		ret = parse_test_gcm_json_init();
 		break;
+	case FIPS_TEST_ALGO_HMAC:
+		ret = parse_test_hmac_json_init();
+		break;
 	default:
 		return -EINVAL;
 	}
