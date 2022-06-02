@@ -180,8 +180,8 @@ parse_flow_tokens(char **tokens, uint32_t n_tokens,
 				INCREMENT_TOKEN_INDEX(ti, n_tokens, status);
 				if (status->status < 0)
 					return;
-				if (ipv4_addr_cpy(&rule->ipv4.spec.hdr.src_addr,
-						  &rule->ipv4.mask.hdr.src_addr,
+				if (ipv4_addr_cpy(&rule->ipv4.spec.hdr.dst_addr,
+						  &rule->ipv4.mask.hdr.dst_addr,
 						  tokens[ti], status))
 					return;
 			}
@@ -205,8 +205,8 @@ parse_flow_tokens(char **tokens, uint32_t n_tokens,
 				INCREMENT_TOKEN_INDEX(ti, n_tokens, status);
 				if (status->status < 0)
 					return;
-				if (ipv6_addr_cpy(rule->ipv6.spec.hdr.src_addr,
-						  rule->ipv6.mask.hdr.src_addr,
+				if (ipv6_addr_cpy(rule->ipv6.spec.hdr.dst_addr,
+						  rule->ipv6.mask.hdr.dst_addr,
 						  tokens[ti], status))
 					return;
 			}
