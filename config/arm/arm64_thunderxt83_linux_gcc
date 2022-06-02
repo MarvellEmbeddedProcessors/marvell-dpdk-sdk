@@ -1,6 +1,6 @@
 [binaries]
-c = 'aarch64-marvell-linux-gnu-gcc'
-cpp = 'aarch64-marvell-linux-gnu-cpp'
+c = ['ccache', 'aarch64-marvell-linux-gnu-gcc']
+cpp = ['ccache', 'aarch64-marvell-linux-gnu-cpp']
 ar = 'aarch64-marvell-linux-gnu-gcc-ar'
 strip = 'aarch64-marvell-linux-gnu-strip'
 pkgconfig = 'aarch64-marvell-linux-gnu-pkg-config'
