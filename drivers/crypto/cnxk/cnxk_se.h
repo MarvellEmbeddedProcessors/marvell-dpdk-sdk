@@ -34,7 +34,6 @@ struct cnxk_se_sess {
 	uint8_t mac_len;
 	uint8_t iv_length;
 	uint8_t auth_iv_length;
-	uint8_t cpt_rev;
 	uint16_t iv_offset;
 	uint16_t auth_iv_offset;
 	uint32_t salt;
@@ -2039,11 +2038,6 @@ fill_sess_cipher(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 		return -1;
 	}
 
-	if ((sess->cpt_rev < ROC_CPT_REVISION_ID_96XX_B0 ||
-	     sess->cpt_rev > ROC_CPT_REVISION_ID_98XX) &&
-	    zsk_flag && sess->chained_op)
-		return -1;
-
 	if (zsk_flag && sess->roc_se_ctx.ciph_then_auth) {
 		struct rte_crypto_auth_xform *a_form;
 		a_form = &xform->next->auth;
@@ -2170,11 +2164,6 @@ fill_sess_auth(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 			   a_form->algo);
 		return -1;
 	}
-
-	if ((sess->cpt_rev < ROC_CPT_REVISION_ID_96XX_B0 ||
-	     sess->cpt_rev > ROC_CPT_REVISION_ID_98XX) &&
-	    zsk_flag && sess->chained_op)
-		return -1;
 
 	if (zsk_flag && sess->roc_se_ctx.auth_then_ciph) {
 		struct rte_crypto_cipher_xform *c_form;
