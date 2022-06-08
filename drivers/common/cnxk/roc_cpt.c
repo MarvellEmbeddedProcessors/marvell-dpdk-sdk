@@ -25,6 +25,11 @@
 #define CPT_LF_DEFAULT_NB_DESC	1024
 #define CPT_LF_FC_MIN_THRESHOLD 32
 
+static struct cpt_int_cb {
+	roc_cpt_int_misc_cb_t cb;
+	void *cb_args;
+} int_cb;
+
 static void
 cpt_lf_misc_intr_enb_dis(struct roc_cpt_lf *lf, bool enb)
 {
@@ -57,6 +62,9 @@ cpt_lf_misc_irq(void *param)
 
 	/* Clear interrupt */
 	plt_write64(intr, lf->rbase + CPT_LF_MISC_INT);
+
+	if (int_cb.cb != NULL)
+		int_cb.cb(lf, int_cb.cb_args);
 }
 
 static int
@@ -1173,4 +1181,26 @@ roc_on_cpt_ctx_write(struct roc_cpt_lf *lf, uint64_t sa, bool inb,
 free:
 	plt_free(hw_res);
 	return ret;
+}
+
+int
+roc_cpt_int_misc_cb_register(roc_cpt_int_misc_cb_t cb, void *args)
+{
+	if (int_cb.cb != NULL)
+		return -EBUSY;
+
+	int_cb.cb = cb;
+	int_cb.cb_args = args;
+	return 0;
+}
+
+int
+roc_cpt_int_misc_cb_unregister(roc_cpt_int_misc_cb_t cb, void *args)
+{
+	if (int_cb.cb != cb || int_cb.cb_args != args)
+		return -EINVAL;
+
+	int_cb.cb = NULL;
+	int_cb.cb_args = NULL;
+	return 0;
 }
