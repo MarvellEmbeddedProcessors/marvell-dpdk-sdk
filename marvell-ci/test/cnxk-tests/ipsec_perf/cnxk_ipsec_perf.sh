@@ -278,7 +278,8 @@ function run_ipsec_secgw_inb()
 
 function ipsec_exit()
 {
-	killall dpdk-ipsec-secgw
+	killall -q dpdk-ipsec-secgw
+
 	# Wait until the process is killed
 	while (ps -ef | grep dpdk-ipsec-secgw | grep -q $IPSEC_PREFIX); do
 		continue
