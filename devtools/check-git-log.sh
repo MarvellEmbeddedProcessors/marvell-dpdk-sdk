@@ -54,6 +54,7 @@ fixes=$(git log --format='%h %s' --reverse $range | grep -i ': *fix' | cut -d' '
 stablefixes=$($selfdir/git-log-fixes.sh $range | sed '/(N\/A)$/d'  | cut -d' ' -f2)
 tags=$(git log --format='%b' --reverse $range | grep -i -e 'by *:' -e 'fix.*:')
 bytag='\(Reported\|Suggested\|Signed-off\|Acked\|Reviewed\|Tested\)-by:'
+exttag='Coverity issue:\|Bugzilla ID:\|Fixes:\|Cc:'
 
 failure=false
 
@@ -201,6 +202,53 @@ bad=$(for fix in $stablefixes ; do
 		git log --format='\t%s' -1 $fix
 done)
 [ -z "$bad" ] || { printf "Is it candidate for Cc: stable@dpdk.org backport?\n$bad\n"\
+	&& failure=true;}
+
+# check tag sequence
+bad=$(for commit in $commits; do
+	body=$(git log --format='%b' -1 $commit)
+	echo "$body" |\
+	grep -o -e "$exttag\|^[[:blank:]]*$\|$bytag" | \
+	# retrieve tags only
+	cut -f1 -d":" |\
+	# it is okay to have several tags of the same type but for processing
+	# we need to squash them
+	uniq |\
+	# make sure the tags are in the proper order as presented in SEQ
+	awk -v cmt="$commit" 'BEGIN{
+		SEQ[0] = "Coverity issue";
+		SEQ[1] = "Bugzilla ID";
+		SEQ[2] = "Fixes";
+		SEQ[3] = "Cc";
+		SEQ[4] = "^$";
+		SEQ[5] = "Suggested-by";
+		SEQ[6] = "Reported-by";
+		SEQ[7] = "Signed-off-by";
+		latest = 0;
+	}
+	{
+		for (seq = 0; seq < length(SEQ); seq++) {
+			if (match($0, SEQ[seq])) {
+				if (seq < latest) {
+					print "\tCommit " cmt " (" $0 ":)";
+					break;
+				} else {
+					latest = seq;
+				}
+			}
+		}
+	 }'
+done)
+[ -z "$bad" ] || { printf "Wrong tag order: \n$bad\n"\
+	&& failure=true;}
+
+# check required tag
+bad=$(for commit in $commits; do
+	  body=$(git log --format='%b' -1 $commit)
+	  echo $body | grep -q "Signed-off-by:" \
+	      || echo "\tCommit" $commit "(Signed-off-by:)"
+      done)
+[ -z "$bad" ] || { printf "Missing obligatory tag: \n$bad\n"\
 	&& failure=true;}
 
 total=$(echo "$commits" | wc -l)
