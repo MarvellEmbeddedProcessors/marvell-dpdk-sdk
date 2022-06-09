@@ -64,6 +64,7 @@ test_subdirs = [
         'bphy_irq',
         'queue_intr_test',
         'dpdk_config_test',
+        'trace_autotest',
 ]
 
 foreach dir:test_subdirs
