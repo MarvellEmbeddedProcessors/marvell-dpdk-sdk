@@ -795,9 +795,9 @@ roc_cpt_iq_reset(struct roc_cpt_lf *lf)
 	union cpt_lf_inprog lf_inprog = {.u = 0x0};
 	union cpt_lf_ctl lf_ctl = {.u = 0x0};
 
+	lf_inprog.u = plt_read64(lf->rbase + CPT_LF_INPROG);
 	if (((lf_inprog.s.gwb_cnt & 0x1) == 0x1) &&
 	    (lf_inprog.s.grb_partial == 0x0)) {
-		lf_inprog.u = plt_read64(lf->rbase + CPT_LF_INPROG);
 		lf_inprog.s.grp_drp = 1;
 		plt_write64(lf_inprog.u, lf->rbase + CPT_LF_INPROG);
 
