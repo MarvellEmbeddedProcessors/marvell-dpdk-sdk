@@ -130,8 +130,7 @@ static __rte_always_inline void
 cn10k_process_vwqe(uintptr_t vwqe, uint16_t port_id, const uint32_t flags,
 		   void *lookup_mem, void *tstamp, uintptr_t lbase)
 {
-	uint64_t mbuf_init = 0x100010000ULL | RTE_PKTMBUF_HEADROOM |
-			     (flags & NIX_RX_OFFLOAD_TSTAMP_F ? 8 : 0);
+	uint64_t mbuf_init = 0x100010000ULL | RTE_PKTMBUF_HEADROOM;
 	struct rte_event_vector *vec;
 	uint64_t aura_handle, laddr;
 	uint16_t nb_mbufs, non_vec;
@@ -150,6 +149,9 @@ cn10k_process_vwqe(uintptr_t vwqe, uint16_t port_id, const uint32_t flags,
 #define OBJS_PER_CLINE (RTE_CACHE_LINE_SIZE / sizeof(void *))
 	for (i = OBJS_PER_CLINE; i < vec->nb_elem; i += OBJS_PER_CLINE)
 		rte_prefetch0(&vec->ptrs[i]);
+
+	if (flags & NIX_RX_OFFLOAD_TSTAMP_F && tstamp)
+		mbuf_init |= 8;
 
 	nb_mbufs = RTE_ALIGN_FLOOR(vec->nb_elem, NIX_DESCS_PER_LOOP);
 	nb_mbufs = cn10k_nix_recv_pkts_vector(&mbuf_init, wqe, nb_mbufs,
