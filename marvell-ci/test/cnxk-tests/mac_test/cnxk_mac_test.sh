@@ -173,21 +173,21 @@ function macfltr_pkt_test_verify()
 
 function macfltr_pkt_test()
 {
-	testpmd_cmd $PRFX "port stop $1"
-	testpmd_cmd $PRFX "port config $1 loopback 1"
-	testpmd_cmd $PRFX "port start $1"
+	testpmd_cmd_refresh $PRFX "port stop $1"
+	testpmd_cmd_refresh $PRFX "port config $1 loopback 1"
+	testpmd_cmd_refresh $PRFX "port start $1"
 
 	if [[ $3 == "mcast" ]]
 	then
-		testpmd_cmd $PRFX "mcast_addr add $1 $2"
+		testpmd_cmd_refresh $PRFX "mcast_addr add $1 $2"
 		NUM_PKTS=$MCAST_DMAC_PKT_CNT
 	else
-		testpmd_cmd $PRFX "mac_addr add $1 $2"
+		testpmd_cmd_refresh $PRFX "mac_addr add $1 $2"
 		NUM_PKTS=$UCAST_DMAC_PKT_CNT
 	fi
 
-	testpmd_cmd $PRFX "clear port stats all"
-	testpmd_cmd $PRFX "start"
+	testpmd_cmd_refresh $PRFX "clear port stats all"
+	testpmd_cmd_refresh $PRFX "start"
 	macfltr_pkt_test_verify $NUM_PKTS
 }
 
@@ -214,11 +214,11 @@ function macfltr_mcast_mac_cnt()
 
 function xmit_pkts()
 {
-	testpmd_cmd $PRFX "port stop $1"
-	testpmd_cmd $PRFX "port config $1 loopback 1"
-	testpmd_cmd $PRFX "port start $1"
-	testpmd_cmd $PRFX "clear port stats all"
-	testpmd_cmd $PRFX "start"
+	testpmd_cmd_refresh $PRFX "port stop $1"
+	testpmd_cmd_refresh $PRFX "port config $1 loopback 1"
+	testpmd_cmd_refresh $PRFX "port start $1"
+	testpmd_cmd_refresh $PRFX "clear port stats all"
+	testpmd_cmd_refresh $PRFX "start"
 }
 
 # Register signal handlers.
@@ -271,7 +271,7 @@ sleep 1
 DEF_MAC=`testpmd_log $PRFX | tail -12 | grep "MAC address: " | \
 	cut --complement -f 1 -d ":"`
 
-testpmd_cmd $PRFX "mac_addr set $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[0]}"
+testpmd_cmd_refresh $PRFX "mac_addr set $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[0]}"
 
 testpmd_cmd $PRFX "show device info $MACFLTR_PORT"
 sleep 1
@@ -302,7 +302,7 @@ echo "$rx_count packets with configured unicast MAC address \
 ##
 
 #Set back original MAC
-testpmd_cmd $PRFX "mac_addr set $MACFLTR_PORT_INDEX $DEF_MAC"
+testpmd_cmd_refresh $PRFX "mac_addr set $MACFLTR_PORT_INDEX $DEF_MAC"
 ##
 
 
@@ -319,7 +319,7 @@ echo "**** Test-3 Verify configuring max:$NUM_MAX_UCAST_MAC unicast MAC "\
 mac=0
 while [ $mac -lt $NUM_MAX_UCAST_MAC ]
 do
-	testpmd_cmd $PRFX \
+	testpmd_cmd_refresh $PRFX \
 		"mac_addr add $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[$mac]}"
 	let "mac+=1"
 done
@@ -344,7 +344,7 @@ echo "**** Test-4 Verify deleting unicast MAC address for LMAC configured "\
 mac=0
 while [ $mac -lt $NUM_MAX_UCAST_MAC ]
 do
-	testpmd_cmd $PRFX \
+	testpmd_cmd_refresh $PRFX \
 		"mac_addr remove $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[$mac]}"
 	let "mac+=1"
 done
@@ -387,7 +387,7 @@ echo "**** Test-6 Verify configuring max:$NUM_MAX_MCAST_MAC multicast MAC "\
 mac=0
 while [ $mac -lt $NUM_MAX_MCAST_MAC ]
 do
-	testpmd_cmd $PRFX \
+	testpmd_cmd_refresh $PRFX \
 		"mcast_addr add $MACFLTR_PORT_INDEX ${MCAST_DMAC_ARR[$mac]}"
 	let "mac+=1"
 done
@@ -410,7 +410,7 @@ echo "**** Test-7 Verify configuring max multicast MAC address for LMAC ****"
 mac=0
 while [ $mac -lt $NUM_MAX_MCAST_MAC ]
 do
-	testpmd_cmd $PRFX \
+	testpmd_cmd_refresh $PRFX \
 		"mcast_addr remove $MACFLTR_PORT_INDEX ${MCAST_DMAC_ARR[$mac]}"
 	let "mac+=1"
 done
