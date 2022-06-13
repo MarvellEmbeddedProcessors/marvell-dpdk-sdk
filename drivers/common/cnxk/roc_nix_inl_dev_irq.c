@@ -305,8 +305,8 @@ nix_inl_nix_register_irqs(struct nix_inl_dev *inl_dev)
 	struct plt_intr_handle *handle = inl_dev->pci_dev->intr_handle;
 	uintptr_t nix_base = inl_dev->nix_base;
 	struct nix_inl_qint *qints_mem;
+	int rc, q, ret = 0;
 	uint16_t msixoff;
-	int rc, q, ret;
 	int qints;
 
 	msixoff = inl_dev->nix_msixoff;

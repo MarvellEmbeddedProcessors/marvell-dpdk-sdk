@@ -1385,6 +1385,7 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 			RTE_BUILD_BUG_ON(NPC_LT_LC_IP6 != 4);
 			RTE_BUILD_BUG_ON(NPC_LT_LC_IP6_EXT != 5);
 
+			ltypes = vdup_n_u16(0);
 			ltypes = vset_lane_u16((cq0_w1 >> 40) & 0x6, ltypes, 0);
 			ltypes = vset_lane_u16((cq1_w1 >> 40) & 0x6, ltypes, 1);
 			ltypes = vset_lane_u16((cq2_w1 >> 40) & 0x6, ltypes, 2);
