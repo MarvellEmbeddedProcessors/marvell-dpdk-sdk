@@ -222,6 +222,12 @@ cn10k_cpt_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
 	inst = (struct cpt_inst_s *)lmt_base;
 
 again:
+	fc.u64[0] = __atomic_load_n(fc_addr, __ATOMIC_RELAXED);
+	if (unlikely(fc.s.qsize > fc_thresh)) {
+		i = 0;
+		goto pend_q_commit;
+	}
+
 	for (i = 0; i < RTE_MIN(PKTS_PER_LOOP, nb_ops); i++) {
 		infl_req = &pend_q->req_queue[head];
 		infl_req->op_flags = 0;
@@ -235,13 +241,6 @@ again:
 		}
 
 		pending_queue_advance(&head, pq_mask);
-	}
-
-	fc.u64[0] = __atomic_load_n(fc_addr, __ATOMIC_RELAXED);
-	if (unlikely(fc.s.qsize > fc_thresh)) {
-		pending_queue_retreat(&head, pq_mask, i);
-		i = 0;
-		goto pend_q_commit;
 	}
 
 	if (i > PKTS_PER_STEORL) {
