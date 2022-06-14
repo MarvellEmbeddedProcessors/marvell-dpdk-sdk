@@ -411,6 +411,7 @@ roc_nix_fc_npa_bp_cfg(struct roc_nix *roc_nix, uint64_t pool_id, uint8_t ena,
 	struct npa_aq_enq_rsp *rsp;
 	struct mbox *mbox;
 	uint32_t limit;
+	uint64_t shift;
 	int rc;
 
 	if (roc_nix_is_sdp(roc_nix))
@@ -433,6 +434,7 @@ roc_nix_fc_npa_bp_cfg(struct roc_nix *roc_nix, uint64_t pool_id, uint8_t ena,
 		return;
 
 	limit = rsp->aura.limit;
+	shift = rsp->aura.shift;
 
 	/* BP is already enabled. */
 	if (rsp->aura.bp_ena && ena) {
@@ -491,8 +493,7 @@ roc_nix_fc_npa_bp_cfg(struct roc_nix *roc_nix, uint64_t pool_id, uint8_t ena,
 			req->aura.nix0_bpid = nix->bpid[tc];
 			req->aura_mask.nix0_bpid = ~(req->aura_mask.nix0_bpid);
 		}
-		req->aura.bp = NIX_RQ_AURA_THRESH(
-			limit > 128 ? 256 : limit); /* 95% of size*/
+		req->aura.bp = NIX_RQ_AURA_THRESH(limit >> shift);
 		req->aura_mask.bp = ~(req->aura_mask.bp);
 	} else {
 		req->aura.bp = 0;
