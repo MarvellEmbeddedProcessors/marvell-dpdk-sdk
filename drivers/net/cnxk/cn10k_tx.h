@@ -1051,6 +1051,8 @@ again:
 	if (flags & NIX_TX_OFFLOAD_SECURITY_F) {
 		/* Reduce pkts to be sent to CPT */
 		burst -= ((c_lnum << 1) + c_loff);
+		if (flags & NIX_TX_VWQE_F)
+			cn10k_nix_vwqe_wait_fc(txq, 16);
 		cn10k_nix_sec_fc_wait(txq, (c_lnum << 1) + c_loff);
 		cn10k_nix_sec_steorl(c_io_addr, c_lmt_id, c_lnum, c_loff,
 				     c_shft);
