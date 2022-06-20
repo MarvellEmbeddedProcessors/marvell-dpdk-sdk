@@ -278,7 +278,7 @@ function run_ipsec_secgw_inb()
 
 function ipsec_exit()
 {
-	killall -q dpdk-ipsec-secgw
+	killall -q dpdk-ipsec-secgw | echo "ipsec_exit: killed dpdk-ipsec-secgw"
 
 	# Wait until the process is killed
 	while (ps -ef | grep dpdk-ipsec-secgw | grep -q $IPSEC_PREFIX); do
@@ -300,6 +300,9 @@ function sig_handler()
 		ipsec_exit
 		testpmd_quit "$TPMD_TX_PREFIX"
 		testpmd_quit "$TPMD_RX_PREFIX"
+		ps -ef
+		# print all IPsec logs
+		IPSEC_LOG=ipsec_*.log
 		awk ' { print FILENAME": " $0 } ' $IPSEC_LOG
 		awk ' { print FILENAME": " $0 } ' testpmd.in.$TPMD_TX_PREFIX
 		awk ' { print FILENAME": " $0 } ' testpmd.out.$TPMD_TX_PREFIX
@@ -443,6 +446,7 @@ function outb_perf()
 				# Restart ipsec-secgw
 				ipsec_exit
 				echo "Restart ipsec-secgw"
+				IPSEC_LOG=ipsec_"$X"_outb_"$Y"_"$tcnt".log
 				run_ipsec_secgw
 			fi
 			testpmd_cmd "$TPMD_RX_PREFIX" "start"
@@ -506,6 +510,7 @@ function inb_perf()
 				# Restart ipsec-secgw
 				ipsec_exit
 				echo "Restart ipsec-secgw"
+				IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
 				run_ipsec_secgw_inb
 			fi
 			testpmd_cmd "$TPMD_RX_PREFIX" "start"
@@ -740,7 +745,9 @@ LIF4=0002:01:01.0
 SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 EVENT_VF=$SSO_DEV
 
-IPSEC_LOG=ipsec.log
+# IPsec log file name for app will be as
+# ipsec_{1/2 for aes-cbc/aes-gcm}_{outb/inb}_{Test number}_{Trial number}.log
+IPSEC_LOG=ipsec_*.log
 VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
 
 rm -f $IPSEC_LOG
@@ -764,9 +771,10 @@ while [ $Y -lt $NUM_MODES ]; do
 	if [[ $Y -gt 4 ]]; then
 		perf_cfg=0
 	fi
+	X=1
+	IPSEC_LOG=ipsec_"$X"_outb_"$Y"_1.log
 	run_ipsec_secgw
 
-	X=1
 	pmd_rx_launch
 	pmd_tx_launch
 	aes_cbc_sha1_hmac_outb
@@ -778,15 +786,16 @@ while [ $Y -lt $NUM_MODES ]; do
 	echo ""
 	# aes-gcm
 
+	X=2
 	if [[ $Y -gt 4 ]]; then
 		# Restart ipsec-secgw for Inline Protocol Single-SA tests with new config
 		ipsec_exit
 		echo "Restart ipsec-secgw"
 		# Select perf config file for Inline protocol Single-SA perf tests
 		perf_cfg=1
+		IPSEC_LOG=ipsec_"$X"_outb_"$Y"_1.log
 		run_ipsec_secgw
 	fi
-	X=2
 	pmd_rx_launch
 	pmd_tx_launch
 	aes_gcm_outb
@@ -797,6 +806,7 @@ while [ $Y -lt $NUM_MODES ]; do
 	echo ""
 	# Inbound
 	X=1
+	IPSEC_LOG=ipsec_"$X"_inb_"$Y"_1.log
 	run_ipsec_secgw_inb
 	pmd_rx_launch
 	aes_cbc_sha1_hmac_inb
