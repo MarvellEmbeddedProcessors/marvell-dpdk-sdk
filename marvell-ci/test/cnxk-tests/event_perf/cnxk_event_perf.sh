@@ -143,19 +143,17 @@ record_pps()
 			;;
 		dpdk-test-eventdev)
 			sleep 20 # avg need more time to stabilize
-			pps=$(sed -n "s/.\+ mpps avg \([0-9\.]\+\) mpps/\1/p" $test_log \
+			pps=$(sed -n "0,/.\+ mpps avg \([0-9\.]\+\) mpps/s//\1/p" $test_log \
 				| sed "s/[^[:print:]].*//")
 			printf "$pps\n" >> $out_file
 			;;
 	esac
 }
 
-kill_test()
+wait_for_term()
 {
 	local test_bin=$1
 	local wait_time=0
-
-	sudo killall -q $test_bin
 
 	while [[ wait_time -lt 100 ]]; do
 		if pgrep -f $test_bin > /dev/null; then
@@ -166,7 +164,7 @@ kill_test()
 		((wait_time++))
 	done
 
-	echo "$test_bin cleanup didn't finish"
+	echo "$test_bin didn't terminate"
 	exit 1
 }
 
@@ -179,6 +177,7 @@ measure_test_perf()
 	local out_file=$5
 	local test_log=$(mktemp)
 	local unbuffer="stdbuf -o0"
+	local timeout="timeout --foreground -k 10 -s SIGINT 30"
 	local test_path=$(find $REMOTE_DIR -type f -executable -iname $test_bin)
 
 	printf "cores, RESULT\n" >> $out_file
@@ -187,7 +186,7 @@ measure_test_perf()
 	for num_cores in "${CORES[@]}"; do
 		printf "$num_cores, " >> $out_file
 		test_args=$(get_test_args $test_name $num_cores $sched_mode)
-		sudo $unbuffer $test_path $test_args &> $test_log &
+		sudo $timeout $unbuffer $test_path $test_args &> $test_log &
 		while ! (tail -n1 $test_log | grep -q "$pattern"); do
 			sleep 1
 		done
@@ -203,7 +202,7 @@ measure_test_perf()
 			exec_testpmd_cmd "stop"
 		fi
 
-		kill_test $test_bin
+		wait_for_term $test_bin
 	done
 
 	exec_testpmd_cmd cleanup
