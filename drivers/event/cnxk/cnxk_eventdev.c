@@ -12,6 +12,24 @@ crypto_adapter_qp_setup(const struct rte_cryptodev *cdev,
 	char name[RTE_MEMPOOL_NAMESIZE];
 	uint32_t cache_size, nb_req;
 	unsigned int req_size;
+	uint32_t nb_desc_min;
+
+	/*
+	 * Update CPT FC threshold. Decrement by hardware burst size to allow
+	 * simultaneous enqueue from all available cores.
+	 */
+	if (roc_model_is_cn10k())
+		nb_desc_min = rte_lcore_count() * 32;
+	else
+		nb_desc_min = rte_lcore_count() * 2;
+
+	if (qp->lmtline.fc_thresh < nb_desc_min) {
+		plt_err("CPT queue depth not sufficient to allow enqueueing from %d cores",
+			rte_lcore_count());
+		return -ENOSPC;
+	}
+
+	qp->lmtline.fc_thresh -= nb_desc_min;
 
 	snprintf(name, RTE_MEMPOOL_NAMESIZE, "cnxk_ca_req_%u:%u",
 		 cdev->data->dev_id, qp->lf.lf_id);
@@ -25,15 +43,6 @@ crypto_adapter_qp_setup(const struct rte_cryptodev *cdev,
 		return -ENOMEM;
 
 	qp->ca.enabled = true;
-
-	/*
-	 * Update CPT FC threshold. Decrement by hardware burst size to allow
-	 * simultaneous enqueue from all available cores.
-	 */
-	if (roc_model_is_cn10k())
-		qp->lmtline.fc_thresh -= rte_lcore_count() * 32;
-	else
-		qp->lmtline.fc_thresh -= rte_lcore_count() * 2;
 
 	return 0;
 }
