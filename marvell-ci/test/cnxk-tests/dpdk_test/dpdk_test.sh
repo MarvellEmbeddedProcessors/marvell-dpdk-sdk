@@ -8,6 +8,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 EVENT_DEVICE="$SSO_DEV"
 TEST_TYPE=$1
+ISOLCPUS=$(</sys/devices/system/cpu/isolated)
 
 if [[ -f $SCRIPTPATH/../../../../app/test/dpdk-test ]]; then
 	# This is running from build directory
@@ -39,13 +40,13 @@ register_cnxk_event_test() {
 
 run_cn9k_event_tests() {
 	for test in ${!cn9k_event_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN ${cn9k_event_test_args[$test]}
+		DPDK_TEST=$test $DPDK_TEST_BIN -l $ISOLCPUS ${cn9k_event_test_args[$test]}
 	done
 }
 
 run_cn10k_event_tests() {
 	for test in ${!cn10k_event_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN ${cn10k_event_test_args[$test]}
+		DPDK_TEST=$test $DPDK_TEST_BIN -l $ISOLCPUS ${cn10k_event_test_args[$test]}
 	done
 }
 
@@ -56,7 +57,7 @@ run_event_tests() {
 	esac
 
 	for test in ${!cnxk_event_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN ${cnxk_event_test_args[$test]}
+		DPDK_TEST=$test $DPDK_TEST_BIN -l $ISOLCPUS ${cnxk_event_test_args[$test]}
 	done
 }
 
