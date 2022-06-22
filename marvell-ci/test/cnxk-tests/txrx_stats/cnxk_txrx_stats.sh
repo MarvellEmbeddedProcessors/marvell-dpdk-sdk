@@ -167,7 +167,7 @@ testpmd_cmd $PRFX "stop"
 testpmd_cmd $PRFX "port stop all"
 
 testpmd_cmd $PRFX "show port stats all"
-testpmd_cmd $PRFX "show port xstats all"
+testpmd_cmd $PRFX "show port xstats 0"
 run_app '$PROC_CMD -- --xstats-name tx_ucast'
 run_app '$PROC_CMD -- --xstats-ids 1'
 testpmd_cmd $PRFX "clear port stats all"
@@ -180,6 +180,13 @@ OFF=`testpmd_log_sz $PRFX`
 
 sleep 2
 echo ""
+
+XSTATS=`testpmd_log $PRFX | grep "Error: Unable to get xstats" || true`
+if [ "$XSTATS" != "" ]
+then
+        exit 1
+fi
+
 val=`cat $APP_LOG | grep -a "tx_ucast:" || true`
 if [ "$val" == "" ]
 then
