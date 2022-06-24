@@ -238,41 +238,4 @@ def print_env(Object s) {
 	"""
 }
 
-def stage_node(Object s, nodes, name, stage_exec) {
-	def node_def
-
-	node_def = {
-		stage (name) {
-			def completed = false
-
-			lock(label: "DEV_CI_DATAPLANE_ASIM", variable: "mc", quantity:'1',
-				     skipIfLocked : true) {
-				println "Locked ASIM machine is ${env.mc.trim()}"
-				def mc_details="${env.mc.trim()} 22"
-				def tokens = mc_details.split()
-				def mc_ip = tokens[0]
-				node ("$mc_ip") {
-					lock(env.NODE_NAME) { /* Only for debugging */
-						print_env(s)
-						stage_exec()
-					}
-				}
-				completed = true
-			}
-			if (!completed) {
-				/* ASIM machine was not available, run on any other available
-				 * machine */
-				node (s.NODE_LABEL_ME) {
-					lock(env.NODE_NAME) { /* Only for debugging */
-						print_env(s)
-						stage_exec()
-					}
-				}
-			}
-		}
-	}
-
-	nodes.put(name, node_def)
-}
-
 return this

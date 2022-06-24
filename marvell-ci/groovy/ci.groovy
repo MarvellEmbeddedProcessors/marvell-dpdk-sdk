@@ -9,7 +9,7 @@
  */
 
 def execute_ci(Object s) {
-	node (s.NODE_LABEL_ANY) {
+	node (s.NODE_LABEL) {
 		def groovy_dir
 		def tmp_path
 
@@ -52,7 +52,7 @@ def execute_ci(Object s) {
 	s.build.run(s)
 	s.test.run(s)
 
-	node (s.NODE_LABEL_ANY) {
+	node (s.NODE_LABEL) {
 		s.verify.run(s)
 		sh script : """#!/bin/bash
 			set -euo pipefail
@@ -62,16 +62,12 @@ def execute_ci(Object s) {
 }
 
 def run_ci(Object s) {
-	s.NODE_LABEL_HE="buildenv-2004-he"
-	s.NODE_LABEL_ME="buildenv-2004-me"
-	s.NODE_LABEL_LE="buildenv-2004-le"
-	s.NODE_LABEL_TEST="buildenv-2004-test"
-	s.NODE_LABEL_ANY="${s.NODE_LABEL_LE} || ${s.NODE_LABEL_ME} || ${s.NODE_LABEL_HE}"
+	s.NODE_LABEL="buildenv-2004-me"
 
 	try {
 		execute_ci(s)
 	} catch (err) {
-		node (s.NODE_LABEL_ANY) {
+		node (s.NODE_LABEL) {
 			sh script : """#!/bin/bash
 				set -euo pipefail
 				rm -rf ${s.JOB_ROOT}

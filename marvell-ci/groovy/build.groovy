@@ -2,6 +2,23 @@
  * Copyright(C) 2021 Marvell.
  */
 
+def build_stage_node(Object s, nodes, name, stage_exec) {
+	def node_def
+
+	node_def = {
+		stage (name) {
+			node (s.NODE_LABEL) {
+				lock(env.NODE_NAME) { /* Only for debugging */
+					s.utils.print_env(s)
+					stage_exec()
+				}
+			}
+		}
+	}
+
+	nodes.put(name, node_def)
+}
+
 def add_doc_build_stage(Object s, nodes)
 {
 	def build_name = 'doc-build'
@@ -70,7 +87,7 @@ def add_doc_build_stage(Object s, nodes)
 		s.utils.post_artifacts(build_name)
 	}
 
-	utils.stage_node(s, nodes, build_name, stg)
+	build_stage_node(s, nodes, build_name, stg)
 }
 
 def add_klocwork_stage(Object s, nodes)
@@ -150,7 +167,7 @@ def add_klocwork_stage(Object s, nodes)
 		}
 	}
 
-	utils.stage_node(s, nodes, build_name, stg)
+	build_stage_node(s, nodes, build_name, stg)
 }
 
 def get_build_params(build_name, compiler, libtype, copt, clinkopt, arch, extra_args)
@@ -247,7 +264,7 @@ def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinko
 		}
 	}
 
-	utils.stage_node(s, nodes, name, stg)
+	build_stage_node(s, nodes, name, stg)
 }
 
 def prepare_build_stages(Object s, nodes, compilers, libtypes, copts, clinkopts, archs, extra_args,
@@ -359,7 +376,7 @@ def run(Object s) {
 
 	s.BUILD_DIR = "/ci_build"
 
-	node (s.NODE_LABEL_ANY) {
+	node (s.NODE_LABEL) {
 		prepare_builds(s, nodes)
 
 		if (!s.utils.get_flag(s, "disable_failfast"))
