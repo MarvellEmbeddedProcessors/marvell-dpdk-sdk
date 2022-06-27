@@ -102,11 +102,11 @@ parse_input_color_table_entries(char *str, enum rte_color **dscp_table,
 		return -1;
 
 	while (1) {
-		if (strcmp(token, "G") == 0 || strcmp(token, "g") == 0)
+		if (strcasecmp(token, "G") == 0)
 			dscp[i++] = RTE_COLOR_GREEN;
-		else if (strcmp(token, "Y") == 0 || strcmp(token, "y") == 0)
+		else if (strcasecmp(token, "Y") == 0)
 			dscp[i++] = RTE_COLOR_YELLOW;
-		else if (strcmp(token, "R") == 0 || strcmp(token, "r") == 0)
+		else if (strcasecmp(token, "R") == 0)
 			dscp[i++] = RTE_COLOR_RED;
 		else {
 			free(dscp);
@@ -128,7 +128,7 @@ parse_input_color_table_entries(char *str, enum rte_color **dscp_table,
 	if (token == NULL)
 		return 0;
 
-	/* Allocate memory for vlan tables */
+	/* Allocate memory for vlan table */
 	vlan = (enum rte_color *)malloc(MAX_VLAN_TABLE_ENTRIES *
 		sizeof(enum rte_color));
 	if (vlan == NULL)
@@ -136,11 +136,11 @@ parse_input_color_table_entries(char *str, enum rte_color **dscp_table,
 
 	i = 0;
 	while (1) {
-		if (strcmp(token, "G") == 0 || strcmp(token, "g") == 0)
+		if (strcasecmp(token, "G") == 0)
 			vlan[i++] = RTE_COLOR_GREEN;
-		else if (strcmp(token, "Y") == 0 || strcmp(token, "y") == 0)
+		else if (strcasecmp(token, "Y") == 0)
 			vlan[i++] = RTE_COLOR_YELLOW;
-		else if (strcmp(token, "R") == 0 || strcmp(token, "r") == 0)
+		else if (strcasecmp(token, "R") == 0)
 			vlan[i++] = RTE_COLOR_RED;
 		else {
 			free(vlan);
@@ -177,14 +177,11 @@ parse_vlan_table_entries(char *str, enum rte_color **vlan_table)
 		return -1;
 
 	while (1) {
-		if (strcmp(token, "G") == 0 ||
-			strcmp(token, "g") == 0)
+		if (strcasecmp(token, "G") == 0)
 			(*vlan_table)[i++] = RTE_COLOR_GREEN;
-		else if (strcmp(token, "Y") == 0 ||
-			strcmp(token, "y") == 0)
+		else if (strcasecmp(token, "Y") == 0)
 			(*vlan_table)[i++] = RTE_COLOR_YELLOW;
-		else if (strcmp(token, "R") == 0 ||
-			strcmp(token, "r") == 0)
+		else if (strcasecmp(token, "R") == 0)
 			(*vlan_table)[i++] = RTE_COLOR_RED;
 		else {
 			free(*vlan_table);
@@ -245,35 +242,6 @@ parse_dscp_table_entries(char *str, enum rte_color **dscp_table)
 }
 
 static int
-parse_input_color_method(char *str, uint64_t *input_color_method)
-{
-	char *token;
-
-	token = strtok_r(str, PARSE_DELIMITER, &str);
-	if (token == NULL)
-		return 0;
-
-	if (strcmp(token, "blind") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_COLOR_BLIND;
-	else if (strcmp(token, "vlan") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_VLAN;
-	else if (strcmp(token, "dscp") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_DSCP;
-	else if (strcmp(token, "vlan_dscp") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP;
-	else if (strcmp(token, "inner_vlan") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN;
-	else if (strcmp(token, "inner_dscp") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_INNER_DSCP;
-	else if (strcmp(token, "inner_vlan_dscp") == 0)
-		*input_color_method = RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP;
-	else
-		return -1;
-
-	return 0;
-}
-
-static int
 parse_default_input_color_str(char *str, uint64_t *def_inp_color)
 {
 	char *token;
@@ -282,11 +250,11 @@ parse_default_input_color_str(char *str, uint64_t *def_inp_color)
 	if (token == NULL)
 		return 0;
 
-	if ((strcmp(token, "G") == 0) || (strcmp(token, "g") == 0))
+	if (strcasecmp(token, "G") == 0)
 		*def_inp_color = RTE_COLOR_GREEN;
-	else if ((strcmp(token, "Y") == 0) || (strcmp(token, "y") == 0))
+	else if (strcasecmp(token, "Y") == 0)
 		*def_inp_color = RTE_COLOR_YELLOW;
-	else if ((strcmp(token, "R") == 0) || (strcmp(token, "r") == 0))
+	else if (strcasecmp(token, "R") == 0)
 		*def_inp_color = RTE_COLOR_RED;
 	else
 		return -1;
@@ -483,7 +451,8 @@ static void cmd_show_port_meter_cap_parsed(void *parsed_result,
 	printf("cap.trtcm_rfc4115_packet_mode_supported %" PRId32 "\n",
 		cap.trtcm_rfc4115_packet_mode_supported);
 	printf("cap.stats_mask %" PRIx64 "\n", cap.stats_mask);
-	printf("cap.methods_mask 0x%" PRIx64 "\n", cap.methods_mask);
+	printf("cap.input_color_proto_mask 0x%" PRIx64 "\n",
+		cap.input_color_proto_mask);
 	printf("cap.separate_input_color_table_per_port %" PRId32 "\n",
 		cap.separate_input_color_table_per_port);
 }
@@ -930,7 +899,6 @@ struct cmd_create_port_meter_result {
 	cmdline_fixed_string_t r_action;
 	uint64_t statistics_mask;
 	uint32_t shared;
-	cmdline_fixed_string_t input_color_method;
 	cmdline_fixed_string_t default_input_color;
 	cmdline_multi_string_t meter_input_color;
 };
@@ -959,24 +927,12 @@ cmdline_parse_token_num_t cmd_create_port_meter_policy_id =
 cmdline_parse_token_string_t cmd_create_port_meter_meter_enable =
 	TOKEN_STRING_INITIALIZER(struct cmd_create_port_meter_result,
 		meter_enable, "yes#no");
-cmdline_parse_token_string_t cmd_create_port_meter_g_action =
-	TOKEN_STRING_INITIALIZER(struct cmd_create_port_meter_result,
-		g_action, "R#Y#G#D#r#y#g#d");
-cmdline_parse_token_string_t cmd_create_port_meter_y_action =
-	TOKEN_STRING_INITIALIZER(struct cmd_create_port_meter_result,
-		y_action, "R#Y#G#D#r#y#g#d");
-cmdline_parse_token_string_t cmd_create_port_meter_r_action =
-	TOKEN_STRING_INITIALIZER(struct cmd_create_port_meter_result,
-		r_action, "R#Y#G#D#r#y#g#d");
 cmdline_parse_token_num_t cmd_create_port_meter_statistics_mask =
 	TOKEN_NUM_INITIALIZER(struct cmd_create_port_meter_result,
 		statistics_mask, RTE_UINT64);
 cmdline_parse_token_num_t cmd_create_port_meter_shared =
 	TOKEN_NUM_INITIALIZER(struct cmd_create_port_meter_result,
 		shared, RTE_UINT32);
-cmdline_parse_token_string_t cmd_create_port_meter_input_color_method =
-	TOKEN_STRING_INITIALIZER(struct cmd_create_port_meter_result,
-		input_color_method, "blind#vlan#dscp#vlan_dscp#inner_vlan#inner_dscp#inner_vlan_dscp");
 cmdline_parse_token_string_t cmd_create_port_meter_default_input_color =
 	TOKEN_STRING_INITIALIZER(struct cmd_create_port_meter_result,
 		default_input_color, "R#Y#G#r#y#g");
@@ -995,12 +951,10 @@ static void cmd_create_port_meter_parsed(void *parsed_result,
 	uint32_t shared = res->shared;
 	uint32_t use_prev_meter_color = 0;
 	uint16_t port_id = res->port_id;
-	uint64_t input_color_method = 0;
 	uint64_t def_inp_color = 0;
 	enum rte_color *dscp_table = NULL;
 	enum rte_color *vlan_table = NULL;
 	char *def_color_str = res->default_input_color;
-	char *method_str = res->input_color_method;
 	char *c_str = res->meter_input_color;
 	int ret;
 
@@ -1011,14 +965,6 @@ static void cmd_create_port_meter_parsed(void *parsed_result,
 	memset(&params, 0, sizeof(struct rte_mtr_params));
 	params.meter_profile_id = res->profile_id;
 	params.meter_policy_id = res->policy_id;
-
-	/* Parse meter input color method string params */
-	ret = parse_input_color_method(method_str, &input_color_method);
-	if (ret) {
-		fprintf(stderr,
-			" Meter input color method is invalid\n");
-		return;
-	}
 
 	/* Parse meter default input color string params */
 	ret = parse_default_input_color_str(def_color_str, &def_inp_color);
@@ -1037,31 +983,21 @@ static void cmd_create_port_meter_parsed(void *parsed_result,
 		return;
 	}
 
-	params.input_color_method = input_color_method;
 	params.use_prev_mtr_color = use_prev_meter_color;
-
-	if (input_color_method & RTE_MTR_INPUT_COLOR_METHOD_VLAN ||
-	    input_color_method & RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN)
-		params.vlan_table = vlan_table;
-	else if (input_color_method & RTE_MTR_INPUT_COLOR_METHOD_DSCP ||
-		 input_color_method & RTE_MTR_INPUT_COLOR_METHOD_INNER_DSCP)
-		params.dscp_table = dscp_table;
-	else if (input_color_method & RTE_MTR_INPUT_COLOR_METHOD_VLAN_DSCP ||
-		 input_color_method & RTE_MTR_INPUT_COLOR_METHOD_INNER_VLAN_DSCP) {
-		params.vlan_table = vlan_table;
-		params.dscp_table = dscp_table;
-	}
-
+	params.vlan_table = vlan_table;
+	params.dscp_table = dscp_table;
 	params.default_input_color = def_inp_color;
 
 	if (strcmp(res->meter_enable, "yes") == 0)
 		params.meter_enable = 1;
 	else
 		params.meter_enable = 0;
+
 	params.stats_mask = res->statistics_mask;
 
 	ret = rte_mtr_create(port_id, mtr_id, &params, shared, &error);
 	if (ret != 0) {
+		free(vlan_table);
 		free(dscp_table);
 		print_err_msg(&error);
 		return;
@@ -1073,10 +1009,9 @@ cmdline_parse_inst_t cmd_create_port_meter = {
 	.data = NULL,
 	.help_str = "create port meter <port_id> <mtr_id> <profile_id> <policy_id> "
 		"<meter_enable>(yes|no) <stats_mask> <shared> "
-		"<input_color_method>(blind|vlan|dscp|vlan_dscp|inner_vlan|inner_dscp|inner_vlan_dscp) "
 		"<default_input_color>(g|y|r) <use_pre_meter_color> "
-		"[<dscp_tbl_entry0> <dscp_tbl_entry1> ... <dscp_tbl_entry63>]"
-		"[<vlan_tbl_entry0> <vlan_tbl_entry1> ... <vlan_tbl_entry16>]",
+		"[<dscp_tbl_entry0> <dscp_tbl_entry1> ...<dscp_tbl_entry63>] "
+		"[<vlan_tbl_entry0> <vlan_tbl_entry1> ... <vlan_tbl_entry15>]",
 	.tokens = {
 		(void *)&cmd_create_port_meter_create,
 		(void *)&cmd_create_port_meter_port,
@@ -1088,7 +1023,6 @@ cmdline_parse_inst_t cmd_create_port_meter = {
 		(void *)&cmd_create_port_meter_meter_enable,
 		(void *)&cmd_create_port_meter_statistics_mask,
 		(void *)&cmd_create_port_meter_shared,
-		(void *)&cmd_create_port_meter_input_color_method,
 		(void *)&cmd_create_port_meter_default_input_color,
 		(void *)&cmd_create_port_meter_input_color,
 		NULL,
@@ -1561,6 +1495,271 @@ cmdline_parse_inst_t cmd_set_port_meter_vlan_table = {
 		(void *)&cmd_set_port_meter_vlan_table_meter,
 		(void *)&cmd_set_port_meter_vlan_table_vlan_table,
 		(void *)&cmd_set_port_meter_vlan_table_token_string,
+		NULL,
+	},
+};
+
+/* *** Set Port Meter input protocol *** */
+struct cmd_set_port_meter_in_proto_result {
+	cmdline_fixed_string_t set;
+	cmdline_fixed_string_t port;
+	cmdline_fixed_string_t meter;
+	cmdline_fixed_string_t protocol;
+	cmdline_fixed_string_t proto;
+	uint32_t prio;
+	uint32_t mtr_id;
+	uint16_t port_id;
+};
+
+cmdline_parse_token_string_t cmd_set_port_meter_in_proto_set =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, set, "set");
+
+cmdline_parse_token_string_t cmd_set_port_meter_in_proto_port =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, port, "port");
+
+cmdline_parse_token_string_t cmd_set_port_meter_in_proto_meter =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, meter, "meter");
+
+cmdline_parse_token_string_t cmd_set_port_meter_in_proto_protocol =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, protocol, "proto");
+
+cmdline_parse_token_string_t cmd_set_port_meter_in_proto_proto =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, proto,
+		"outer_vlan#inner_vlan#outer_ip#inner_ip");
+
+cmdline_parse_token_num_t cmd_set_port_meter_in_proto_prio =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, prio, RTE_UINT32);
+
+cmdline_parse_token_num_t cmd_set_port_meter_in_proto_port_id =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, port_id, RTE_UINT16);
+
+cmdline_parse_token_num_t cmd_set_port_meter_in_proto_mtr_id =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_set_port_meter_in_proto_result, mtr_id, RTE_UINT32);
+
+static void cmd_set_port_meter_in_proto_parsed(void *parsed_result,
+	__rte_unused struct cmdline *cl,
+	__rte_unused void *data)
+{
+	struct cmd_set_port_meter_in_proto_result *res = parsed_result;
+	enum rte_mtr_color_in_protocol proto;
+	struct rte_mtr_error error;
+	int ret;
+
+	if (port_id_is_invalid(res->port_id, ENABLED_WARN))
+		return;
+
+	if (strcmp(res->proto, "outer_vlan") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_OUTER_VLAN;
+	else if (strcmp(res->proto, "inner_vlan") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_INNER_VLAN;
+	else if (strcmp(res->proto, "outer_ip") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_OUTER_IP;
+	else if (strcmp(res->proto, "inner_ip") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_INNER_IP;
+	else {
+		printf("Invalid protocol\n");
+		return;
+	}
+
+	/* Update Meter input proto and priority */
+	ret = rte_mtr_color_in_protocol_set(res->port_id, res->mtr_id,
+		proto, res->prio, &error);
+	if (ret != 0)
+		print_err_msg(&error);
+}
+
+cmdline_parse_inst_t cmd_set_port_meter_in_proto = {
+	.f = cmd_set_port_meter_in_proto_parsed,
+	.data = NULL,
+	.help_str = "set port meter proto <port_id> <mtr_id> <proto> "
+		"<prio>",
+	.tokens = {
+		(void *)&cmd_set_port_meter_in_proto_set,
+		(void *)&cmd_set_port_meter_in_proto_port,
+		(void *)&cmd_set_port_meter_in_proto_meter,
+		(void *)&cmd_set_port_meter_in_proto_protocol,
+		(void *)&cmd_set_port_meter_in_proto_port_id,
+		(void *)&cmd_set_port_meter_in_proto_mtr_id,
+		(void *)&cmd_set_port_meter_in_proto_proto,
+		(void *)&cmd_set_port_meter_in_proto_prio,
+		NULL,
+	},
+};
+
+/* *** Get Port Meter input protocol *** */
+struct cmd_get_port_meter_in_proto_result {
+	cmdline_fixed_string_t get;
+	cmdline_fixed_string_t port;
+	cmdline_fixed_string_t meter;
+	cmdline_fixed_string_t protocol;
+	uint32_t mtr_id;
+	uint16_t port_id;
+};
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_get =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_result, get, "get");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_port =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_result, port, "port");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_meter =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_result, meter, "meter");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_protocol =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_result, protocol, "proto");
+
+cmdline_parse_token_num_t cmd_get_port_meter_in_proto_port_id =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_result, port_id, RTE_UINT16);
+
+cmdline_parse_token_num_t cmd_get_port_meter_in_proto_mtr_id =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_result, mtr_id, RTE_UINT32);
+
+static void cmd_get_port_meter_in_proto_parsed(void *parsed_result,
+	__rte_unused struct cmdline *cl,
+	__rte_unused void *data)
+{
+	struct cmd_set_port_meter_in_proto_result *res = parsed_result;
+	struct rte_mtr_error error;
+	uint64_t proto_mask = 0;
+	int ret;
+
+	if (port_id_is_invalid(res->port_id, ENABLED_WARN))
+		return;
+
+	/* Update Meter input proto and priority */
+	ret = rte_mtr_color_in_protocol_get(res->port_id, res->mtr_id,
+		&proto_mask, &error);
+	if (ret != 0)
+		print_err_msg(&error);
+
+	printf("Enabled protocols:\n");
+	if (proto_mask & RTE_MTR_COLOR_IN_PROTO_OUTER_VLAN)
+		printf("\touter_vlan\n");
+	if (proto_mask & RTE_MTR_COLOR_IN_PROTO_INNER_VLAN)
+		printf("\tinner_vlan\n");
+	if (proto_mask & RTE_MTR_COLOR_IN_PROTO_OUTER_IP)
+		printf("\touter_ip\n");
+	if (proto_mask & RTE_MTR_COLOR_IN_PROTO_INNER_IP)
+		printf("\tinner_ip\n");
+}
+
+cmdline_parse_inst_t cmd_get_port_meter_in_proto = {
+	.f = cmd_get_port_meter_in_proto_parsed,
+	.data = NULL,
+	.help_str = "get port meter proto <port_id> <mtr_id>",
+	.tokens = {
+		(void *)&cmd_get_port_meter_in_proto_get,
+		(void *)&cmd_get_port_meter_in_proto_port,
+		(void *)&cmd_get_port_meter_in_proto_meter,
+		(void *)&cmd_get_port_meter_in_proto_protocol,
+		(void *)&cmd_get_port_meter_in_proto_port_id,
+		(void *)&cmd_get_port_meter_in_proto_mtr_id,
+		NULL,
+	},
+};
+
+/* *** Get Port Meter input protocol priority *** */
+struct cmd_get_port_meter_in_proto_prio_result {
+	cmdline_fixed_string_t get;
+	cmdline_fixed_string_t port;
+	cmdline_fixed_string_t meter;
+	cmdline_fixed_string_t protocol;
+	cmdline_fixed_string_t proto;
+	uint32_t mtr_id;
+	uint16_t port_id;
+};
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_prio_get =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, get, "get");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_prio_port =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, port, "port");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_prio_meter =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, meter, "meter");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_prio_protocol =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, protocol,
+		"proto_prio");
+
+cmdline_parse_token_string_t cmd_get_port_meter_in_proto_prio_proto =
+	TOKEN_STRING_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, proto,
+		"outer_vlan#inner_vlan#outer_ip#inner_ip");
+
+cmdline_parse_token_num_t cmd_get_port_meter_in_proto_prio_port_id =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, port_id,
+		RTE_UINT16);
+
+cmdline_parse_token_num_t cmd_get_port_meter_in_proto_prio_mtr_id =
+	TOKEN_NUM_INITIALIZER(
+		struct cmd_get_port_meter_in_proto_prio_result, mtr_id,
+		RTE_UINT32);
+
+static void cmd_get_port_meter_in_proto_prio_parsed(void *parsed_result,
+	__rte_unused struct cmdline *cl,
+	__rte_unused void *data)
+{
+	struct cmd_get_port_meter_in_proto_prio_result *res = parsed_result;
+	enum rte_mtr_color_in_protocol proto;
+	struct rte_mtr_error error;
+	uint32_t prio = 0;
+	int ret;
+
+	if (port_id_is_invalid(res->port_id, ENABLED_WARN))
+		return;
+
+	if (strcmp(res->proto, "outer_vlan") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_OUTER_VLAN;
+	else if (strcmp(res->proto, "inner_vlan") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_INNER_VLAN;
+	else if (strcmp(res->proto, "outer_ip") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_OUTER_IP;
+	else if (strcmp(res->proto, "inner_ip") == 0)
+		proto = RTE_MTR_COLOR_IN_PROTO_INNER_IP;
+	else {
+		printf("Invalid protocol\n");
+		return;
+	}
+
+	/* Get Meter input proto and priority */
+	ret = rte_mtr_color_in_protocol_priority_get(res->port_id, res->mtr_id,
+		proto, &prio, &error);
+	if (ret != 0)
+		print_err_msg(&error);
+}
+
+cmdline_parse_inst_t cmd_get_port_meter_in_proto_prio = {
+	.f = cmd_get_port_meter_in_proto_prio_parsed,
+	.data = NULL,
+	.help_str = "get port meter proto_prio <port_id> <mtr_id> <proto>",
+	.tokens = {
+		(void *)&cmd_get_port_meter_in_proto_prio_get,
+		(void *)&cmd_get_port_meter_in_proto_prio_port,
+		(void *)&cmd_get_port_meter_in_proto_prio_meter,
+		(void *)&cmd_get_port_meter_in_proto_prio_protocol,
+		(void *)&cmd_get_port_meter_in_proto_prio_port_id,
+		(void *)&cmd_get_port_meter_in_proto_prio_mtr_id,
+		(void *)&cmd_get_port_meter_in_proto_prio_proto,
 		NULL,
 	},
 };

@@ -265,6 +265,9 @@ EXPERIMENTAL {
 	rte_eth_ip_reassembly_conf_set;
 
 	# added in 22.07
+	rte_mtr_color_in_protocol_get;
+	rte_mtr_color_in_protocol_priority_get;
+	rte_mtr_color_in_protocol_set;
 	rte_mtr_meter_vlan_table_update;
 };
 
