@@ -7,7 +7,7 @@ def build_stage_node(Object s, nodes, name, stage_exec) {
 
 	node_def = {
 		stage (name) {
-			node (s.NODE_LABEL) {
+			node (s.NODE_LABEL_BUILD) {
 				lock(env.NODE_NAME) { /* Only for debugging */
 					s.utils.print_env(s)
 					stage_exec()
@@ -37,7 +37,19 @@ def add_doc_build_stage(Object s, nodes)
 				mkdir -p ${src_dir}
 				mkdir -p ${build_dir}
 				mkdir -p ${ci_logdir}
-				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/
+				"""
+			)
+			lock ("SYNC_LOCK") {
+				sh (
+					script: """#!/bin/bash -x
+					set -euo pipefail
+					rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/
+					"""
+				)
+			}
+			sh (
+				script: """#!/bin/bash -x
+				set -euo pipefail
 				cd ${src_dir}
 				MAKE_J=2
 
@@ -110,8 +122,19 @@ def add_klocwork_stage(Object s, nodes)
 				mkdir -p ${build_dir}
 				mkdir -p ${src_dir}
 				mkdir -p ${ci_logdir}
-				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/curr/
-				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/prev/
+				"""
+			)
+			lock ("SYNC_LOCK") {
+				sh (
+					script: """#!/bin/bash -x
+					set -euo pipefail
+					rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/curr/
+					rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/prev/
+					"""
+				)
+			}
+			sh (
+				script: """#!/bin/bash -x
 				MAKE_J=2
 
 				export PATH=${s.TOOLCHAIN_DIR}/bin:/home/jenkins/klocwork/kwbin/bin:$PATH
@@ -216,7 +239,19 @@ def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinko
 
 				mkdir -p ${src_dir}/
 				mkdir -p ${build_dir}
-				rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/
+				"""
+			)
+			lock ("SYNC_LOCK") {
+				sh (
+					script: """#!/bin/bash -x
+					set -euo pipefail
+					rsync -a ${s.PROJECT_ROOT}/ ${src_dir}/
+					"""
+				)
+			}
+			sh (
+				script: """#!/bin/bash -x
+				set -euo pipefail
 				cd ${src_dir}
 
 				./marvell-ci/patches/apply_patches.sh ${patches}
@@ -376,12 +411,9 @@ def run(Object s) {
 
 	s.BUILD_DIR = "/ci_build"
 
-	node (s.NODE_LABEL) {
-		prepare_builds(s, nodes)
-
-		if (!s.utils.get_flag(s, "disable_failfast"))
-			nodes.failFast = true
-	}
+	prepare_builds(s, nodes)
+	if (!s.utils.get_flag(s, "disable_failfast"))
+		nodes.failFast = true
 
 	if (nodes.size() > 0) {
 		stage ("Build") {

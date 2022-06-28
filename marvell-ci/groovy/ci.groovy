@@ -9,7 +9,7 @@
  */
 
 def execute_ci(Object s) {
-	node (s.NODE_LABEL) {
+	node (s.NODE_LABEL_GENERIC) {
 		def groovy_dir
 		def tmp_path
 
@@ -24,12 +24,14 @@ def execute_ci(Object s) {
 		s.project = s.components_map[this.params.component_name]
 		s.checkout_patch(s)
 		tmp_path = s.project.srcdir()
-		sh script : """#!/bin/bash
-			set -euo pipefail
-			ls ${tmp_path}
-			mkdir -p ${s.PROJECT_ROOT}
-			rsync -a ${tmp_path}/ ${s.PROJECT_ROOT}/
-		"""
+		lock ("SYNC_LOCK") {
+			sh script : """#!/bin/bash
+				set -euo pipefail
+				ls ${tmp_path}
+				mkdir -p ${s.PROJECT_ROOT}
+				rsync -a ${tmp_path}/ ${s.PROJECT_ROOT}/
+			"""
+		}
 
 		/* Load groovy scripts */
 		groovy_dir = "${tmp_path}/marvell-ci/groovy/"
@@ -52,26 +54,32 @@ def execute_ci(Object s) {
 	s.build.run(s)
 	s.test.run(s)
 
-	node (s.NODE_LABEL) {
+	node (s.NODE_LABEL_GENERIC) {
 		s.verify.run(s)
-		sh script : """#!/bin/bash
-			set -euo pipefail
-			rm -rf ${s.JOB_ROOT}
-		"""
-	}
-}
-
-def run_ci(Object s) {
-	s.NODE_LABEL="buildenv-2004-me"
-
-	try {
-		execute_ci(s)
-	} catch (err) {
-		node (s.NODE_LABEL) {
+		lock ("SYNC_LOCK") {
 			sh script : """#!/bin/bash
 				set -euo pipefail
 				rm -rf ${s.JOB_ROOT}
 			"""
+		}
+	}
+}
+
+def run_ci(Object s) {
+	s.NODE_LABEL_BUILD="buildenv-2004-me"
+	s.NODE_LABEL_TEST="buildenv-2004-test"
+	s.NODE_LABEL_GENERIC="buildenv-2004-le"
+
+	try {
+		execute_ci(s)
+	} catch (err) {
+		node (s.NODE_LABEL_GENERIC) {
+			lock ("SYNC_LOCK") {
+				sh script : """#!/bin/bash
+					set -euo pipefail
+					rm -rf ${s.JOB_ROOT}
+				"""
+			}
 		}
 		error "CI failed with error ${err}"
 	}

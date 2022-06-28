@@ -282,10 +282,9 @@ def run(Object s) {
 	def tests = [:]
 	def num_tests
 
-	node (s.NODE_LABEL) {
-		num_tests = prepare_tests(s, tests)
-
-		if (num_tests > 0) {
+	num_tests = prepare_tests(s, tests)
+	if (num_tests > 0) {
+		node (s.NODE_LABEL_TEST) {
 			lock(env.NODE_NAME) {
 				s.utils.print_env(s)
 				stage ("Test") {
