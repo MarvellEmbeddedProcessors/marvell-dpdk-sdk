@@ -1841,9 +1841,6 @@ test_ipsec_inline_proto_known_vec_inb(const void *test_data)
 	struct ipsec_test_flags flags;
 	struct ipsec_test_data td_inb;
 
-	if (test_data == &pkt_aes_256_gcm_v6)
-		SKIP_ON_CN9K();
-
 	memset(&flags, 0, sizeof(flags));
 
 	if (td->ipsec_xform.direction == RTE_SECURITY_IPSEC_SA_DIR_EGRESS)
@@ -1969,8 +1966,6 @@ test_ipsec_inline_proto_tunnel_v6_in_v6(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
 
-	SKIP_ON_CN9K();
-
 	memset(&flags, 0, sizeof(flags));
 
 	flags.ipv6 = true;
@@ -1984,8 +1979,6 @@ test_ipsec_inline_proto_tunnel_v4_in_v6(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
 
-	SKIP_ON_CN9K();
-
 	memset(&flags, 0, sizeof(flags));
 
 	flags.ipv6 = false;
@@ -1998,8 +1991,6 @@ static int
 test_ipsec_inline_proto_tunnel_v6_in_v4(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
-
-	SKIP_ON_CN9K();
 
 	memset(&flags, 0, sizeof(flags));
 
@@ -2098,8 +2089,6 @@ static int
 test_ipsec_inline_proto_set_df_1_inner_0(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
-
-	SKIP_ON_CN9K();
 
 	memset(&flags, 0, sizeof(flags));
 
@@ -2245,8 +2234,6 @@ static int
 test_ipsec_inline_proto_iv_gen(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
-
-	SKIP_ON_CN9K();
 
 	memset(&flags, 0, sizeof(flags));
 
