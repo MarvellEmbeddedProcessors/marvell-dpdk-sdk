@@ -6,140 +6,12 @@
 #define _IPSEC_NEON_H_
 
 #include "ipsec.h"
+#include "neon/port_group.h"
 
-#define FWDSTEP		4
 #define MAX_TX_BURST	(MAX_PKT_BURST / 2)
 #define BAD_PORT	((uint16_t)-1)
 
 extern xmm_t val_eth[RTE_MAX_ETHPORTS];
-
-/*
- * Group consecutive packets with the same destination port into one burst.
- * To avoid extra latency this is done together with some other packet
- * processing, but after we made a final decision about packet's destination.
- * To do this we maintain:
- * pnum - array of number of consecutive packets with the same dest port for
- * each packet in the input burst.
- * lp - pointer to the last updated element in the pnum.
- * dlp - dest port value lp corresponds to.
- */
-
-#define	GRPSZ	(1 << FWDSTEP)
-#define	GRPMSK	(GRPSZ - 1)
-
-#define GROUP_PORT_STEP(dlp, dcp, lp, pn, idx)	do { \
-	if (likely((dlp) == (dcp)[(idx)])) {         \
-		(lp)[0]++;                           \
-	} else {                                     \
-		(dlp) = (dcp)[idx];                  \
-		(lp) = (pn) + (idx);                 \
-		(lp)[0] = 1;                         \
-	}                                            \
-} while (0)
-
-static const struct {
-	uint64_t pnum; /* prebuild 4 values for pnum[]. */
-	int32_t  idx;  /* index for new last updated elemnet. */
-	uint16_t lpv;  /* add value to the last updated element. */
-} gptbl[GRPSZ] = {
-	{
-		/* 0: a != b, b != c, c != d, d != e */
-		.pnum = UINT64_C(0x0001000100010001),
-		.idx = 4,
-		.lpv = 0,
-	},
-	{
-		/* 1: a == b, b != c, c != d, d != e */
-		.pnum = UINT64_C(0x0001000100010002),
-		.idx = 4,
-		.lpv = 1,
-	},
-	{
-		/* 2: a != b, b == c, c != d, d != e */
-		.pnum = UINT64_C(0x0001000100020001),
-		.idx = 4,
-		.lpv = 0,
-	},
-	{
-		/* 3: a == b, b == c, c != d, d != e */
-		.pnum = UINT64_C(0x0001000100020003),
-		.idx = 4,
-		.lpv = 2,
-	},
-	{
-		/* 4: a != b, b != c, c == d, d != e */
-		.pnum = UINT64_C(0x0001000200010001),
-		.idx = 4,
-		.lpv = 0,
-	},
-	{
-		/* 5: a == b, b != c, c == d, d != e */
-		.pnum = UINT64_C(0x0001000200010002),
-		.idx = 4,
-		.lpv = 1,
-	},
-	{
-		/* 6: a != b, b == c, c == d, d != e */
-		.pnum = UINT64_C(0x0001000200030001),
-		.idx = 4,
-		.lpv = 0,
-	},
-	{
-		/* 7: a == b, b == c, c == d, d != e */
-		.pnum = UINT64_C(0x0001000200030004),
-		.idx = 4,
-		.lpv = 3,
-	},
-	{
-		/* 8: a != b, b != c, c != d, d == e */
-		.pnum = UINT64_C(0x0002000100010001),
-		.idx = 3,
-		.lpv = 0,
-	},
-	{
-		/* 9: a == b, b != c, c != d, d == e */
-		.pnum = UINT64_C(0x0002000100010002),
-		.idx = 3,
-		.lpv = 1,
-	},
-	{
-		/* 0xa: a != b, b == c, c != d, d == e */
-		.pnum = UINT64_C(0x0002000100020001),
-		.idx = 3,
-		.lpv = 0,
-	},
-	{
-		/* 0xb: a == b, b == c, c != d, d == e */
-		.pnum = UINT64_C(0x0002000100020003),
-		.idx = 3,
-		.lpv = 2,
-	},
-	{
-		/* 0xc: a != b, b != c, c == d, d == e */
-		.pnum = UINT64_C(0x0002000300010001),
-		.idx = 2,
-		.lpv = 0,
-	},
-	{
-		/* 0xd: a == b, b != c, c == d, d == e */
-		.pnum = UINT64_C(0x0002000300010002),
-		.idx = 2,
-		.lpv = 1,
-	},
-	{
-		/* 0xe: a != b, b == c, c == d, d == e */
-		.pnum = UINT64_C(0x0002000300040001),
-		.idx = 1,
-		.lpv = 0,
-	},
-	{
-		/* 0xf: a == b, b == c, c == d, d == e */
-		.pnum = UINT64_C(0x0002000300040005),
-		.idx = 0,
-		.lpv = 4,
-	},
-};
-
 
 /*
  * Update source and destination MAC addresses in the ethernet header.
@@ -184,44 +56,6 @@ processx4_step3(struct rte_mbuf *pkts[FWDSTEP], uint16_t dst_port[FWDSTEP],
 		}
 
 	}
-}
-
-/*
- * Group consecutive packets with the same destination port in bursts of 4.
- * Suppose we have array of destination ports:
- * dst_port[] = {a, b, c, d,, e, ... }
- * dp1 should contain: <a, b, c, d>, dp2: <b, c, d, e>.
- * We doing 4 comparisons at once and the result is 4 bit mask.
- * This mask is used as an index into prebuild array of pnum values.
- */
-static inline uint16_t *
-port_groupx4(uint16_t pn[FWDSTEP + 1], uint16_t *lp, uint16x8_t dp1,
-	     uint16x8_t dp2)
-{
-	union {
-		uint16_t u16[FWDSTEP + 1];
-		uint64_t u64;
-	} *pnum = (void *)pn;
-
-	uint16x8_t mask = {1, 2, 4, 8, 0, 0, 0, 0};
-	int32_t v;
-
-	dp1 = vceqq_u16(dp1, dp2);
-	dp1 = vandq_u16(dp1, mask);
-	v = vaddvq_u16(dp1);
-
-	/* update last port counter. */
-	lp[0] += gptbl[v].lpv;
-	rte_compiler_barrier();
-
-	/* if dest port value has changed. */
-	if (v != GRPMSK) {
-		pnum->u64 = gptbl[v].pnum;
-		pnum->u16[FWDSTEP] = 1;
-		lp = pnum->u16 + gptbl[v].idx;
-	}
-
-	return lp;
 }
 
 /**
