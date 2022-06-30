@@ -118,7 +118,7 @@ function check_meter_input_color_method()
 		exit 1
 	fi
 
-	if [[ $pc_mode != $1 && $tnl_ena != $2 ]]; then
+	if [[ $pc_mode != $1 || $tnl_ena != $2 ]]; then
 		echo "input color method is not same. pc_mode $pc_mode and tnl_ena $tnl_ena"
 		exit 1
 	fi
@@ -180,7 +180,7 @@ testpmd_cmd $PRFX "start"
 # Test case - 1: Validate metering algorithm configuration
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_algo "3"
@@ -190,7 +190,7 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile trtcm_rfc2698 0 0 1000000000 2000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_algo "1"
@@ -201,7 +201,7 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 # Test case - 2: Validate action configuration based on color
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_actions "PASS" "PASS" "PASS"
@@ -211,7 +211,7 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions drop / end y_actions drop / end r_actions drop / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_actions "DROP" "DROP" "DROP"
@@ -222,7 +222,7 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 # Test case - 3: Validate input color configuration
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color "Green"
@@ -232,7 +232,7 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color "Yellow"
@@ -242,7 +242,7 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan r 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 r 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color "Red"
@@ -253,7 +253,8 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 # Test case - 4: Validate input color method configuration
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "set port meter proto 0 0 outer_vlan 0"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color_method "VLAN" "0"
@@ -263,7 +264,8 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 inner_vlan g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 g 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "set port meter proto 0 0 inner_vlan 0"
 testpmd_cmd $PRFX "flow create 0 ingress pattern vlan pcp is 0 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color_method "VLAN" "1"
@@ -273,7 +275,8 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 dscp y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "set port meter proto 0 0 outer_ip 0"
 testpmd_cmd $PRFX "flow create 0 ingress pattern ipv4 src is 1.1.1.1 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color_method "DSCP" "0"
@@ -283,7 +286,8 @@ testpmd_cmd $PRFX "del port meter policy 0 0"
 
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 inner_dscp y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "set port meter proto 0 0 inner_ip 0"
 testpmd_cmd $PRFX "flow create 0 ingress pattern ipv4 src is 1.1.1.1 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_input_color_method "DSCP" "1"
@@ -291,24 +295,10 @@ testpmd_cmd $PRFX "del port meter 0 0"
 testpmd_cmd $PRFX "del port meter profile 0 0"
 testpmd_cmd $PRFX "del port meter policy 0 0"
 
-testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
-testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 vlan_dscp y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
-sleep 3
-testpmd_cmd $PRFX "del port meter profile 0 0"
-testpmd_cmd $PRFX "del port meter policy 0 0"
-
-testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
-testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 inner_vlan_dscp y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
-sleep 3
-testpmd_cmd $PRFX "del port meter profile 0 0"
-testpmd_cmd $PRFX "del port meter policy 0 0"
-
 # Test case - 5: Validate meter configuration association with RQ
 testpmd_cmd $PRFX "add port meter profile srtcm_rfc2697 0 0 1000000000 5000 10000 0"
 testpmd_cmd $PRFX "add port meter policy 0 0 g_actions void / end y_actions void / end r_actions void / end"
-testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 dscp y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
+testpmd_cmd $PRFX "create port meter 0 0 0 0 yes 0 0 y 0 r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y g r y y y y y y y y y y y y y y y y"
 testpmd_cmd $PRFX "flow create 0 ingress pattern ipv4 src is 1.1.1.1 / end actions meter mtr_id 0 / queue index 0 / end"
 sleep 3
 check_meter_rq_config
