@@ -13,7 +13,7 @@ Overview
 * **Init** - Initializes the environment for running further CI steps.
 * **Check** - Runs checkpatch and checkformat. See section `Formatting Checks`_
   for more details.
-* **Setup** - Sets up toolchains and auto adds reviewers to gerrit review.
+* **Add Reviewers** - Auto adds reviewers to gerrit review.
 * **Build** - Does multiple DPDK builds for different architectures and build
   parameters. See section `Building`_ for more details. This also does the
   Klocwork static analysis. See section `Klocwork`_ for more details.
@@ -123,11 +123,10 @@ How to build ?
 
 How to skip build in CI ?
 -------------------------
-  Builds can be skipped in CI using the ``skip_build`` directive.
+  Builds can be skipped in CI using the directives ``skip_test_build`` and
+  ``skip_doc_build`` directives.
 
   | **Note:** If builds are skipped, CI will not give +1.
-  | **Note:** Test builds are enabled only if corresponding test stage is
-    enabled.
 
 Handling exe_wrapper in test builds
 -----------------------------------

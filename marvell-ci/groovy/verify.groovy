@@ -10,7 +10,8 @@ def run(Object s)
 			return
 		}
 
-		if (s.utils.get_flag(s, "skip_build"))
+		if (s.utils.get_flag(s, "skip_test_build") ||
+		    s.utils.get_flag(s, "skip_doc_build"))
 			error "-E- Didn't verify all mandatory builds"
 
 		if (!s.utils.get_flag(s, "run_base") || s.utils.get_flag(s, "skip_test")) {

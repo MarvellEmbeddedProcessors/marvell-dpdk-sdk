@@ -25,6 +25,7 @@ function help() {
 	echo "--extra-meson-args | -m      : Additional arguments to meson"
 	echo "--jobs | -j                  : Number of parallel jobs [Default: 4]"
 	echo "--project-root | -p          : DPDK Project root [Default: PWD]"
+	echo "--no-clean | -n              : Dont clean build directories before building"
 	echo "--verbose | -v               : Enable verbose logs"
 	echo "--help | -h                  : Print this help and exit"
 	set -x
@@ -32,8 +33,8 @@ function help() {
 
 SCRIPT_NAME="$(basename "$0")"
 if ! OPTS=$(getopt \
-	-o "r:b:m:j:p:hv" \
-	-l "build-root:,build-env:,extra-meson-args:,jobs:,project-root:,help,verbose" \
+	-o "r:b:m:j:p:hvn" \
+	-l "build-root:,build-env:,extra-meson-args:,jobs:,project-root:,help,verbose,no-clean" \
 	-n "$SCRIPT_NAME" \
 	-- "$@"); then
 	help
@@ -46,6 +47,7 @@ MAKE_J=4
 EXTRA_ARGS=
 PROJECT_ROOT="$PWD"
 VERBOSE=
+DONT_CLEAN=
 
 eval set -- "$OPTS"
 unset OPTS
@@ -56,6 +58,7 @@ while [[ $# -gt 1 ]]; do
 		-m|--extra-meson-args) shift; EXTRA_ARGS="$1";;
 		-j|--jobs) shift; MAKE_J=$1;;
 		-p|--project-root) shift; PROJECT_ROOT=$1;;
+		-n|--no-clean) DONT_CLEAN=1;;
 		-v|--verbose) VERBOSE='-v';;
 		-h|--help) help; exit 0;;
 		*) help; exit 1;;
@@ -78,8 +81,10 @@ PREFIX_DIR=$BUILD_ROOT/prefix
 
 source $BUILD_ENV
 
-rm -rf $BUILD_DIR
-rm -rf $PREFIX_DIR
+if [[ -z $DONT_CLEAN ]]; then
+	rm -rf $BUILD_DIR
+	rm -rf $PREFIX_DIR
+fi
 
 cd $PROJECT_ROOT
 

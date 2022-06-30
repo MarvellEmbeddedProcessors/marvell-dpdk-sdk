@@ -69,6 +69,7 @@ def add_doc_build_stage(Object s, nodes)
 			if (s.FAILING_FAST) {
 				unstable ("Aborting as a parallel stage failed")
 			} else {
+				s.BUILD_STAGES_FAILED.push(build_name)
 				if (!s.utils.get_flag(s, "disable_failfast"))
 					s.FAILING_FAST = true
 				error "-E- Failed to build DPDK Docs, Exception err: ${err}"
@@ -86,10 +87,12 @@ def add_doc_build_stage(Object s, nodes)
 				""",
 				label: "Build Marvell CI Docs"
 			)
+			s.BUILD_STAGES_PASSED.push(build_name)
 		} catch (err) {
 			if (s.FAILING_FAST) {
 				unstable ("Aborting as a parallel stage failed")
 			} else {
+				s.BUILD_STAGES_FAILED.push(build_name)
 				if (!s.utils.get_flag(s, "disable_failfast"))
 					s.FAILING_FAST = true
 				error "-E- Failed to build Marvell CI Docs, Exception err: ${err}"
@@ -178,10 +181,12 @@ def add_klocwork_stage(Object s, nodes)
 				label: "Klocwork"
 			)
 			s.utils.post_artifacts("klocwork")
+			s.BUILD_STAGES_PASSED.push(build_name)
 		} catch (err) {
 			if (s.FAILING_FAST) {
 				unstable ("Aborting as a parallel stage failed")
 			} else {
+				s.BUILD_STAGES_FAILED.push(build_name)
 				if (!s.utils.get_flag(s, "disable_failfast"))
 					s.FAILING_FAST = true
 				s.utils.post_artifacts("klocwork")
@@ -212,8 +217,7 @@ def get_build_params(build_name, compiler, libtype, copt, clinkopt, arch, extra_
 }
 
 def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinkopt, arch,
-		    extra_args = "", patches = "", backup = false, strict_me = false,
-		    strict_he = false)
+		    extra_args = "", patches = "", backup = false, build_deps = false)
 {
 	def params = get_build_params(build_name, compiler, libtype, copt, clinkopt, arch,
 				      extra_args)
@@ -264,19 +268,31 @@ def add_build_stage(Object s, nodes, build_name, compiler, libtype, copt, clinko
 				export CFLAGS="${copt}"
 				export LDFLAGS="${clinkopt}"
 				MAKE_J=2
+
+				if [[ "${build_deps}" == "true" ]]; then
+					./marvell-ci/build/build-deps.sh \
+						-r $build_dir \
+						-p $src_dir \
+						-i ${build_dir}/build/deps \
+						-j \$MAKE_J
+				fi
+
 				./marvell-ci/build/build.sh \
 					-b ./marvell-ci/build/env/${arch}-${compiler}.env \
 					-r ${build_dir} \
 					-p ${src_dir} \
 					-j \$MAKE_J \
-					-m "${args}"
+					-m "${args}" \
+					-n
 				""",
 				label: "Build ${name}"
 			)
+			s.BUILD_STAGES_PASSED.push(name)
 		} catch (err) {
 			if (s.FAILING_FAST) {
 				unstable ("Aborting Build as a parallel stage failed")
 			} else {
+				s.BUILD_STAGES_FAILED.push(name)
 				if (!s.utils.get_flag(s, "disable_failfast"))
 					s.FAILING_FAST = true
 				error "-E- Failed to build ${name}, Exception err: ${err}"
@@ -320,33 +336,57 @@ def prepare_build_stages(Object s, nodes, compilers, libtypes, copts, clinkopts,
 }
 
 def prepare_builds(Object s, nodes) {
+	def test_enabled
+	def skip_test_build = s.utils.get_flag(s, "skip_test_build")
+	def force_misc_build = s.utils.get_flag(s, "force_misc_build")
 	/* Builds used in test stages */
-	if (!s.utils.get_flag(s, "skip_test")) {
-		/* CN9k Test builds */
-		if (s.utils.get_flag(s, "run_test-cn9k") ||
-		    s.utils.get_flag(s, "run_test-cn96") ||
-		    s.utils.get_flag(s, "run_test-cn96-perf") ||
-		    s.utils.get_flag(s, "run_test-cn98-perf"))
-			add_build_stage(s, nodes, "test-cn9k-build", 'gcc-marvell', 'static',
-					'-O3', '-lto', 'cn9k', '-Dexamples=all', '', true)
-	}
 
-	if (s.ENABLE_CN10K) {
-		/* cn10k test builds */
-		if (s.utils.get_flag(s, "run_test-cn10k") ||
-		    s.utils.get_flag(s, "run_test-cn106-perf") ||
-		    s.utils.get_flag(s, "run_test-asim-cn10ka") ||
-		    !s.utils.get_flag(s, "skip_build"))
-			add_build_stage(s, nodes, "test-cn10k-build", 'gcc-marvell',
-					'static', '-O3', '-lto', 'cn10k', '-Dexamples=all',
-					'', true)
-	}
+	/* CN9k Test builds */
+	test_enabled = s.utils.get_flag(s, "run_test-cn9k") ||
+		       s.utils.get_flag(s, "run_test-cn96") ||
+		       s.utils.get_flag(s, "run_test-cn96-perf") ||
+		       s.utils.get_flag(s, "run_test-cn98-perf")
+	if (test_enabled || !skip_test_build)
+		add_build_stage(s, nodes, "test-cn9k-build", 'gcc-marvell', 'static',
+				'-O3', '-lto', 'cn9k', '-Dexamples=all',
+				'', test_enabled, true)
 
-	if (!s.utils.get_flag(s, "skip_build")) {
-		/* Klocwork Build */
-		if (!s.utils.get_flag(s, "skip_klocwork"))
-			add_klocwork_stage(s, nodes)
+	/* cn10k test builds */
+	test_enabled = s.utils.get_flag(s, "run_test-cn10k") ||
+		       s.utils.get_flag(s, "run_test-cn106-perf") ||
+		       s.utils.get_flag(s, "run_test-asim-cn10ka")
+	if (test_enabled || !skip_test_build)
+		add_build_stage(s, nodes, "test-cn10k-build", 'gcc-marvell',
+				'static', '-O3', '-lto', 'cn10k', '-Dexamples=all',
+				'', test_enabled, true)
 
+	/* CN9k Debug Build */
+	test_enabled = s.utils.get_flag(s, "run_test-cn9k-debug")
+	if (test_enabled || force_misc_build)
+		add_build_stage(s, nodes, "test-cn9k-debug-build", 'gcc-marvell',
+			'static', '-O0 -DRTE_ENABLE_ASSERT',
+			'', 'cn9k',
+			"-Dexamples=all --buildtype=debug --werror",
+			'', test_enabled, true)
+
+	/* CN10k Debug Build */
+	test_enabled = s.utils.get_flag(s, "run_test-cn10k-debug") ||
+		       s.utils.get_flag(s, "run_test-asim-cn10ka-debug")
+	if (test_enabled || force_misc_build)
+		add_build_stage(s, nodes, "test-cn10k-debug-build", 'gcc-marvell',
+			'static', '-O0 -DRTE_ENABLE_ASSERT', '', 'cn10k',
+			"-Dexamples=all --buildtype=debug --werror",
+			'', test_enabled, true)
+
+	/* Klocwork Build */
+	if (!s.utils.get_flag(s, "skip_klocwork"))
+		add_klocwork_stage(s, nodes)
+
+	/* Doc Build */
+	if (!s.utils.get_flag(s, "skip_doc_build"))
+		add_doc_build_stage(s, nodes)
+
+	if (force_misc_build) {
 		/* x86 Builds */
 		prepare_build_stages(s, nodes, ['clang', 'gcc-4.8', 'gcc'], ['static'],
 					     ['-O3'], [''], ['x86'], '-Dexamples=all')
@@ -371,39 +411,14 @@ def prepare_builds(Object s, nodes) {
 		prepare_build_stages(s, nodes, ['gcc-marvell'], ['static'],
 				     ['-O3'], ['-lto'], ['cn9k'], '-Dexamples=all')
 
-		if (s.ENABLE_CN10K) {
-			/* CN10k Builds */
-			prepare_build_stages(s, nodes, ['gcc-marvell'], ['static', 'shared'],
-					     ['-O3'], ['-lto', ''], ['cn10k'], '-Dexamples=all')
-			prepare_build_stages(s, nodes, ['gcc-marvell'], ['static', 'shared'],
-					     ['-O0'], ['-lto', ''], ['cn10k'], '-Dexamples=all')
-			prepare_build_stages(s, nodes, ['clang'], ['shared'],
-					     ['-O3'], [''], ['cn10k'], '-Dexamples=all')
-		}
-
-		/* Doc Build */
-		add_doc_build_stage(s, nodes)
-
+		/* CN10k Builds */
+		prepare_build_stages(s, nodes, ['gcc-marvell'], ['static', 'shared'],
+				     ['-O3'], ['-lto', ''], ['cn10k'], '-Dexamples=all')
+		prepare_build_stages(s, nodes, ['gcc-marvell'], ['static', 'shared'],
+				     ['-O0'], ['-lto', ''], ['cn10k'], '-Dexamples=all')
+		prepare_build_stages(s, nodes, ['clang'], ['shared'],
+				     ['-O3'], [''], ['cn10k'], '-Dexamples=all')
 	}
-
-	/* CN9k Debug Build */
-	if (!s.utils.get_flag(s, "skip_build") ||
-	    (!s.utils.get_flag(s, "skip_test") && s.utils.get_flag(s, "run_test-cn9k-debug")))
-		add_build_stage(s, nodes, "test-cn9k-debug-build", 'gcc-marvell',
-			'static', '-O0 -DRTE_ENABLE_ASSERT',
-			'', 'cn9k',
-			"-Dexamples=all --buildtype=debug --werror",
-			'', false)
-
-	/* CN10k Debug Build */
-	if (s.ENABLE_CN10K && (!s.utils.get_flag(s, "skip_build") ||
-	    (!s.utils.get_flag(s, "skip_test") && (s.utils.get_flag(s, "run_test-cn10k-debug") ||
-		(s.utils.get_flag(s, "run_test-asim-cn10ka-debug"))))))
-		add_build_stage(s, nodes, "test-cn10k-debug-build", 'gcc-marvell',
-			'static', '-O0 -DRTE_ENABLE_ASSERT', '', 'cn10k',
-			"-Dexamples=all --buildtype=debug --werror",
-			'', false)
-
 }
 
 def run(Object s) {
@@ -417,7 +432,25 @@ def run(Object s) {
 
 	if (nodes.size() > 0) {
 		stage ("Build") {
-			parallel(nodes)
+			def failed = false
+
+			try {
+				parallel(nodes)
+			} catch (err) {
+				failed = true
+			}
+
+			/* Slack report for nightly builds */
+			if (s.utils.get_flag(s, "nightly_test") && failed) {
+				node (s.NODE_LABEL_GENERIC) {
+					s.utils.slack_report(
+						s, "CI Nightly Build Failure Report",
+						s.BUILD_STAGES_PASSED, [], s.BUILD_STAGES_FAILED)
+				}
+			}
+
+			if (failed)
+				error "-E- Build stages failed"
 		}
 	}
 }

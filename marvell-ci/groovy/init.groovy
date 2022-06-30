@@ -3,27 +3,11 @@
  */
 
 def init_env_vars(Object s) {
-	def regular_branches = [
-		/* ASIM binaries and images are picked up based on the ref branch name */
-
-		/* BRANCH NAME       REF BRANCH          Enable CN10k*/
-		["dpdk-21.11-devel", "dpdk-21.05-devel", true],
-		["dpdk-21.08-devel", "dpdk-21.05-devel", true],
-		["dpdk-21.05-devel", "dpdk-21.05-devel", true],
-		["dpdk-20.11-devel", "dpdk-21.05-devel", false]
-	]
-
+	s.DPDK_BRANCH = "dpdk-21.11-devel"
 	s.REF_BRANCH = "dpdk-21.05-devel"
 	s.REGULAR_BRANCH = false
-	s.ENABLE_CN10K = true
-	for (b in regular_branches) {
-		if (b[0] == env.GERRIT_BRANCH) {
-			s.REGULAR_BRANCH = true
-			s.REF_BRANCH = b[1]
-			s.ENABLE_CN10K = b[2]
-			break
-		}
-	}
+	if (s.DPDK_BRANCH == env.GERRIT_BRANCH)
+		s.REGULAR_BRANCH = true
 
 	s.COMMIT_MESSAGE = new String(env.GERRIT_CHANGE_COMMIT_MESSAGE.decodeBase64())
 	currentBuild.description = s.COMMIT_MESSAGE.readLines()[0]
@@ -46,8 +30,11 @@ def init_env_vars(Object s) {
 
 	s.HEAD_COMMIT = s.utils.gerrit_is_head_commit(s)
 	s.FAILING_FAST = false
+	s.BUILD_STAGES_PASSED = []
+	s.BUILD_STAGES_FAILED = []
 	s.TEST_STAGES_PASSED = []
 	s.TEST_STAGES_FAILED = []
+	s.TEST_STAGES_FAILED_CRITICAL = []
 
 	s.base_tests = [
 		'test-cn96',
@@ -59,7 +46,9 @@ def init_env_vars(Object s) {
 		'run_all' : [ 'Run all tests', false ],
 		'run_base' : [ 'Run base tests', s.HEAD_COMMIT ],
 		'skip_all' : [ 'Skips all CI stages and abort the build', false],
-		'skip_build' : [ 'Skips all build stages.', false ],
+		'skip_doc_build' : [ 'Skips documentation builds', false ],
+		'force_misc_build' : [ 'Force miscellaneous builds', false ],
+		'skip_test_build' : [ 'Skip builds used for testing', false ],
 		'skip_checkpatch' : [ 'Skip checkpatch validation', false ],
 		'skip_checkformat' : [ 'Skip check format validation', false ],
 		'skip_klocwork' : [ 'Skip klocwork validation', false ],
@@ -76,7 +65,6 @@ def init_env_vars(Object s) {
 		'run_test-asim-cn10ka' : [ 'Run CN10ka tests', false],
 		'run_test-asim-cn10ka-debug' : [ 'Run CN10ka Debug tests', false],
 		'disable_failfast' : [ 'Disable failFast for parallel stages', false ],
-		'skip_roc_check' : [ 'Skip ROC Files check', false ],
 		'skip_check_sanity' : [ 'Skip sanity check', false ],
 		'force_start' : [ 'Force start CI on non-regular branches', false ],
 		'nightly_test' : [ 'Enables Nightly tests, checks and messages. This flag will reset other flags.', false ],
@@ -156,13 +144,12 @@ def init_flags(Object s) {
 			if (v.getKey().matches("run_.*"))
 				v.getValue()[1] = false
 
-		s.utils.set_flag(s, "skip_build", true)
+		s.utils.set_flag(s, "force_misc_build", true)
 		s.utils.set_flag(s, "skip_checkpatch", true)
 		s.utils.set_flag(s, "skip_checkformat", true)
 		s.utils.set_flag(s, "skip_klocwork", true)
 		s.utils.set_flag(s, "disable_failfast", true)
 		s.utils.set_flag(s, "skip_add_reviewers", true)
-		s.utils.set_flag(s, "skip_roc_check", true)
 		s.utils.set_flag(s, "run_test-cn96-perf", true)
 		s.utils.set_flag(s, "run_test-cn106-perf", true)
 	} else if (s.utils.get_flag(s, "run_all")) {

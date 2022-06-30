@@ -238,4 +238,35 @@ def print_env(Object s) {
 	"""
 }
 
+def slack_report(s, title, passed, failed, critical_failures) {
+	def report
+
+	report  = "======================================\n"
+	report += "${env.GERRIT_BRANCH} ${title}\n"
+	report += "======================================\n"
+	report += "\n"
+	report += "Link: ${env.RUN_DISPLAY_URL}\n"
+
+	if (critical_failures.size() > 0) {
+		report += "\n"
+		report += "Critical Failures\n"
+		report += "-----------------\n"
+		for (t in critical_failures)
+			report += "${t}\n"
+	}
+
+	report += "\n"
+	report += "Passed\n"
+	report += "------------\n"
+	for (t in passed)
+		report += "${t}\n"
+	report += "\n"
+	report += "Failed\n"
+	report += "------------\n"
+	for (t in failed)
+		report += "${t}\n"
+
+	message_slack(s, "$report", critical_failures.size() > 0)
+}
+
 return this

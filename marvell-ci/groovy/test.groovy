@@ -33,7 +33,8 @@ def lock_dual_board_and_test(s, board_rsrc, test_name, test_def) {
 	}
 }
 
-def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc) {
+def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_rsrc,
+		       is_perf = false, dual_board = false) {
 	if (!s.utils.get_flag(s, "run_${test_name}"))
 		return
 
@@ -95,7 +96,10 @@ def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_r
 				if (s.FAILING_FAST) {
 					unstable ("Aborting as a parallel stage failed")
 				} else {
-					s.TEST_STAGES_FAILED.push(test_name)
+					if (is_perf)
+						s.TEST_STAGES_FAILED.push(test_name)
+					else
+						s.TEST_STAGES_FAILED_CRITICAL.push(test_name)
 					if (!s.utils.get_flag(s, "disable_failfast"))
 						s.FAILING_FAST = true
 					s.utils.post_artifacts(test_name)
@@ -104,9 +108,7 @@ def prepare_test_stage(Object s, tests, test_name, test_env, build_name, board_r
 			}
 		}
 
-		if ("${board_rsrc}" == "DEV_CI_DATAPLANE_96xx_PERF_SETUP" ||
-		    "${board_rsrc}" == "DEV_CI_DATAPLANE_98xx_PERF_SETUP" ||
-		    "${board_rsrc}" == "DEV_CI_DATAPLANE_106xx_PERF_SETUP")
+		if (dual_board)
 			lock_dual_board_and_test(s, "${board_rsrc}", test_name, test_def)
 		else
 			lock_board_and_test(s, "${board_rsrc}", test_name, test_def)
@@ -179,7 +181,7 @@ def prepare_asim_test_substage(Object s, tests, test_name, test_env, build_name,
 					if (s.FAILING_FAST) {
 						unstable ("Aborting as a parallel stage failed")
 					} else {
-						s.TEST_STAGES_FAILED.push(test_name)
+						s.TEST_STAGES_FAILED_CRITICAL.push(test_name)
 						if (!s.utils.get_flag(s, "disable_failfast"))
 							s.FAILING_FAST = true
 						s.utils.post_artifacts(test_name)
@@ -238,37 +240,35 @@ def prepare_tests(Object s, tests) {
 
 	/* CN96 Perf Stage */
 	prepare_test_stage(s, tests, "test-cn96-perf", "cn96-perf.env", "test-cn9k-build",
-				"DEV_CI_DATAPLANE_96xx_PERF_SETUP")
+				"DEV_CI_DATAPLANE_96xx_PERF_SETUP", true, true)
 
 	/* CN98 Perf Stage */
 	prepare_test_stage(s, tests, "test-cn98-perf", "cn98-perf.env", "test-cn9k-build",
-				"DEV_CI_DATAPLANE_98xx_PERF_SETUP")
+				"DEV_CI_DATAPLANE_98xx_PERF_SETUP", true, true)
 
-	if (s.ENABLE_CN10K) {
-		/* CN10K Test */
-		prepare_test_stage(s, tests, "test-cn10k", "cn10k.env", "test-cn10k-build",
-					"DEV_CI_DATAPLANE_106xx")
+	/* CN10K Test */
+	prepare_test_stage(s, tests, "test-cn10k", "cn10k.env", "test-cn10k-build",
+				"DEV_CI_DATAPLANE_106xx")
 
-		/* CN10K Debug Test */
-		prepare_test_stage(s, tests, "test-cn10k-debug", "cn10k.env", "test-cn10k-debug-build",
-					"DEV_CI_DATAPLANE_106xx")
+	/* CN10K Debug Test */
+	prepare_test_stage(s, tests, "test-cn10k-debug", "cn10k.env", "test-cn10k-debug-build",
+				"DEV_CI_DATAPLANE_106xx")
 
-		/* CN10K Perf Stage */
-		prepare_test_stage(s, tests, "test-cn106-perf", "cn106-perf.env", "test-cn10k-build",
-					"DEV_CI_DATAPLANE_106xx_PERF_SETUP")
+	/* CN10K Perf Stage */
+	prepare_test_stage(s, tests, "test-cn106-perf", "cn106-perf.env", "test-cn10k-build",
+				"DEV_CI_DATAPLANE_106xx_PERF_SETUP", true, true)
 
-		/* ASIM Test Stage */
-		prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka.env",
-					"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM")
-		prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka-crypto.env",
-					"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM", "crypto")
+	/* ASIM Test Stage */
+	prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka.env",
+				"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM")
+	prepare_asim_test_stage(s, tests, "test-asim-cn10ka", "asim-cn10ka-crypto.env",
+				"test-cn10k-build", "DEV_CI_DATAPLANE_ASIM", "crypto")
 
-		/* ASIM Debug Test Stage */
-		prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka.env",
-					"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM")
-		prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka-crypto.env",
-					"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM", "crypto")
-	}
+	/* ASIM Debug Test Stage */
+	prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka.env",
+				"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM")
+	prepare_asim_test_stage(s, tests, "test-asim-cn10ka-debug", "asim-cn10ka-crypto.env",
+				"test-cn10k-debug-build", "DEV_CI_DATAPLANE_ASIM", "crypto")
 
 	num_tests = tests.size()
 
@@ -303,26 +303,12 @@ def run(Object s) {
 					}
 
 					/* Slack report for nightly tests */
-					if (s.utils.get_flag(s, "nightly_test")) {
-						def report
-
-						report  = "=======================================\n"
-						report += "${env.GERRIT_BRANCH} CI Nightly Test Report\n"
-						report += "=======================================\n"
-						report += "\n"
-						report += "Link: ${env.RUN_DISPLAY_URL}\n"
-						report += "\n"
-						report += "Tests Passed\n"
-						report += "------------\n"
-						for (t in s.TEST_STAGES_PASSED)
-							report += "${t}\n"
-						report += "\n"
-						report += "Tests Failed\n"
-						report += "------------\n"
-						for (t in s.TEST_STAGES_FAILED)
-							report += "${t}\n"
-						s.utils.message_slack(s, "$report", failed)
-					}
+					if (s.utils.get_flag(s, "nightly_test"))
+						s.utils.slack_report(s,
+							"CI Nightly Test Report",
+							s.TEST_STAGES_PASSED,
+							s.TEST_STAGES_FAILED,
+							s.TEST_STAGES_FAILED_CRITICAL)
 
 					if (failed)
 						error "-E- Test stages failed"
