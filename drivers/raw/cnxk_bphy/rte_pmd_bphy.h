@@ -84,6 +84,8 @@ enum cnxk_bphy_cgx_eth_link_fec {
 	CNXK_BPHY_CGX_ETH_LINK_FEC_BASE_R,
 	/** Reed-Solomon FEC */
 	CNXK_BPHY_CGX_ETH_LINK_FEC_RS,
+	/** Base R and RS FEC */
+	CNXK_BPHY_CGX_ETH_LINK_FEC_BASE_R_RS,
 	__CNXK_BPHY_CGX_ETH_LINK_FEC_MAX
 };
 
