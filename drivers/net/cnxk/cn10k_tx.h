@@ -62,7 +62,7 @@ cn10k_nix_vwqe_wait_fc(struct cn10k_eth_txq *txq, int64_t req)
 retry:
 	while (__atomic_load_n(&txq->fc_cache_pkts, __ATOMIC_RELAXED) < 0)
 		;
-	cached = __atomic_sub_fetch(&txq->fc_cache_pkts, req, __ATOMIC_RELAXED);
+	cached = __atomic_sub_fetch(&txq->fc_cache_pkts, req, __ATOMIC_ACQUIRE);
 	/* Check if there is enough space, else update and retry. */
 	if (cached < 0) {
 		/* Check if we have space else retry. */
@@ -71,7 +71,7 @@ retry:
 				(txq->nb_sqb_bufs_adj -
 				 __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED))
 				<< txq->sqes_per_sqb_log2;
-		} while (refill < 0);
+		} while (refill <= 0);
 		__atomic_compare_exchange(&txq->fc_cache_pkts, &cached, &refill,
 					  0, __ATOMIC_RELEASE,
 					  __ATOMIC_RELAXED);
