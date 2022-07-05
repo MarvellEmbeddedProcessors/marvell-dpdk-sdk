@@ -137,6 +137,11 @@ def init_flags(Object s) {
 			s.utils.set_flag(s, "run_base", false)
 	}
 
+	if (s.utils.get_flag(s, "skip_test")) {
+		s.utils.set_flag(s, "run_base", false)
+		s.utils.set_flag(s, "run_all", false)
+	}
+
 	/* Do some per-flag logic now */
 	if (s.utils.get_flag(s, "nightly_test")) {
 		/* Nightly flags will reset other flags */
