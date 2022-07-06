@@ -468,6 +468,9 @@ fips_test_parse_one_json_vector_set(void)
 		info.algo = FIPS_TEST_ALGO_AES_XTS;
 	else if (strstr(algo_str, "SHA"))
 		info.algo = FIPS_TEST_ALGO_SHA;
+	else if (strstr(algo_str, "TDES-CBC") ||
+		strstr(algo_str, "TDES-ECB"))
+		info.algo = FIPS_TEST_ALGO_TDES;
 	else
 		return -EINVAL;
 
@@ -529,7 +532,7 @@ fips_test_parse_one_json_case(void)
 			 * is not included in the string being parsed.
 			 */
 			ret = info.callbacks[i].cb(
-				"", info.one_line_text,
+				info.callbacks[i].key, info.one_line_text,
 				info.callbacks[i].val
 			);
 			if (ret < 0)
