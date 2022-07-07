@@ -625,7 +625,11 @@ parse_uint8_hex_str(const char *key, char *src, struct fips_val *val)
 {
 	uint32_t len, j;
 
+#ifndef USE_JANSSON
 	src += strlen(key);
+#else
+	RTE_SET_USED(key);
+#endif
 
 	len = strlen(src) / 2;
 
