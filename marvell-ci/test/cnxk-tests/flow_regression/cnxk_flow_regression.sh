@@ -191,7 +191,7 @@ function testpmd_check_vlan_flags()
 echo "Testpmd running with $TESTPMD_PORT, Coremask=$TESTPMD_COREMASK"
 testpmd_launch $PRFX \
 		" -c $TESTPMD_COREMASK -a $TESTPMD_PORT" \
-		" --no-flush-rx --nb-cores=1 --rxq 8 --txq 8" \
+		" --no-flush-rx --rx-metadata --nb-cores=1 --rxq 8 --txq 8" \
 		" --port-topology=loop"
 
 testpmd_test_flow $PRFX FLOW_ETH "flow create 0 ingress pattern eth dst is \
