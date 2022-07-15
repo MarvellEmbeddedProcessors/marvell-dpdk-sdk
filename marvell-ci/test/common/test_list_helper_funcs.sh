@@ -120,12 +120,12 @@ function test_enabled()
 
 	# Check the SKIP_TESTS and RUN_TESTS and make sure that test need indeed be run
 	if [[ -n $RUN_TESTS ]]; then
-		if ! (echo "$RUN_TESTS" | grep -q "$tst"); then
+		if ! (echo "$RUN_TESTS" | grep -qw "$tst"); then
 			echo "Skipping $tst as not on RUN_TESTS list !!"
 			echo "$test_num: $tst [RUN_TESTS]" >> $RUN_DIR/skip.list
 			return 77
 		fi
-	elif $(echo "$SKIP_TESTS" | grep -q "$tst"); then
+	elif $(echo "$SKIP_TESTS" | grep -qw "$tst"); then
 		echo "Skipping $tst on SKIP_TESTS list !!"
 		echo "$test_num: $tst [SKIP_TESTS]" >> $RUN_DIR/skip.list
 		return 77

@@ -102,6 +102,8 @@ function testpmd_test_flow()
 	sleep 3
 
 	pktgen_quit
+	sleep 1
+
 	pktgen_cleanup
 
 	echo "-------------------------TESTPMD LOG-----------------------------"
