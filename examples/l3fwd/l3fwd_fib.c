@@ -86,7 +86,8 @@ fib_send_single(int nb_tx, struct lcore_conf *qconf,
 #if defined DO_RFC_1812_CHECKS
 		rfc1812_process((struct rte_ipv4_hdr *)(rte_pktmbuf_mtod(
 				pkts_burst[j], struct rte_ether_hdr *) + 1),
-				&hops[j], pkts_burst[j]->packet_type);
+				&hops[j], pkts_burst[j]->packet_type,
+				pkts_burst[j]->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
 #endif
 
 		/* Set MAC addresses. */
