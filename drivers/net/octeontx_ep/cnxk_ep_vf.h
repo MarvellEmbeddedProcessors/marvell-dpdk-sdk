@@ -165,4 +165,9 @@ struct cnxk_ep_instr_64B {
 #define CNXK_EP_ISM_EN                  (0x1)
 #define CNXK_EP_ISM_MSIX_DIS            (0x2)
 #define CNXK_EP_MAX_RX_PKT_LEN          (16384)
+#define OTX_EP_R_MBOX_PF_VF_INT_START        (0x10220)
+#define OTX_EP_RING_OFFSET                   (0x1ull << 17)
+#define OTX_EP_R_MBOX_PF_VF_INT(ring) \
+	(OTX_EP_R_MBOX_PF_VF_INT_START + ((ring) * OTX_EP_RING_OFFSET))
+
 #endif /*_CNXK_EP_VF_H_ */
