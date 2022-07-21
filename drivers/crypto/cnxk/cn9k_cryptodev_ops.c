@@ -487,8 +487,7 @@ cn9k_cpt_crypto_adapter_enqueue(uintptr_t base, struct rte_crypto_op *op)
 }
 
 static inline int
-ipsec_antireplay_check(struct cn9k_ipsec_sa *sa, uint32_t win_sz,
-		       struct roc_ie_on_inb_hdr *data)
+ipsec_antireplay_check(struct cn9k_ipsec_sa *sa, uint32_t win_sz, struct roc_ie_on_inb_hdr *data)
 {
 	uint32_t esn_low, esn_hi, seql, seqh = 0;
 	struct roc_ie_on_common_sa *common_sa;

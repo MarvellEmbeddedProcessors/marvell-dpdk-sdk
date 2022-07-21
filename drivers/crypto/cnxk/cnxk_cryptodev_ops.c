@@ -10,8 +10,8 @@
 
 #include "cnxk_ae.h"
 #include "cnxk_cryptodev.h"
-#include "cnxk_cryptodev_ops.h"
 #include "cnxk_cryptodev_capabilities.h"
+#include "cnxk_cryptodev_ops.h"
 #include "cnxk_se.h"
 
 #define CNXK_CPT_MAX_ASYM_OP_NUM_PARAMS	 5

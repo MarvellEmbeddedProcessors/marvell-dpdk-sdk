@@ -284,7 +284,7 @@ struct roc_se_buf_ptr {
 /* IOV Pointer */
 struct roc_se_iov_ptr {
 	int buf_cnt;
-	struct roc_se_buf_ptr bufs[0];
+	struct roc_se_buf_ptr bufs[];
 };
 
 #define ROC_SE_PDCP_ALG_TYPE_ZUC	  0

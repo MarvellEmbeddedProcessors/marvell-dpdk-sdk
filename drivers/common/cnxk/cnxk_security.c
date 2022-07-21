@@ -830,8 +830,7 @@ cnxk_ipsec_ivlen_get(enum rte_crypto_cipher_algorithm c_algo,
 {
 	uint8_t ivlen = 0;
 
-	if ((aead_algo == RTE_CRYPTO_AEAD_AES_GCM) ||
-	    (aead_algo == RTE_CRYPTO_AEAD_AES_CCM))
+	if ((aead_algo == RTE_CRYPTO_AEAD_AES_GCM) || (aead_algo == RTE_CRYPTO_AEAD_AES_CCM))
 		ivlen = 8;
 
 	switch (c_algo) {
@@ -910,8 +909,7 @@ cnxk_ipsec_outb_roundup_byte(enum rte_crypto_cipher_algorithm c_algo,
 {
 	uint8_t roundup_byte = 4;
 
-	if ((aead_algo == RTE_CRYPTO_AEAD_AES_GCM) ||
-	    (aead_algo == RTE_CRYPTO_AEAD_AES_CCM))
+	if ((aead_algo == RTE_CRYPTO_AEAD_AES_GCM) || (aead_algo == RTE_CRYPTO_AEAD_AES_CCM))
 		return roundup_byte;
 
 	switch (c_algo) {
@@ -1228,8 +1226,7 @@ cnxk_on_ipsec_outb_sa_create(struct rte_security_ipsec_xform *ipsec,
 		return ret;
 
 	if (ctl->enc_type == ROC_IE_ON_SA_ENC_AES_GCM ||
-	    ctl->enc_type == ROC_IE_ON_SA_ENC_AES_CCM ||
-	    ctl->auth_type == ROC_IE_ON_SA_AUTH_NULL ||
+	    ctl->enc_type == ROC_IE_ON_SA_ENC_AES_CCM || ctl->auth_type == ROC_IE_ON_SA_AUTH_NULL ||
 	    ctl->auth_type == ROC_IE_ON_SA_AUTH_AES_GMAC) {
 		template = &out_sa->aes_gcm.template;
 		ctx_len = offsetof(struct roc_ie_on_outb_sa, aes_gcm.template);

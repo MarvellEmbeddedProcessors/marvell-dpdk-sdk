@@ -374,9 +374,8 @@ cn10k_ca_meta_info_extract(struct rte_crypto_op *op,
 }
 
 static inline uint16_t
-ca_lmtst_burst_submit(struct cn10k_sso_hws *ws, uint64_t w2[],
-		      struct cnxk_cpt_qp *qp, struct rte_crypto_op *op[],
-		      uint16_t nb_ops)
+ca_lmtst_burst_submit(struct cn10k_sso_hws *ws, uint64_t w2[], struct cnxk_cpt_qp *qp,
+		      struct rte_crypto_op *op[], uint16_t nb_ops)
 {
 	struct cpt_inflight_req *infl_reqs[PKTS_PER_LOOP];
 	uint64_t lmt_base, lmt_arg, io_addr;
@@ -401,8 +400,7 @@ ca_lmtst_burst_submit(struct cn10k_sso_hws *ws, uint64_t w2[],
 		return 0;
 	}
 
-	if (unlikely(rte_mempool_get_bulk(qp->ca.req_mp, (void **)infl_reqs,
-					  nb_ops))) {
+	if (unlikely(rte_mempool_get_bulk(qp->ca.req_mp, (void **)infl_reqs, nb_ops))) {
 		rte_errno = ENOMEM;
 		return 0;
 	}
@@ -441,16 +439,13 @@ submit:
 		roc_sso_hws_head_wait(ws->base);
 
 	if (i > PKTS_PER_STEORL) {
-		lmt_arg = ROC_CN10K_CPT_LMT_ARG | (PKTS_PER_STEORL - 1) << 12 |
-			  (uint64_t)lmt_id;
+		lmt_arg = ROC_CN10K_CPT_LMT_ARG | (PKTS_PER_STEORL - 1) << 12 | (uint64_t)lmt_id;
 		roc_lmt_submit_steorl(lmt_arg, io_addr);
-		lmt_arg = ROC_CN10K_CPT_LMT_ARG |
-			  (i - PKTS_PER_STEORL - 1) << 12 |
+		lmt_arg = ROC_CN10K_CPT_LMT_ARG | (i - PKTS_PER_STEORL - 1) << 12 |
 			  (uint64_t)(lmt_id + PKTS_PER_STEORL);
 		roc_lmt_submit_steorl(lmt_arg, io_addr);
 	} else {
-		lmt_arg = ROC_CN10K_CPT_LMT_ARG | (i - 1) << 12 |
-			  (uint64_t)lmt_id;
+		lmt_arg = ROC_CN10K_CPT_LMT_ARG | (i - 1) << 12 | (uint64_t)lmt_id;
 		roc_lmt_submit_steorl(lmt_arg, io_addr);
 	}
 
@@ -458,15 +453,13 @@ submit:
 
 put:
 	if (unlikely(i != nb_ops))
-		rte_mempool_put_bulk(qp->ca.req_mp, (void *)&infl_reqs[i],
-				     nb_ops - i);
+		rte_mempool_put_bulk(qp->ca.req_mp, (void *)&infl_reqs[i], nb_ops - i);
 
 	return i;
 }
 
 uint16_t __rte_hot
-cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[],
-				 uint16_t nb_events)
+cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
 {
 	struct rte_crypto_op *ops[PKTS_PER_LOOP], *op;
 	struct cnxk_cpt_qp *qp, *curr_qp = NULL;
@@ -484,8 +477,7 @@ cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[],
 
 		if (qp != curr_qp) {
 			if (ops_len) {
-				submitted = ca_lmtst_burst_submit(
-					ws, w2s, curr_qp, ops, ops_len);
+				submitted = ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len);
 				count += submitted;
 				if (unlikely(submitted != ops_len))
 					return count;
@@ -496,8 +488,7 @@ cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[],
 		w2s[ops_len] = w2;
 		ops[ops_len] = op;
 		if (++ops_len == PKTS_PER_LOOP) {
-			submitted = ca_lmtst_burst_submit(ws, w2s, curr_qp, ops,
-							  ops_len);
+			submitted = ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len);
 			count += submitted;
 			if (unlikely(submitted != ops_len))
 				return count;
@@ -510,8 +501,7 @@ cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[],
 }
 
 static inline void
-cn10k_cpt_sec_post_process(struct rte_crypto_op *cop,
-			   struct cpt_cn10k_res_s *res)
+cn10k_cpt_sec_post_process(struct rte_crypto_op *cop, struct cpt_cn10k_res_s *res)
 {
 	struct rte_mbuf *mbuf = cop->sym->m_src;
 	const uint16_t m_len = res->rlen;
