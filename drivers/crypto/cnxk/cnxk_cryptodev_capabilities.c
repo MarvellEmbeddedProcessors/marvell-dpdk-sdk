@@ -1259,6 +1259,7 @@ sec_crypto_caps_populate(struct rte_cryptodev_capabilities cnxk_caps[],
 	int cur_pos = 0;
 
 	SEC_CAPS_ADD(cnxk_caps, &cur_pos, hw_caps, aes);
+	SEC_CAPS_ADD(cnxk_caps, &cur_pos, hw_caps, des);
 	SEC_CAPS_ADD(cnxk_caps, &cur_pos, hw_caps, sha1_sha2);
 
 	if (roc_model_is_cn10k())
