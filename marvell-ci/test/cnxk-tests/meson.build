@@ -65,6 +65,7 @@ test_subdirs = [
         'queue_intr_test',
         'dpdk_config_test',
         'trace_autotest',
+        'hotplug_test',
 ]
 
 foreach dir:test_subdirs
