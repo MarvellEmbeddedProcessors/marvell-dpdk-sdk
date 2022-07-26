@@ -40,13 +40,13 @@ register_cnxk_event_test() {
 
 run_cn9k_event_tests() {
 	for test in ${!cn9k_event_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN -l $ISOLCPUS ${cn9k_event_test_args[$test]}
+		DPDK_TEST=$test $DPDK_TEST_BIN ${cn9k_event_test_args[$test]}
 	done
 }
 
 run_cn10k_event_tests() {
 	for test in ${!cn10k_event_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN -l $ISOLCPUS ${cn10k_event_test_args[$test]}
+		DPDK_TEST=$test $DPDK_TEST_BIN ${cn10k_event_test_args[$test]}
 	done
 }
 
@@ -57,17 +57,17 @@ run_event_tests() {
 	esac
 
 	for test in ${!cnxk_event_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN -l $ISOLCPUS ${cnxk_event_test_args[$test]}
+		DPDK_TEST=$test $DPDK_TEST_BIN ${cnxk_event_test_args[$test]}
 	done
 }
 
 # FIXME: Re-enable timer test after fixing random failure.
 #				DPDK TEST NAME			TEST ARGS
-#register_cn9k_event_test	event_timer_adapter_test	"-a $EVENT_DEVICE,single_ws=1,tim_stats_ena=1"
-register_cn9k_event_test	eventdev_selftest_cn9k
-register_cn9k_event_test	event_eth_rx_adapter_autotest
-register_cn9k_event_test	event_crypto_adapter_autotest
-register_cn10k_event_test	eventdev_selftest_cn10k
+#register_cn9k_event_test	event_timer_adapter_test	"-l $ISOLCPUS -a $EVENT_DEVICE,single_ws=1,tim_stats_ena=1"
+register_cn9k_event_test	eventdev_selftest_cn9k		"-l $ISOLCPUS"
+register_cn10k_event_test	eventdev_selftest_cn10k		"-l $ISOLCPUS"
+register_cnxk_event_test	event_eth_rx_adapter_autotest	"-l $ISOLCPUS"
+register_cnxk_event_test	event_crypto_adapter_autotest	"-l 0,1"
 
 case $TEST_TYPE in
 	event_tests)
