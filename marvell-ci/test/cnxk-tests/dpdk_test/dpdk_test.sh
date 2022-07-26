@@ -61,9 +61,8 @@ run_event_tests() {
 	done
 }
 
-# FIXME: Re-enable timer test after fixing random failure.
 #				DPDK TEST NAME			TEST ARGS
-#register_cn9k_event_test	event_timer_adapter_test	"-l $ISOLCPUS -a $EVENT_DEVICE,single_ws=1,tim_stats_ena=1"
+register_cn9k_event_test	event_timer_adapter_test	"-l $ISOLCPUS -a $EVENT_DEVICE,single_ws=1,tim_stats_ena=1"
 register_cn9k_event_test	eventdev_selftest_cn9k		"-l $ISOLCPUS"
 register_cn10k_event_test	eventdev_selftest_cn10k		"-l $ISOLCPUS"
 register_cnxk_event_test	event_eth_rx_adapter_autotest	"-l $ISOLCPUS"
