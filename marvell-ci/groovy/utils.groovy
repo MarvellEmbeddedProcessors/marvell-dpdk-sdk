@@ -67,7 +67,7 @@ def setup_board(Object s, board, force = false) {
 	try {
 		sh script: """#!/bin/bash
 		cd ${s.PROJECT_ROOT}
-		python3 ./marvell-ci/test/board/board_setup.py ${force_reboot} --ssh-ip ${board}
+		python3 ${s.SCRIPTS_CACHE_DIR}/boards/setup_board.py ${force_reboot} --ssh-ip ${board}
 		"""
 	} catch (err) {
 		if (s.FAILING_FAST) {
