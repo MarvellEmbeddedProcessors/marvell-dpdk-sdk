@@ -818,6 +818,36 @@ static const struct rte_cryptodev_capabilities sec_caps_aes[] = {
 			}, }
 		}, }
 	},
+	{	/* AES CCM */
+		.op = RTE_CRYPTO_OP_TYPE_SYMMETRIC,
+		{.sym = {
+			.xform_type = RTE_CRYPTO_SYM_XFORM_AEAD,
+			{.aead = {
+				.algo = RTE_CRYPTO_AEAD_AES_CCM,
+				.block_size = 16,
+				.key_size = {
+					.min = 16,
+					.max = 32,
+					.increment = 8
+				},
+				.digest_size = {
+					.min = 16,
+					.max = 16,
+					.increment = 0
+				},
+				.aad_size = {
+					.min = 8,
+					.max = 12,
+					.increment = 4
+				},
+				.iv_size = {
+					.min = 12,
+					.max = 12,
+					.increment = 0
+				}
+			}, }
+		}, }
+	},
 	{	/* AES CTR */
 		.op = RTE_CRYPTO_OP_TYPE_SYMMETRIC,
 		{.sym = {
@@ -1034,38 +1064,6 @@ static const struct rte_cryptodev_capabilities sec_caps_null[] = {
 	},
 };
 
-static const struct rte_cryptodev_capabilities aes_ccm = {
-	/* AES CCM */
-	.op = RTE_CRYPTO_OP_TYPE_SYMMETRIC,
-	{.sym = {
-		.xform_type = RTE_CRYPTO_SYM_XFORM_AEAD,
-		{.aead = {
-			.algo = RTE_CRYPTO_AEAD_AES_CCM,
-			.block_size = 16,
-			.key_size = {
-				.min = 16,
-				.max = 32,
-				.increment = 8
-			},
-			.digest_size = {
-				.min = 16,
-				.max = 16,
-				.increment = 0
-			},
-			.aad_size = {
-				.min = 8,
-				.max = 12,
-				.increment = 4
-			},
-			.iv_size = {
-				.min = 12,
-				.max = 12,
-				.increment = 0
-			}
-		}, }
-	}, }
-};
-
 static const struct rte_security_capability sec_caps_templ[] = {
 	{	/* IPsec Lookaside Protocol ESP Tunnel Ingress */
 		.action = RTE_SECURITY_ACTION_TYPE_LOOKASIDE_PROTOCOL,
@@ -1280,8 +1278,6 @@ cn10k_sec_crypto_caps_update(struct rte_cryptodev_capabilities cnxk_caps[],
 			*cur_pos += 1;
 		}
 	}
-
-	sec_caps_add(cnxk_caps, cur_pos, &aes_ccm, 1);
 }
 
 static void
