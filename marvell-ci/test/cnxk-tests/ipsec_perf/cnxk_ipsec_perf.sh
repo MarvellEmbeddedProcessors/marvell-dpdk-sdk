@@ -75,7 +75,10 @@ else
 fi
 
 CFG=(
+	# Lookaside protocol
 	"ep0_lookaside_crypto.cfg"
+	"ep0_lookaside_protocol.cfg"
+	"ep0_lookaside_protocol.cfg"
 	"ep0_lookaside_protocol.cfg"
 	# Inline protocol Outbound config files
 	"ep0_inline_protocol_ob_sp.cfg"
@@ -90,6 +93,8 @@ CFG=(
 IP_IB_CFG=(
 	""
 	""
+	""
+	""
 	"ep0_inline_protocol_ib_sp.cfg"
 	"ep0_inline_protocol_ib_sp.cfg"
 	"ep0_inline_protocol_ib_sp.cfg"
@@ -101,6 +106,8 @@ IP_IB_CFG=(
 IP_IB_CFG_DP=(
 	""
 	""
+	""
+	""
 	"ep0_inline_protocol_ib_dp.cfg"
 	"ep0_inline_protocol_ib_dp.cfg"
 	"ep0_inline_protocol_ib_dp.cfg"
@@ -110,6 +117,8 @@ IP_IB_CFG_DP=(
 
 # Dual Port Outbound configs for Inline protocol
 IP_OB_CFG_DP=(
+	""
+	""
 	""
 	""
 	"ep0_inline_protocol_ob_dp.cfg"
@@ -129,6 +138,8 @@ IP_PERF_CFG=(
 TYPE=(
 	"lc"
 	"lp"
+	"lp_e"
+	"lp_ev"
 	"ip"
 	"ip_ev"
 	"ip_p"
@@ -139,6 +150,8 @@ TYPE=(
 TN=(
 	"Lookaside Crypto"
 	"Lookaside Protocol"
+	"Lookaside Protocol: Event Basic Mode"
+	"Lookaside Protocol: Event Vector Mode"
 	"Inline Protocol: Event Basic Mode"
 	"Inline Protocol: Event Vector Mode"
 	"Inline Protocol: Poll Mode"
@@ -268,7 +281,7 @@ function is_single_sa_test()
 function supported_by_9k()
 {
 	local type=$1
-	local supported=(lc lp ip)
+	local supported=(lc lp lp_e ip)
 
 	[[ " ${supported[*]} " =~ " $type " ]]
 }
@@ -302,7 +315,10 @@ function run_test()
 function run_ipsec_secgw()
 {
 	local config="(0,0,16),(1,0,16)"
-	local lookaside="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --config=$config"
+	local lookaside_env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX"
+	local lookaside="$lookaside_env -- -P -p 0x3 -f ${CFG[$Y]} --config=$config"
+	local lookaside_event="$lookaside_env -a $EVENT_VF -- -P -p 0x3 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel"
+	local lookaside_event_vec="$lookaside_event --vector-size 64 --event-vector"
 
 	echo "ipsec-secgw outb"
 	if [[ $IS_CN10K -ne 0 ]]; then
@@ -314,6 +330,14 @@ function run_ipsec_secgw()
 			lc|lp)
 				# Lookaside Crypto/Protocol
 				run_test '$lookaside'
+				;;
+			lp_e)
+				# Lookaside Protocol Event Mode
+				run_test '$lookaside_event'
+				;;
+			lp_ev)
+				# Lookaside Protocol Event Vector Mode
+				run_test '$lookaside_event_vec'
 				;;
 			ip)
 				# Inline Protocol Event Mode
@@ -343,6 +367,14 @@ function run_ipsec_secgw()
 				# Lookaside Crypto/Protocol
 				run_test '$lookaside'
 				;;
+			lp_e)
+				# Lookaside Protocol Event Mode
+				run_test '$lookaside_event'
+				;;
+			lp_ev)
+				# Lookaside Protocol Event Vector Mode
+				run_test '$lookaside_event_vec'
+				;;
 			ip)
 				# Inline Protocol Event Mode
 				run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${IP_OB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
@@ -355,7 +387,10 @@ function run_ipsec_secgw()
 function run_ipsec_secgw_inb()
 {
 	local config="(0,0,16),(1,0,16)"
-	local lookaside="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config"
+	local lookaside_env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX"
+	local lookaside="$lookaside_env -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config"
+	local lookaside_event="$lookaside_env -a $EVENT_VF -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel"
+	local lookaside_event_vec="$lookaside_event --vector-size 64 --event-vector"
 
 	echo "ipsec-secgw inb"
 	if [[ $IS_CN10K -ne 0 ]]; then
@@ -371,6 +406,14 @@ function run_ipsec_secgw_inb()
 			ip)
 				# Inline Protocol Event Mode
 				run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+				;;
+			lp_e)
+				# Lookaside Protocol Event Mode
+				run_test '$lookaside_event'
+				;;
+			lp_ev)
+				# Lookaside Protocol Event Vector Mode
+				run_test '$lookaside_event_vec'
 				;;
 			ip_ev)
 				# Inline Protocol Event Vector Mode
@@ -395,6 +438,14 @@ function run_ipsec_secgw_inb()
 			lc|lp)
 				# Lookaside Crypto/Protocol
 				run_test '$lookaside'
+				;;
+			lp_e)
+				# Lookaside Protocol Event Mode
+				run_test '$lookaside_event'
+				;;
+			lp_ev)
+				# Lookaside Protocol Event Vector Mode
+				run_test '$lookaside_event_vec'
 				;;
 			ip)
 				# Inline Protocol Event Mode
