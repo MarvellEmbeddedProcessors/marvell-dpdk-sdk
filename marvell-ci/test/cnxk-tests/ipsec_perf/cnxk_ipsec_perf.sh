@@ -12,7 +12,6 @@ NUM_CAPTURE=3
 MAX_TRY_CNT=5
 CORES=(1)
 COREMASK="0x10000"
-NUM_MODES=7
 TXWAIT=15
 RXWAIT=5
 WS=2
@@ -147,6 +146,26 @@ TN=(
 	"Inline Protocol: Poll Perf Mode (Single-SA)"
 )
 
+NB_TYPES=${#TYPE[@]}
+
+function assert_arr_len()
+{
+	local name=$1
+	local -n arr=$name
+	local arr_len=${#arr[@]}
+
+	if [[ $arr_len -ne $NB_TYPES ]]; then
+		echo "'$name' array($arr_len) should be same length as 'TYPE' array($NB_TYPES)"
+		exit 1
+	fi
+}
+
+assert_arr_len CFG
+assert_arr_len IP_IB_CFG
+assert_arr_len IP_IB_CFG_DP
+assert_arr_len IP_OB_CFG_DP
+assert_arr_len TN
+
 Failed_tests=""
 
 LIF1=0002:01:00.5
@@ -230,9 +249,34 @@ fi
 	echo "CPTCLK: $CPTCLK Mhz"
 }
 
+function is_inline_proto_test()
+{
+	local type=${TYPE[$Y]}
+	local ip_tests=(ip ip_ev ip_p ip_ev_ss ip_p_ss)
+
+	[[ " ${ip_tests[*]} " =~ " $type " ]]
+}
+
+function is_single_sa_test()
+{
+	local type=${TYPE[$Y]}
+	local sa_tests=(ip_ev_ss ip_p_ss)
+
+	[[ " ${sa_tests[*]} " =~ " $type " ]]
+}
+
+function supported_by_9k()
+{
+	local type=$1
+	local supported=(lc lp ip)
+
+	[[ " ${supported[*]} " =~ " $type " ]]
+}
+
 function run_test()
 {
 	local cmd=$1
+	touch $IPSEC_LOG
 	eval "nohup $1 >> $IPSEC_LOG 2>&1 &"
 	PT1="IPSEC: entering main loop on lcore"
 	PT2="IPSEC: Launching event mode worker"
@@ -258,39 +302,52 @@ function run_test()
 function run_ipsec_secgw()
 {
 	local config="(0,0,16),(1,0,16)"
+	local lookaside="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --config=$config"
 
 	echo "ipsec-secgw outb"
-	if [[ $Y -ge 2 ]]; then
-		if [[ $IS_CN10K -ne 0 ]]; then
-			local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3"
+	if [[ $IS_CN10K -ne 0 ]]; then
+		local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3"
+		if is_inline_proto_test; then
 			IS_RXPPS_TXTPMD=1
-			case "$Y" in
-				2)
-					# Inline Protocol Event Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
-					;;
-				3)
-					# Inline Protocol Event Vector Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -e'
-					;;
-				4)
-					# Inline Protocol Poll Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
-					;;
-				5)
-					# Inline Protocol Event Vector Perf Mode (Single-SA)
-					run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 256 --event-vector --event-schedule-type parallel -e --single-sa 0'
-					;;
-				6)
-					# Inline Protocol Poll Perf Mode (Single-SA)
-					run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
-					;;
-			esac
-		else
-			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${IP_OB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
 		fi
+		case "${TYPE[$Y]}" in
+			lc|lp)
+				# Lookaside Crypto/Protocol
+				run_test '$lookaside'
+				;;
+			ip)
+				# Inline Protocol Event Mode
+				run_test '$env -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+				;;
+			ip_ev)
+				# Inline Protocol Event Vector Mode
+				run_test '$env -f ${CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -e'
+				;;
+			ip_p)
+				# Inline Protocol Poll Mode
+				run_test '$env -f ${CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
+				;;
+			ip_ev_ss)
+				# Inline Protocol Event Vector Perf Mode (Single-SA)
+				run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 256 --event-vector --event-schedule-type parallel -e --single-sa 0'
+				;;
+			ip_p_ss)
+				# Inline Protocol Poll Perf Mode (Single-SA)
+				run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
+				;;
+		esac
 	else
-		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --config=$config'
+		# 9K supported types
+		case "${TYPE[$Y]}" in
+			lc|lp)
+				# Lookaside Crypto/Protocol
+				run_test '$lookaside'
+				;;
+			ip)
+				# Inline Protocol Event Mode
+				run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${IP_OB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
+				;;
+		esac
 	fi
 	sleep $WS
 }
@@ -298,40 +355,52 @@ function run_ipsec_secgw()
 function run_ipsec_secgw_inb()
 {
 	local config="(0,0,16),(1,0,16)"
+	local lookaside="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config"
 
 	echo "ipsec-secgw inb"
-
-	if [[ $Y -ge 2 ]]; then
-		if [[ $IS_CN10K -ne 0 ]]; then
-			local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
+	if [[ $IS_CN10K -ne 0 ]]; then
+		local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
+		if is_inline_proto_test; then
 			IS_RXPPS_TXTPMD=1
-			case "$Y" in
-				2)
-					# Inline Protocol Event Mode
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
-					;;
-				3)
-					# Inline Protocol Event Vector Mode
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 256 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192'
-					;;
-				4)
-					# Inline Protocol Poll Mode
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
-					;;
-				5)
-					# Inline Protocol Event Vector Perf Mode (Single-SA)
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 256 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192 --single-sa 0'
-					;;
-				6)
-					# Inline Protocol Poll Perf Mode (Single-SA)
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
-					;;
-			esac
-		else
-			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${IP_IB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
 		fi
+		case "${TYPE[$Y]}" in
+			lc|lp)
+				# Lookaside Crypto/Protocol
+				run_test '$lookaside'
+				;;
+			ip)
+				# Inline Protocol Event Mode
+				run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+				;;
+			ip_ev)
+				# Inline Protocol Event Vector Mode
+				run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192'
+				;;
+			ip_p)
+				# Inline Protocol Poll Mode
+				run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
+				;;
+			ip_ev_ss)
+				# Inline Protocol Event Vector Perf Mode (Single-SA)
+				run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 256 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192 --single-sa 0'
+				;;
+			ip_p_ss)
+				# Inline Protocol Poll Perf Mode (Single-SA)
+				run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
+				;;
+		esac
 	else
-		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config'
+		# 9K supported types
+		case "${TYPE[$Y]}" in
+			lc|lp)
+				# Lookaside Crypto/Protocol
+				run_test '$lookaside'
+				;;
+			ip)
+				# Inline Protocol Event Mode
+				run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${IP_IB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
+				;;
+		esac
 	fi
 	sleep $WS
 }
@@ -387,7 +456,7 @@ exec_testpmd_cmd_gen()
 
 function pmd_tx_launch()
 {
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		exec_testpmd_cmd_gen "launch_tx_outb" $TPMD_TX_PREFIX $X
 	else
 		testpmd_launch "$TPMD_TX_PREFIX" \
@@ -403,10 +472,10 @@ function pmd_tx_launch()
 function pmd_tx_launch_for_inb()
 {
 	local pcap=$CNXKTESTPATH/pcap/enc_$1_$2.pcap
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		exec_testpmd_cmd_gen "launch_tx_inb" $TPMD_TX_PREFIX $pcap
 	else
-		if [[ $Y -gt 4 ]]; then
+		if is_single_sa_test; then
 			testpmd_launch "$TPMD_TX_PREFIX" \
 			"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
 			"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx"
@@ -424,7 +493,7 @@ function pmd_tx_launch_for_inb()
 
 function pmd_rx_launch()
 {
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then :
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then :
 	else
 		testpmd_launch "$TPMD_RX_PREFIX" \
 			"-c 0x700 -a $LIF4" \
@@ -439,7 +508,7 @@ function pmd_rx_dry_run()
 	local port="0"
 	PREFIX=("$TPMD_RX_PREFIX" "$TPMD_TX_PREFIX")
 
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		rxpps=$(exec_testpmd_cmd_gen "rx_pps" $TPMD_TX_PREFIX $port)
 	else
 		for prefix in "${PREFIX[@]}"
@@ -462,7 +531,7 @@ function rx_stats()
 	local in=testpmd.in.$prefix
 	local out=testpmd.out.$prefix
 
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		rxpps=$(exec_testpmd_cmd_gen "rx_pps" $prefix $port)
 		echo $rxpps
 	else
@@ -487,7 +556,7 @@ function capture_rx_pps()
 		stats=$(rx_stats $TPMD_RX_PREFIX "0")
 	fi
 
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		echo $stats
 	else
 		echo $stats | awk '{print $2}'
@@ -516,7 +585,7 @@ function cleanup_interfaces()
 
 function start_testpmd()
 {
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		exec_testpmd_cmd_gen "start" $TPMD_TX_PREFIX
 	else
 		testpmd_cmd "$TPMD_RX_PREFIX" "start"
@@ -526,7 +595,7 @@ function start_testpmd()
 
 function stop_testpmd()
 {
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		exec_testpmd_cmd_gen "stop" $TPMD_TX_PREFIX
 	else
 		testpmd_cmd "$TPMD_TX_PREFIX" "stop"
@@ -536,7 +605,7 @@ function stop_testpmd()
 
 function set_pktsize_testpmd()
 {
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		exec_testpmd_cmd_gen "pktsize" "$TPMD_TX_PREFIX" $1
 	else
 		testpmd_cmd "$TPMD_TX_PREFIX" "set txpkts $1"
@@ -545,7 +614,7 @@ function set_pktsize_testpmd()
 
 function quit_testpmd()
 {
-	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		if [[ $1 == $TPMD_TX_PREFIX ]]; then
 			exec_testpmd_cmd_gen "log" $1 >testpmd.out.$1
 			exec_testpmd_cmd_gen "quit" $1
@@ -789,78 +858,30 @@ else
 	FPATH="$CNXKTESTPATH/ref_numbers/cn9k/$FNAME"
 fi
 
+function check_ref_files()
+{
+	local outb
+	local inb
 
-if [[ ! -f "$FPATH.lc.outb" ]]; then
-	echo "File $FPATH.lc.outb not present"
-	exit 1
-fi
+	for type in "${TYPE[@]}"; do
+		if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k $type; then
+			continue
+		fi
+		outb="$FPATH.$type.outb"
+		if [[ ! -f $outb ]]; then
+			echo "File $outb not present"
+			exit 1
+		fi
 
-if [[ ! -f "$FPATH.lc.inb" ]]; then
-	echo "File $FPATH.lc.inb not present"
-	exit 1
-fi
+		inb="$FPATH.$type.inb"
+		if [[ ! -f $inb ]]; then
+			echo "File $inb not present"
+			exit 1
+		fi
+	done
+}
 
-if [[ ! -f "$FPATH.lp.outb" ]]; then
-	echo "File $FPATH.lp.outb not present"
-	exit 1
-fi
-
-if [[ ! -f "$FPATH.lp.inb" ]]; then
-	echo "File $FPATH.lp.inb not present"
-	exit 1
-fi
-
-if [[ ! -f "$FPATH.ip.outb" ]]; then
-	echo "File $FPATH.ip.outb not present"
-	exit 1
-fi
-
-if [[ ! -f "$FPATH.ip.inb" ]]; then
-	echo "File $FPATH.ip.inb not present"
-	exit 1
-fi
-
-if [[ $IS_CN10K -ne 0 ]]; then
-	if [[ ! -f "$FPATH.ip_ev.outb" ]]; then
-		echo "File $FPATH.ip_ev.outb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_ev.inb" ]]; then
-		echo "File $FPATH.ip_ev.inb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_p.outb" ]]; then
-		echo "File $FPATH.ip_p.outb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_p.inb" ]]; then
-		echo "File $FPATH.ip_p.inb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_ev_ss.outb" ]]; then
-		echo "File $FPATH.ip_ev_ss.outb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_ev_ss.inb" ]]; then
-		echo "File $FPATH.ip_ev_ss.inb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_p_ss.outb" ]]; then
-		echo "File $FPATH.ip_p_ss.outb not present"
-		exit 1
-	fi
-
-	if [[ ! -f "$FPATH.ip_p_ss.inb" ]]; then
-		echo "File $FPATH.ip_p_ss.inb not present"
-		exit 1
-	fi
-fi
+check_ref_files
 
 trap "sig_handler ERR" ERR
 trap "sig_handler INT" INT
@@ -874,9 +895,10 @@ setup_interfaces
 
 Y=0
 
-while [ $Y -lt $NUM_MODES ]; do
-	if [[ $IS_CN10K -eq 0 && $Y -gt 2 ]]; then
-		break
+while [[ $Y -lt $NB_TYPES ]]; do
+	if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k ${TYPE[$Y]}; then
+		((++Y))
+		continue
 	fi
 	echo ""
 	echo "Test: ${TN[$Y]}"
@@ -887,7 +909,7 @@ while [ $Y -lt $NUM_MODES ]; do
 	# aes-cbc sha1-hmac
 
 	# Select perf config file for Inline protocol Single-SA perf tests
-	if [[ $Y -gt 4 ]]; then
+	if is_single_sa_test; then
 		perf_cfg=0
 	fi
 	X=1
@@ -906,7 +928,7 @@ while [ $Y -lt $NUM_MODES ]; do
 	# aes-gcm
 
 	X=2
-	if [[ $Y -gt 4 ]]; then
+	if is_single_sa_test; then
 		# Restart ipsec-secgw for Inline Protocol Single-SA tests with new config
 		ipsec_exit
 		echo "Restart ipsec-secgw"
