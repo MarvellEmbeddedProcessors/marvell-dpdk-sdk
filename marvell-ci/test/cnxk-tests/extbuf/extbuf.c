@@ -439,7 +439,7 @@ launch_lcore_tx(void *args)
 		 * Seg 2 - External Mbuf at offset 0 of user buffer.
 		 * Seg 3 - External MBuf at offset 64 of Seg 1.
 		 * Seg 4 - External Mbuf at offset 64 of user buffer.
-		 * Seg 4 - External Mbuf at offset 0 of Seg 1. Data offset
+		 * Seg 5 - External Mbuf at offset 0 of Seg 1. Data offset
 		 *         is set at 128.
 		 *
 		 * All segments except Seg 5 are 64B in length. Seg 5 has
