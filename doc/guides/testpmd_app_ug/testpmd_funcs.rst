@@ -5321,6 +5321,32 @@ Flex pattern can be shared between ports.
    testpmd> flow create 0 ingress pattern eth / ipv4 / udp / flex item is 3 pattern is 2 / end actions mark id 1 / queue index 0 / end
    Flow rule #0 created
 
+Congestion Management
+---------------------
+
+Get capabilities
+~~~~~~~~~~~~~~~~
+
+Retrieve congestion management capabilities supported by driver for given port.
+Below example command retrieves capabilities for port 0::
+
+   testpmd> show port cman capa 0
+
+Get configuration
+~~~~~~~~~~~~~~~~~
+Retrieve congestion management configuration for given port. Below example
+command retrieves configuration for port 0::
+
+   testpmd> show port cman config 0
+
+Set configuration
+~~~~~~~~~~~~~~~~~
+Configures congestion management settings on given queue or mempool associated
+with queue. Below example command configures RED as congestion management algo
+for port 0 and queue 0::
+
+   testpmd> set port cman config 0 0 obj queue mode red 10 100 1
+
 Driver specific commands
 ------------------------
 
