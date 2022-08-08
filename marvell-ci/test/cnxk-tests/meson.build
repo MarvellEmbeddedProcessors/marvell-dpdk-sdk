@@ -67,6 +67,7 @@ test_subdirs = [
         'trace_autotest',
         'hotplug_test',
         'l2fwd_tmc',
+        'tx_vlan',
 ]
 
 foreach dir:test_subdirs
