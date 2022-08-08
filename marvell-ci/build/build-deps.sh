@@ -99,6 +99,21 @@ function setup_openssl()
 	popd
 }
 
+function setup_libtmc()
+{
+	mkdir -p $BUILD_ROOT/libtmc
+
+	pushd $BUILD_ROOT/libtmc
+	fetch_dep https://github.com/PavanNikhilesh/libtmc/archive/refs/tags/pthread_timed_join.tar.gz
+	tar -zxvf pthread_timed_join.tar.gz --strip-components=1
+	./bootstrap
+	./configure --host=aarch64-marvell-linux-gnu \
+		--prefix=$INSTALL_ROOT
+	make -j${MAKE_J}
+	make install -j${MAKE_J}
+	popd
+}
+
 SCRIPT_NAME="$(basename "$0")"
 if ! OPTS=$(getopt \
 	-o "i:r:j:p:h" \
@@ -148,4 +163,4 @@ cd $PROJECT_ROOT
 setup_libpcap
 setup_ipsec_mb
 setup_openssl
-
+setup_libtmc
