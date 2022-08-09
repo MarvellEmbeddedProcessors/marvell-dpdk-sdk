@@ -2416,6 +2416,8 @@ fill_fc_params(struct rte_crypto_op *cop, struct cnxk_se_sess *sess,
 	fc_params.auth_iv_len = 0;
 	fc_params.auth_iv_buf = NULL;
 	fc_params.iv_buf = NULL;
+	fc_params.mac_buf.size = 0;
+	fc_params.mac_buf.vaddr = 0;
 
 	if (likely(sess->iv_length)) {
 		flags |= ROC_SE_VALID_IV_BUF;
@@ -2432,11 +2434,8 @@ fill_fc_params(struct rte_crypto_op *cop, struct cnxk_se_sess *sess,
 	}
 
 	/* Kasumi would need SG mode */
-	if (is_kasumi) {
+	if (is_kasumi)
 		inplace = 0;
-		fc_params.mac_buf.vaddr = NULL;
-		fc_params.mac_buf.size = 0;
-	}
 
 	m_src = sym_op->m_src;
 	m_dst = sym_op->m_dst;
@@ -2475,8 +2474,6 @@ fill_fc_params(struct rte_crypto_op *cop, struct cnxk_se_sess *sess,
 		}
 
 		fc_params.iv_buf = PLT_PTR_ADD(salt, 4);
-		fc_params.mac_buf.size = 0;
-		fc_params.mac_buf.vaddr = NULL;
 		m = cpt_m_dst_get(cpt_op, m_src, m_dst);
 
 		/* Digest immediately following data is best case */
@@ -2592,6 +2589,7 @@ fill_fc_params(struct rte_crypto_op *cop, struct cnxk_se_sess *sess,
 		}
 	}
 
+	fc_params.meta_buf.vaddr = NULL;
 	if (unlikely(is_kasumi || !((flags & ROC_SE_SINGLE_BUF_INPLACE) &&
 				    (flags & ROC_SE_SINGLE_BUF_HEADROOM)))) {
 		mdata = alloc_op_meta(&fc_params.meta_buf, m_info->mlen, m_info->pool, infl_req);
