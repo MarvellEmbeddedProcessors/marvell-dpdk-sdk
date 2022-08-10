@@ -11,15 +11,19 @@ fi
 
 RX_LOG=rx.txt
 TX_LOG=tx.txt
+TX_PREFIX=extbuf_tx
+RX_PREFIX=extbuf_rx
 
 rm -rf $RX_LOG
 rm -rf $TX_LOG
+rm -rf /var/run/dpdk/$RX_PREFIX
+rm -rf /var/run/dpdk/$TX_PREFIX
 
 echo "================================"
 echo "Starting RX"
 echo "================================"
 (stdbuf -o 0 ./cnxk-extbuf \
-	--file-prefix rx \
+	--file-prefix $RX_PREFIX \
 	-c 0x3 \
 	-a 0002:01:00.2 \
 	-- \
@@ -38,7 +42,7 @@ echo "================================"
 echo "Starting TX"
 echo "================================"
 (./cnxk-extbuf \
-	--file-prefix tx \
+	--file-prefix $TX_PREFIX \
 	-c 0x5 \
 	-a 0002:01:00.1 \
 	-- \
