@@ -70,6 +70,7 @@ test_subdirs = [
         'tx_vlan',
         'ipsec_reassembly_perf',
         'lso_test',
+        'multi_pool_pkt_tx',
 ]
 
 foreach dir:test_subdirs
