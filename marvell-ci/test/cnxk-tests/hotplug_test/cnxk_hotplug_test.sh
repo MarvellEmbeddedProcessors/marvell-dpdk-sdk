@@ -172,3 +172,4 @@ else
 	echo "Hotplug detach failure"
 	exit 1;
 fi
+$VFIO_DEVBIND -b vfio-pci $PORT0 $PORT3 $PORT2 $PORT4
