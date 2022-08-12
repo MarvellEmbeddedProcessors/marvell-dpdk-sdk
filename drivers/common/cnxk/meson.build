@@ -45,6 +45,7 @@ sources = files(
         'roc_nix_rss.c',
         'roc_nix_stats.c',
         'roc_nix_tm.c',
+        'roc_nix_tm_mark.c',
         'roc_nix_tm_ops.c',
         'roc_nix_tm_utils.c',
         'roc_nix_vlan.c',
@@ -66,7 +67,6 @@ sources = files(
         'roc_tim_irq.c',
         'roc_utils.c',
         'roc_ree.c',
-        'roc_nix_tm_mark.c',
 )
 
 # Security common code
