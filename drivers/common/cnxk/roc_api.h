@@ -51,6 +51,9 @@
 /* HW Errata */
 #include "roc_errata.h"
 
+/* HW Features */
+#include "roc_features.h"
+
 /* Mbox */
 #include "roc_mbox.h"
 
