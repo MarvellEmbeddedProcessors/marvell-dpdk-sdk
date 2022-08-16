@@ -546,6 +546,7 @@ cn10k_sso_tx_one(struct cn10k_sso_hws *ws, struct rte_mbuf *m, uint64_t *cmd,
 		 const uint64_t *txq_data, const uint32_t flags)
 {
 	uint8_t lnum = 0, loff = 0, shft = 0;
+	uint16_t ref_cnt = m->refcnt;
 	struct cn10k_eth_txq *txq;
 	uintptr_t laddr;
 	uint16_t segdw;
@@ -594,6 +595,10 @@ cn10k_sso_tx_one(struct cn10k_sso_hws *ws, struct rte_mbuf *m, uint64_t *cmd,
 	cn10k_sso_txq_fc_wait(txq);
 	roc_lmt_submit_steorl(lmt_id, pa);
 
+	if (flags & NIX_TX_OFFLOAD_MBUF_NOFF_F) {
+		if (ref_cnt > 1)
+			rte_io_wmb();
+	}
 	return 1;
 }
 
@@ -631,6 +636,7 @@ cn10k_sso_vwqe_split_tx(struct cn10k_sso_hws *ws, struct rte_mbuf **mbufs,
 					sched_type, txq_data, flags);
 				if (!done)
 					goto fail;
+				rte_io_wmb();
 				cnt++;
 			}
 		} else {
@@ -655,6 +661,7 @@ cn10k_sso_vwqe_split_tx(struct cn10k_sso_hws *ws, struct rte_mbuf **mbufs,
 					sched_type, txq_data, flags);
 		if (!done)
 			break;
+		rte_io_wmb();
 		cnt++;
 	}
 fail:
