@@ -780,6 +780,24 @@ cn10k_sso_port_unlink(struct rte_eventdev *event_dev, void *port,
 	return (int)nb_unlinks;
 }
 
+static void
+cn10k_sso_configure_queue_stash(struct rte_eventdev *event_dev)
+{
+	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+	struct roc_sso_hwgrp_stash stash[dev->stash_cnt];
+	int i, rc;
+
+	plt_sso_dbg();
+	for (i = 0; i < dev->stash_cnt; i++) {
+		stash[i].hwgrp = dev->stash_parse_data[i].queue;
+		stash[i].stash_offset = dev->stash_parse_data[i].stash_offset;
+		stash[i].stash_count = dev->stash_parse_data[i].stash_length;
+	}
+	rc = roc_sso_hwgrp_stash_config(&dev->sso, stash, dev->stash_cnt);
+	if (rc < 0)
+		plt_warn("failed to configure HWGRP WQE stashing rc = %d", rc);
+}
+
 static int
 cn10k_sso_start(struct rte_eventdev *event_dev)
 {
@@ -789,6 +807,7 @@ cn10k_sso_start(struct rte_eventdev *event_dev)
 	if (rc < 0)
 		return rc;
 
+	cn10k_sso_configure_queue_stash(event_dev);
 	rc = cnxk_sso_start(event_dev, cn10k_sso_hws_reset,
 			    cn10k_sso_hws_flush_events);
 	if (rc < 0)
@@ -1220,6 +1239,7 @@ RTE_PMD_REGISTER_PARAM_STRING(event_cn10k, CNXK_SSO_XAE_CNT "=<int>"
 			      CNXK_SSO_GGRP_QOS "=<string>"
 			      CNXK_SSO_FORCE_BP "=1"
 			      CN10K_SSO_GW_MODE "=<int>"
+			      CN10K_SSO_STASH "=<string>"
 			      CNXK_TIM_DISABLE_NPA "=1"
 			      CNXK_TIM_CHNK_SLOTS "=<int>"
 			      CNXK_TIM_RINGS_LMT "=<int>"
