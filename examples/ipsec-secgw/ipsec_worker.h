@@ -127,6 +127,11 @@ prepare_one_packet(struct rte_security_ctx *ctx, struct rte_mbuf *pkt,
 	const struct rte_ipv6_hdr *iph6;
 	uint32_t tun_type, l3_type;
 
+	if (is_ip_reassembly_incomplete(pkt) > 0) {
+		free_reassembly_fail_pkt(pkt);
+		return;
+	}
+
 	tun_type = ptype & RTE_PTYPE_TUNNEL_MASK;
 	l3_type = ptype & RTE_PTYPE_L3_MASK;
 
