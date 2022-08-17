@@ -68,6 +68,7 @@ test_subdirs = [
         'hotplug_test',
         'l2fwd_tmc',
         'tx_vlan',
+        'ipsec_reassembly_perf',
 ]
 
 foreach dir:test_subdirs
