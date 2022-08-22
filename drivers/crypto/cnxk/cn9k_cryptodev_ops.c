@@ -95,9 +95,9 @@ cn9k_cpt_inst_prep(struct cnxk_cpt_qp *qp, struct rte_crypto_op *op,
 
 		if (op->sess_type == RTE_CRYPTO_OP_WITH_SESSION) {
 			sym_op = op->sym;
-			sess = get_sym_session_private_data(
-				sym_op->session, cn9k_cryptodev_driver_id);
-			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, inst);
+			sess = get_sym_session_private_data(sym_op->session,
+							    cn9k_cryptodev_driver_id);
+			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, inst, false);
 			inst->w7.u64 = sess->cpt_inst_w7;
 		} else if (op->sess_type == RTE_CRYPTO_OP_SECURITY_SESSION)
 			ret = cn9k_cpt_sec_inst_fill(op, infl_req, inst);
@@ -108,10 +108,9 @@ cn9k_cpt_inst_prep(struct cnxk_cpt_qp *qp, struct rte_crypto_op *op,
 				return -1;
 			}
 
-			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, inst);
+			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, inst, false);
 			if (unlikely(ret)) {
-				sym_session_clear(cn9k_cryptodev_driver_id,
-						  op->sym->session);
+				sym_session_clear(cn9k_cryptodev_driver_id, op->sym->session);
 				rte_mempool_put(qp->sess_mp, op->sym->session);
 			}
 			inst->w7.u64 = sess->cpt_inst_w7;

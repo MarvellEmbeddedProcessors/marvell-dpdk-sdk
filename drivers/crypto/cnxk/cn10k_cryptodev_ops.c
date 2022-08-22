@@ -78,8 +78,8 @@ cpt_sec_inst_fill(struct cnxk_cpt_qp *qp, struct rte_crypto_op *op,
 }
 
 static inline int
-cn10k_cpt_fill_inst(struct cnxk_cpt_qp *qp, struct rte_crypto_op *ops[],
-		    struct cpt_inst_s inst[], struct cpt_inflight_req *infl_req)
+cn10k_cpt_fill_inst(struct cnxk_cpt_qp *qp, struct rte_crypto_op *ops[], struct cpt_inst_s inst[],
+		    struct cpt_inflight_req *infl_req, const bool is_sg_ver2)
 {
 	struct cn10k_sec_session *sec_sess;
 	struct rte_crypto_asym_op *asym_op;
@@ -111,10 +111,9 @@ cn10k_cpt_fill_inst(struct cnxk_cpt_qp *qp, struct rte_crypto_op *ops[],
 				return 0;
 			w7 = sec_sess->sa.inst.w7;
 		} else if (op->sess_type == RTE_CRYPTO_OP_WITH_SESSION) {
-			sess = get_sym_session_private_data(
-				sym_op->session, cn10k_cryptodev_driver_id);
-			ret = cpt_sym_inst_fill(qp, op, sess, infl_req,
-						&inst[0]);
+			sess = get_sym_session_private_data(sym_op->session,
+							    cn10k_cryptodev_driver_id);
+			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, &inst[0], is_sg_ver2);
 			if (unlikely(ret))
 				return 0;
 			w7 = sess->cpt_inst_w7;
@@ -125,11 +124,9 @@ cn10k_cpt_fill_inst(struct cnxk_cpt_qp *qp, struct rte_crypto_op *ops[],
 				return 0;
 			}
 
-			ret = cpt_sym_inst_fill(qp, op, sess, infl_req,
-						&inst[0]);
+			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, &inst[0], is_sg_ver2);
 			if (unlikely(ret)) {
-				sym_session_clear(cn10k_cryptodev_driver_id,
-						  op->sym->session);
+				sym_session_clear(cn10k_cryptodev_driver_id, op->sym->session);
 				rte_mempool_put(qp->sess_mp, op->sym->session);
 				return 0;
 			}
@@ -168,7 +165,8 @@ cn10k_cpt_fill_inst(struct cnxk_cpt_qp *qp, struct rte_crypto_op *ops[],
 #define PKTS_PER_STEORL 16
 
 static uint16_t
-cn10k_cpt_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
+cn10k_cpt_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops,
+			const bool is_sg_ver2)
 {
 	uint64_t lmt_base, lmt_arg, io_addr;
 	struct cpt_inflight_req *infl_req;
@@ -213,7 +211,7 @@ again:
 		infl_req = &pend_q->req_queue[head];
 		infl_req->op_flags = 0;
 
-		ret = cn10k_cpt_fill_inst(qp, ops + i, &inst[2 * i], infl_req);
+		ret = cn10k_cpt_fill_inst(qp, ops + i, &inst[2 * i], infl_req, is_sg_ver2);
 		if (unlikely(ret != 1)) {
 			plt_dp_err("Could not process op: %p", ops + i);
 			if (i == 0)
@@ -257,12 +255,22 @@ pend_q_commit:
 	return count + i;
 }
 
+static uint16_t
+cn10k_cpt_sg_ver1_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
+{
+	return cn10k_cpt_enqueue_burst(qptr, ops, nb_ops, false);
+}
+
+static uint16_t
+cn10k_cpt_sg_ver2_enqueue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
+{
+	return cn10k_cpt_enqueue_burst(qptr, ops, nb_ops, true);
+}
+
 static int
-cn10k_cpt_crypto_adapter_ev_mdata_set(struct rte_cryptodev *dev __rte_unused,
-				      void *sess,
+cn10k_cpt_crypto_adapter_ev_mdata_set(struct rte_cryptodev *dev __rte_unused, void *sess,
 				      enum rte_crypto_op_type op_type,
-				      enum rte_crypto_op_sess_type sess_type,
-				      void *mdata)
+				      enum rte_crypto_op_sess_type sess_type, void *mdata)
 {
 	union rte_event_crypto_metadata *ec_mdata = mdata;
 	struct rte_event *rsp_info;
@@ -319,8 +327,7 @@ cn10k_cpt_crypto_adapter_ev_mdata_set(struct rte_cryptodev *dev __rte_unused,
 }
 
 static inline int
-cn10k_ca_meta_info_extract(struct rte_crypto_op *op,
-			 struct cnxk_cpt_qp **qp, uint64_t *w2)
+cn10k_ca_meta_info_extract(struct rte_crypto_op *op, struct cnxk_cpt_qp **qp, uint64_t *w2)
 {
 	if (op->type == RTE_CRYPTO_OP_TYPE_SYMMETRIC) {
 		if (op->sess_type == RTE_CRYPTO_OP_SECURITY_SESSION) {
@@ -375,7 +382,7 @@ cn10k_ca_meta_info_extract(struct rte_crypto_op *op,
 
 static inline uint16_t
 ca_lmtst_burst_submit(struct cn10k_sso_hws *ws, uint64_t w2[], struct cnxk_cpt_qp *qp,
-		      struct rte_crypto_op *op[], uint16_t nb_ops)
+		      struct rte_crypto_op *op[], uint16_t nb_ops, const bool is_sg_ver2)
 {
 	struct cpt_inflight_req *infl_reqs[PKTS_PER_LOOP];
 	uint64_t lmt_base, lmt_arg, io_addr;
@@ -410,7 +417,7 @@ ca_lmtst_burst_submit(struct cn10k_sso_hws *ws, uint64_t w2[], struct cnxk_cpt_q
 		infl_req = infl_reqs[i];
 		infl_req->op_flags = 0;
 
-		ret = cn10k_cpt_fill_inst(qp, &op[i], inst, infl_req);
+		ret = cn10k_cpt_fill_inst(qp, &op[i], inst, infl_req, is_sg_ver2);
 		if (unlikely(ret != 1)) {
 			plt_dp_dbg("Could not process op: %p", op[i]);
 			if (i != 0)
@@ -458,8 +465,9 @@ put:
 	return i;
 }
 
-uint16_t __rte_hot
-cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
+static uint16_t __rte_hot
+cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events,
+				 const bool is_sg_ver2)
 {
 	struct rte_crypto_op *ops[PKTS_PER_LOOP], *op;
 	struct cnxk_cpt_qp *qp, *curr_qp = NULL;
@@ -477,7 +485,8 @@ cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_ev
 
 		if (qp != curr_qp) {
 			if (ops_len) {
-				submitted = ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len);
+				submitted = ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len,
+								  is_sg_ver2);
 				count += submitted;
 				if (unlikely(submitted != ops_len))
 					return count;
@@ -488,7 +497,8 @@ cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_ev
 		w2s[ops_len] = w2;
 		ops[ops_len] = op;
 		if (++ops_len == PKTS_PER_LOOP) {
-			submitted = ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len);
+			submitted =
+				ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len, is_sg_ver2);
 			count += submitted;
 			if (unlikely(submitted != ops_len))
 				return count;
@@ -496,8 +506,20 @@ cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_ev
 		}
 	}
 	if (ops_len)
-		count += ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len);
+		count += ca_lmtst_burst_submit(ws, w2s, curr_qp, ops, ops_len, is_sg_ver2);
 	return count;
+}
+
+uint16_t __rte_hot
+cn10k_cpt_sg_ver1_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
+{
+	return cn10k_cpt_crypto_adapter_enqueue(ws, ev, nb_events, false);
+}
+
+uint16_t __rte_hot
+cn10k_cpt_sg_ver2_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
+{
+	return cn10k_cpt_crypto_adapter_enqueue(ws, ev, nb_events, true);
 }
 
 static inline void
@@ -712,9 +734,13 @@ cn10k_cpt_dequeue_burst(void *qptr, struct rte_crypto_op **ops, uint16_t nb_ops)
 }
 
 void
-cn10k_cpt_set_enqdeq_fns(struct rte_cryptodev *dev)
+cn10k_cpt_set_enqdeq_fns(struct rte_cryptodev *dev, struct cnxk_cpt_vf *vf)
 {
-	dev->enqueue_burst = cn10k_cpt_enqueue_burst;
+	if (vf->cpt.cpt_revision > ROC_CPT_REVISION_ID_106XX)
+		dev->enqueue_burst = cn10k_cpt_sg_ver2_enqueue_burst;
+	else
+		dev->enqueue_burst = cn10k_cpt_sg_ver1_enqueue_burst;
+
 	dev->dequeue_burst = cn10k_cpt_dequeue_burst;
 
 	rte_mb();
