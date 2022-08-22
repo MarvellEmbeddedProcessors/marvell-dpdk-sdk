@@ -43,7 +43,7 @@ get_test_args()
 	case $test_name in
 		L2FWD_EVENT)
 			echo "-l 0-$num_cores -n 4 -a $IF0 -a $SSO_DEV -- -p 1" \
-				"--mode=eventdev --eventq-sched=${sched_mode:0:1}"
+				"--mode=eventdev --eventq-sched=${sched_mode:0:1} -T 0"
 			;;
 		L3FWD_EVENT)
 			echo "-l 0-$((num_cores - 1)) -n 4 -a $IF0 -a $SSO_DEV -- -p 1" \
