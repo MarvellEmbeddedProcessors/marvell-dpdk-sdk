@@ -730,9 +730,10 @@ ipsec_ev_vector_process(struct lcore_conf_ev_tx_int_port_wrkr *lconf,
 
 	if (likely(ret > 0)) {
 		vec->nb_elem = ret;
-		rte_event_eth_tx_adapter_enqueue(links[0].eventdev_id,
-						 links[0].event_port_id,
-						 ev, 1, 0);
+		do {
+			ret = rte_event_eth_tx_adapter_enqueue(links[0].eventdev_id,
+							       links[0].event_port_id, ev, 1, 0);
+		} while (!ret && !force_quit);
 	} else {
 		rte_mempool_put(rte_mempool_from_obj(vec), vec);
 	}
@@ -745,17 +746,22 @@ ipsec_ev_vector_drv_mode_process(struct eh_event_link_info *links,
 {
 	struct rte_event_vector *vec = ev->vec;
 	struct rte_mbuf *pkt;
+	uint16_t ret;
 
 	pkt = vec->mbufs[0];
+
+	vec->attr_valid = 1;
+	vec->port = pkt->port;
 
 	if (!is_unprotected_port(pkt->port))
 		vec->nb_elem = process_ipsec_ev_drv_mode_outbound_vector(vec,
 									 data);
-	if (vec->nb_elem > 0)
-		rte_event_eth_tx_adapter_enqueue(links[0].eventdev_id,
-						 links[0].event_port_id,
-						 ev, 1, 0);
-	else
+	if (likely(vec->nb_elem > 0)) {
+		do {
+			ret = rte_event_eth_tx_adapter_enqueue(links[0].eventdev_id,
+							       links[0].event_port_id, ev, 1, 0);
+		} while (!ret && !force_quit);
+	} else
 		rte_mempool_put(rte_mempool_from_obj(vec), vec);
 }
 
@@ -766,10 +772,21 @@ ipsec_ev_vector_drv_mode_process(struct eh_event_link_info *links,
  */
 
 static void
+ipsec_event_vector_free(struct rte_event *ev)
+{
+	struct rte_event_vector *vec = ev->vec;
+	rte_pktmbuf_free_bulk(vec->mbufs + vec->elem_offset, vec->nb_elem - vec->elem_offset);
+	rte_mempool_put(rte_mempool_from_obj(vec), vec);
+}
+
+static void
 ipsec_event_port_flush(uint8_t eventdev_id __rte_unused, struct rte_event ev,
 		       void *args __rte_unused)
 {
-	rte_pktmbuf_free(ev.mbuf);
+	if (ev.event_type & RTE_EVENT_TYPE_VECTOR)
+		ipsec_event_vector_free(&ev);
+	else
+		rte_pktmbuf_free(ev.mbuf);
 }
 
 /* Workers registered */
