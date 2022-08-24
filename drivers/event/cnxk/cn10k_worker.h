@@ -607,68 +607,58 @@ cn10k_sso_tx_one(struct cn10k_sso_hws *ws, struct rte_mbuf *m, uint64_t *cmd,
 
 static __rte_always_inline uint16_t
 cn10k_sso_vwqe_split_tx(struct cn10k_sso_hws *ws, struct rte_mbuf **mbufs,
-			uint16_t nb_mbufs, uint64_t *cmd, uint16_t lmt_id,
-			uintptr_t lmt_addr, uint8_t sched_type,
+			uint16_t nb_mbufs, uint64_t *cmd,
 			const uint64_t *txq_data, const uint32_t flags)
 {
-	uint16_t i, j, pkts, scalar;
-	uint16_t port[4], queue[4];
+	uint16_t count = 0, port, queue, ret = 0, last_idx = 0;
 	struct cn10k_eth_txq *txq;
-	uint16_t done, cnt;
 	int32_t space;
+	int i;
 
-	scalar = nb_mbufs & (NIX_DESCS_PER_LOOP - 1);
-	pkts = RTE_ALIGN_FLOOR(nb_mbufs, NIX_DESCS_PER_LOOP);
-	cnt = 0;
-	for (i = 0; i < pkts; i += NIX_DESCS_PER_LOOP) {
-		port[0] = mbufs[i]->port;
-		port[1] = mbufs[i + 1]->port;
-		port[2] = mbufs[i + 2]->port;
-		port[3] = mbufs[i + 3]->port;
-
-		queue[0] = rte_event_eth_tx_adapter_txq_get(mbufs[i]);
-		queue[1] = rte_event_eth_tx_adapter_txq_get(mbufs[i + 1]);
-		queue[2] = rte_event_eth_tx_adapter_txq_get(mbufs[i + 2]);
-		queue[3] = rte_event_eth_tx_adapter_txq_get(mbufs[i + 3]);
-
-		if (((port[0] ^ port[1]) & (port[2] ^ port[3])) ||
-		    ((queue[0] ^ queue[1]) & (queue[2] ^ queue[3]))) {
-			for (j = 0; j < 4; j++) {
-				done = cn10k_sso_tx_one(
-					ws, mbufs[i + j], cmd, lmt_id, lmt_addr,
-					sched_type, txq_data, flags);
-				if (!done)
-					goto fail;
-				rte_io_wmb();
-				cnt++;
+	port = mbufs[0]->port;
+	queue = rte_event_eth_tx_adapter_txq_get(mbufs[0]);
+	for (i = 0; i < nb_mbufs; i++) {
+		if (port != mbufs[i]->port ||
+		    queue != rte_event_eth_tx_adapter_txq_get(mbufs[i])) {
+			if (count) {
+				txq = (struct cn10k_eth_txq
+					       *)(txq_data[(txq_data[port] >>
+							    48) +
+							   queue] &
+						  (BIT_ULL(48) - 1));
+				/* Transmit based on queue depth */
+				space = cn10k_sso_sq_depth(txq);
+				if (space < count)
+					goto done;
+				cn10k_nix_xmit_pkts_vector(
+					txq, (uint64_t *)ws, &mbufs[last_idx],
+					count, cmd, flags | NIX_TX_VWQE_F);
+				ret += count;
+				count = 0;
 			}
-		} else {
-			txq = (struct cn10k_eth_txq
-				       *)(txq_data[(txq_data[port[0]] >> 48) +
-						   queue[0]] &
-					  (BIT_ULL(48) - 1));
-			space = cn10k_sso_sq_depth(txq);
-			if (space < NIX_DESCS_PER_LOOP)
-				goto fail;
-			cn10k_nix_xmit_pkts_vector(
-				txq, (uint64_t *)ws, &mbufs[i],
-				NIX_DESCS_PER_LOOP, cmd, flags | NIX_TX_VWQE_F);
-			cnt += NIX_DESCS_PER_LOOP;
+			port = mbufs[i]->port;
+			queue = rte_event_eth_tx_adapter_txq_get(mbufs[i]);
+			last_idx = i;
 		}
+		count++;
 	}
 
-	mbufs += i;
+	if (count) {
+		txq = (struct cn10k_eth_txq
+			       *)(txq_data[(txq_data[port] >> 48) + queue] &
+				  (BIT_ULL(48) - 1));
+		/* Transmit based on queue depth */
+		space = cn10k_sso_sq_depth(txq);
+		if (space < count)
+			goto done;
+		cn10k_nix_xmit_pkts_vector(txq, (uint64_t *)ws,
+					   &mbufs[last_idx], count, cmd,
+					   flags | NIX_TX_VWQE_F);
 
-	for (i = 0; i < scalar; i++) {
-		done = cn10k_sso_tx_one(ws, mbufs[i], cmd, lmt_id, lmt_addr,
-					sched_type, txq_data, flags);
-		if (!done)
-			break;
-		rte_io_wmb();
-		cnt++;
+		ret += count;
 	}
-fail:
-	return cnt;
+done:
+	return ret;
 }
 
 static __rte_always_inline uint16_t
@@ -709,9 +699,9 @@ cn10k_sso_hws_event_tx(struct cn10k_sso_hws *ws, struct rte_event *ev,
 						   mbufs + offset, nb_pkts, cmd,
 						   flags | NIX_TX_VWQE_F);
 		} else {
-			nb_pkts = cn10k_sso_vwqe_split_tx(
-				ws, mbufs + offset, nb_pkts, cmd, lmt_id,
-				lmt_addr, ev->sched_type, txq_data, flags);
+			nb_pkts = cn10k_sso_vwqe_split_tx(ws, mbufs + offset,
+							  nb_pkts, cmd,
+							  txq_data, flags);
 		}
 		if (!((meta & 0xFFFF) - nb_pkts - offset))
 			rte_mempool_put(rte_mempool_from_obj(ev->vec), ev->vec);
