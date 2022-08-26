@@ -18,14 +18,12 @@
 #include "cnxk_se.h"
 
 static __rte_always_inline int __rte_hot
-cn9k_cpt_sec_inst_fill(struct rte_crypto_op *op,
-		       struct cpt_inflight_req *infl_req,
-		       struct cpt_inst_s *inst)
+cn9k_cpt_sec_inst_fill(struct cnxk_cpt_qp *qp, struct rte_crypto_op *op,
+		       struct cpt_inflight_req *infl_req, struct cpt_inst_s *inst)
 {
 	struct rte_crypto_sym_op *sym_op = op->sym;
 	struct cn9k_sec_session *priv;
 	struct cn9k_ipsec_sa *sa;
-	int ret;
 
 	priv = get_sec_session_private_data(op->sym->sec_session);
 	sa = &priv->sa;
@@ -35,22 +33,10 @@ cn9k_cpt_sec_inst_fill(struct rte_crypto_op *op,
 		return -ENOTSUP;
 	}
 
-	if (unlikely(!rte_pktmbuf_is_contiguous(sym_op->m_src))) {
-		plt_dp_err("Scatter Gather mode is not supported");
-		return -ENOTSUP;
-	}
-
 	if (sa->dir == RTE_SECURITY_IPSEC_SA_DIR_EGRESS)
-		ret = process_outb_sa(op, sa, inst);
-	else {
-		infl_req->op_flags |= CPT_OP_FLAGS_IPSEC_DIR_INBOUND;
-		process_inb_sa(op, sa, inst);
-		if (unlikely(sa->replay_win_sz))
-			infl_req->op_flags |= CPT_OP_FLAGS_IPSEC_INB_REPLAY;
-		ret = 0;
-	}
-
-	return ret;
+		return process_outb_sa(&qp->meta_info, op, sa, inst, infl_req);
+	else
+		return process_inb_sa(&qp->meta_info, op, sa, inst, infl_req);
 }
 
 static inline struct cnxk_se_sess *
@@ -100,7 +86,7 @@ cn9k_cpt_inst_prep(struct cnxk_cpt_qp *qp, struct rte_crypto_op *op,
 			ret = cpt_sym_inst_fill(qp, op, sess, infl_req, inst, false);
 			inst->w7.u64 = sess->cpt_inst_w7;
 		} else if (op->sess_type == RTE_CRYPTO_OP_SECURITY_SESSION)
-			ret = cn9k_cpt_sec_inst_fill(op, infl_req, inst);
+			ret = cn9k_cpt_sec_inst_fill(qp, op, infl_req, inst);
 		else {
 			sess = cn9k_cpt_sym_temp_sess_create(qp, op);
 			if (unlikely(sess == NULL)) {
@@ -533,49 +519,62 @@ cn9k_cpt_sec_post_process(struct rte_crypto_op *cop,
 {
 	struct rte_crypto_sym_op *sym_op = cop->sym;
 	struct rte_mbuf *m = sym_op->m_src;
+	struct roc_ie_on_inb_hdr *hdr;
 	struct cn9k_sec_session *priv;
 	struct cn9k_ipsec_sa *sa;
 	struct rte_ipv6_hdr *ip6;
 	struct rte_ipv4_hdr *ip;
 	uint16_t m_len = 0;
-	char *data;
 
 	if (infl_req->op_flags & CPT_OP_FLAGS_IPSEC_DIR_INBOUND) {
 
-		data = rte_pktmbuf_mtod(m, char *);
-		if (unlikely(infl_req->op_flags &
-			     CPT_OP_FLAGS_IPSEC_INB_REPLAY)) {
+		hdr = (struct roc_ie_on_inb_hdr *)rte_pktmbuf_mtod(m, char *);
+
+		if (likely(m->next == NULL)) {
+			ip = PLT_PTR_ADD(hdr, ROC_IE_ON_INB_RPTR_HDR);
+		} else {
+			ip = (struct rte_ipv4_hdr *)hdr;
+			hdr = infl_req->mdata;
+		}
+
+		if (unlikely(infl_req->op_flags & CPT_OP_FLAGS_IPSEC_INB_REPLAY)) {
 			int ret;
 
-			priv = get_sec_session_private_data(
-				sym_op->sec_session);
+			priv = get_sec_session_private_data(sym_op->sec_session);
 			sa = &priv->sa;
 
-			ret = ipsec_antireplay_check(
-				sa, sa->replay_win_sz,
-				(struct roc_ie_on_inb_hdr *)data);
+			ret = ipsec_antireplay_check(sa, sa->replay_win_sz, hdr);
 			if (unlikely(ret)) {
 				cop->status = RTE_CRYPTO_OP_STATUS_ERROR;
 				return;
 			}
 		}
 
-		ip = (struct rte_ipv4_hdr *)(data + ROC_IE_ON_INB_RPTR_HDR);
-
-		if (((ip->version_ihl & 0xf0) >> RTE_IPV4_IHL_MULTIPLIER) ==
-		    IPVERSION) {
+		if (ip->version == IPVERSION) {
 			m_len = rte_be_to_cpu_16(ip->total_length);
 		} else {
-			PLT_ASSERT(((ip->version_ihl & 0xf0) >>
-				    RTE_IPV4_IHL_MULTIPLIER) == 6);
+			PLT_ASSERT((ip->version == 6));
 			ip6 = (struct rte_ipv6_hdr *)ip;
-			m_len = rte_be_to_cpu_16(ip6->payload_len) +
-				sizeof(struct rte_ipv6_hdr);
+			m_len = rte_be_to_cpu_16(ip6->payload_len) + sizeof(struct rte_ipv6_hdr);
 		}
 
-		m->data_len = m_len;
-		m->pkt_len = m_len;
-		m->data_off += ROC_IE_ON_INB_RPTR_HDR;
+		if (likely(m->next == NULL)) {
+			m->data_len = m_len;
+			m->pkt_len = m_len;
+
+			m->data_off += ROC_IE_ON_INB_RPTR_HDR;
+		} else {
+			struct rte_mbuf *temp = m;
+			uint8_t m_len_s = m_len;
+
+			while (m_len_s - temp->data_len > 0) {
+				m_len_s -= temp->data_len;
+				temp = temp->next;
+			}
+
+			temp->data_len = m_len_s;
+			m->pkt_len = m_len;
+		}
 	}
 }
 
