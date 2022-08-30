@@ -78,7 +78,7 @@ roc_npc_mcam_init(struct roc_npc *roc_npc, struct roc_npc_flow *flow,
 		  int mcam_id)
 {
 	struct npc *npc = roc_npc_to_npc_priv(roc_npc);
-	int rc = 0;
+	int rc;
 
 	rc = npc_mcam_init(npc, flow, mcam_id);
 	if (rc != 0) {
@@ -93,7 +93,7 @@ roc_npc_mcam_move(struct roc_npc *roc_npc, uint16_t old_ent, uint16_t new_ent)
 {
 	struct npc *npc = roc_npc_to_npc_priv(roc_npc);
 	struct mbox *mbox = npc->mbox;
-	int rc = -ENOSPC;
+	int rc;
 
 	rc = npc_mcam_move(mbox, old_ent, new_ent);
 	if (rc)
@@ -1070,14 +1070,16 @@ npc_vtag_insert_action_configure(struct mbox *mbox, struct roc_npc_flow *flow,
 
 	vtag_cfg->cfg_type = VTAG_TX;
 	vtag_cfg->vtag_size = NIX_VTAGSIZE_T4;
-	vtag_cfg->tx.vtag0 = (((uint32_t)vlan_info[0].vlan_ethtype << 16) |
-			      (vlan_info[0].vlan_pcp << 13) | vlan_info[0].vlan_id);
+	vtag_cfg->tx.vtag0 =
+		(((uint32_t)vlan_info[0].vlan_ethtype << 16) |
+		 (vlan_info[0].vlan_pcp << 13) | vlan_info[0].vlan_id);
 
 	vtag_cfg->tx.cfg_vtag0 = 1;
 
 	if (flow->vtag_insert_count == 2) {
-		vtag_cfg->tx.vtag1 = (((uint32_t)vlan_info[1].vlan_ethtype << 16) |
-				      (vlan_info[1].vlan_pcp << 13) | vlan_info[1].vlan_id);
+		vtag_cfg->tx.vtag1 =
+			(((uint32_t)vlan_info[1].vlan_ethtype << 16) |
+			 (vlan_info[1].vlan_pcp << 13) | vlan_info[1].vlan_id);
 
 		vtag_cfg->tx.cfg_vtag1 = 1;
 	}

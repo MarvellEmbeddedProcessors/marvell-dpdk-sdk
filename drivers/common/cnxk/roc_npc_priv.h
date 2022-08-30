@@ -386,7 +386,7 @@ struct npc {
 	uint32_t rss_grps;			/* rss groups supported */
 	uint16_t flow_prealloc_size;		/* Pre allocated mcam size */
 	uint16_t flow_max_priority;		/* Max priority for flow */
-	uint16_t switch_header_type; /* Suppprted switch header type */
+	uint16_t switch_header_type; /* Supported switch header type */
 	uint32_t vtag_strip_actions; /* vtag insert/strip actions */
 	uint16_t pf_func;	     /* pf_func of device */
 	npc_dxcfg_t prx_dxcfg;	     /* intf, lid, lt, extract */
