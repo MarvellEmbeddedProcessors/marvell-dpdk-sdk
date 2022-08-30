@@ -133,7 +133,7 @@ function run_app()
 
 function exit_app()
 {
-	killall -9 dpdk-ptpclient
+	killall dpdk-ptpclient
 }
 
 function sig_handler()
