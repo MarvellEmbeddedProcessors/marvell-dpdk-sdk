@@ -986,13 +986,6 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	droq_pkt->l3_len = hdr_lens.l3_len;
 	droq_pkt->l4_len = hdr_lens.l4_len;
 
-	if (is_otx2_ep_vf(otx_ep->chip_id) &&
-		droq_pkt->pkt_len > OTX2_EP_MAX_RX_PKT_LEN) {
-		/* Due to hw errata NIX cannot send over 16K packets to SDP */
-		rte_pktmbuf_free(droq_pkt);
-		goto oq_read_fail;
-	}
-
 	if (droq_pkt->pkt_len > otx_ep->eth_dev->data->mtu) {
 		rte_pktmbuf_free(droq_pkt);
 		goto oq_read_fail;
