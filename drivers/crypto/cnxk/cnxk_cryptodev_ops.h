@@ -12,6 +12,7 @@
 
 #define CNXK_CPT_MIN_HEADROOM_REQ 24
 #define CNXK_CPT_MIN_TAILROOM_REQ 102
+#define CNXK_CPT_META_BUF_MAX_CACHE_SIZE 128
 
 /* Default command timeout in seconds */
 #define DEFAULT_COMMAND_TIMEOUT 4

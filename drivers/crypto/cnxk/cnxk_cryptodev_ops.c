@@ -16,7 +16,6 @@
 
 #define CNXK_CPT_MAX_ASYM_OP_NUM_PARAMS	 5
 #define CNXK_CPT_MAX_ASYM_OP_MOD_LEN	 1024
-#define CNXK_CPT_META_BUF_MAX_CACHE_SIZE 128
 
 static int
 cnxk_cpt_get_mlen(void)
