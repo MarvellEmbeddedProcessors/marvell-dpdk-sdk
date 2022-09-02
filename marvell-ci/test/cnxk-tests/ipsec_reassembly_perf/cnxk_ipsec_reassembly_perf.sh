@@ -217,10 +217,18 @@ function sig_handler()
 
 function pmd_tx_launch_for_inb()
 {
-	local pcap=$CNXKTESTPATH/pcap/enc_$1_reas_$2.pcap
-	testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
+	local pcap1=$CNXKTESTPATH/pcap/enc_$1_reas_$2_1.pcap
+	local pcap2=$CNXKTESTPATH/pcap/enc_$1_reas_$2_2.pcap
+	local pcap3=$CNXKTESTPATH/pcap/enc_$1_reas_$2_3.pcap
+	if [[ $Y -gt 2 ]]; then
+		testpmd_launch "$TPMD_TX_PREFIX" \
+		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,infinite_rx=1 -a $LIF1" \
+		"--nb-cores=4 --txq=3 --rxq=3 --no-flush-rx"
+	else
+		testpmd_launch "$TPMD_TX_PREFIX" \
+		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap1,infinite_rx=1 -a $LIF1" \
 		"--nb-cores=2 --no-flush-rx"
+	fi
 	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
 	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
         # Ratelimit Tx to 50Gbps on LBK
