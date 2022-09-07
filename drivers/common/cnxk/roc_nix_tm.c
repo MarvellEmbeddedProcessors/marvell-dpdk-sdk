@@ -256,10 +256,6 @@ nix_tm_node_add(struct roc_nix *roc_nix, struct nix_tm_node *node)
 	if (node->weight > roc_nix_tm_max_sched_wt_get())
 		return NIX_ERR_TM_WEIGHT_EXCEED;
 
-	/* Maintain minimum weight */
-	if (!node->weight)
-		node->weight = 1;
-
 	node->hw_lvl = nix_tm_lvl2nix(nix, lvl);
 	node->rr_prio = 0xF;
 	node->max_prio = UINT32_MAX;
@@ -1358,7 +1354,11 @@ nix_tm_prepare_default_tree(struct roc_nix *roc_nix)
 		node->id = nonleaf_id;
 		node->parent_id = parent;
 		node->priority = 0;
-		node->weight = NIX_TM_DFLT_RR_WT;
+		/* Default VF root RR_QUANTUM is in sync with kernel */
+		if (lvl == ROC_TM_LVL_ROOT && !nix_tm_have_tl1_access(nix))
+			node->weight = 0;
+		else
+			node->weight = NIX_TM_DFLT_RR_WT;
 		node->shaper_profile_id = ROC_NIX_TM_SHAPER_PROFILE_NONE;
 		node->lvl = lvl;
 		node->tree = ROC_NIX_TM_DEFAULT;
