@@ -4,6 +4,8 @@
 
 set -e
 
+GENERATOR_BOARD=${GENERATOR_BOARD:-}
+REMOTE_DIR=${REMOTE_DIR:-$(pwd | cut -d/ -f 1-3)}
 SUDO=${SUDO:-"sudo"}
 SCRIPTPATH=$1
 PKT_LIST="64 380 1410"
@@ -16,6 +18,11 @@ TXWAIT=15
 RXWAIT=5
 WS=2
 IS_RXPPS_TXTPMD=0
+TARGET_SSH_CMD=${TARGET_SSH_CMD:-"ssh -o LogLevel=ERROR -o ServerAliveInterval=30 \
+	-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"}
+TARGET_SSH_CMD="$TARGET_SSH_CMD -n"
+GENERATOR_SCRIPT=${GENERATOR_SCRIPT:-cnxk_ipsec_perf_gen.sh}
+WITH_GEN_BOARD=0
 
 source $SCRIPTPATH/marvell-ci/test/cnxk-tests/common/testpmd/pktgen.env
 source $SCRIPTPATH/marvell-ci/test/cnxk-tests/common/testpmd/lbk.env
@@ -76,6 +83,40 @@ fi
 	echo "CPTCLK: $CPTCLK Mhz"
 }
 
+LIF1=0002:01:00.5
+LIF2=0002:01:00.6
+LIF3=0002:01:00.7
+LIF4=0002:01:01.0
+
+SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
+EVENT_VF=$SSO_DEV
+
+IPSEC_LOG=ipsec.log
+VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
+
+rm -f $IPSEC_LOG
+
+if [[ -z "$GENERATOR_BOARD" ]]; then
+	echo "Generator board details missing!!"
+	WITH_GEN_BOARD=0
+else
+	echo "Found Generator board details $GENERATOR_BOARD"
+	if [[ $IS_CN10K -ne 0 ]]; then
+		WITH_GEN_BOARD=1
+	fi
+fi
+
+if [[ $WITH_GEN_BOARD -eq 1 ]]
+then
+	IF0=0002:02:00.0
+	IF1=0002:03:00.0
+	echo "Inline Protocol tests will run with generator board"
+else
+	IF0=$LIF2
+	IF1=$LIF3
+	echo "All tests will run locally without generator board"
+fi
+
 get_system_info
 
 if [[ $IS_CN10K -ne 0 ]]; then
@@ -96,29 +137,6 @@ else
 	mkdir -p ref_numbers/cn9k
 	FNAME="ref_numbers/cn9k/rclk"${RCLK}"_sclk"${SCLK}"_cptclk"${CPTCLK}"."${HW}
 fi
-
-function sig_handler()
-{
-	local status=$?
-	set +e
-	trap - ERR
-	trap - INT
-	trap - QUIT
-	trap - EXIT
-	if [[ $status -ne 0 ]]; then
-		echo "$1 Handler"
-		ipsec_exit
-		testpmd_quit "$TPMD_TX_PREFIX"
-		testpmd_quit "$TPMD_RX_PREFIX"
-		awk ' { print FILENAME": " $0 } ' $IPSEC_LOG
-		awk ' { print FILENAME": " $0 } ' testpmd.in.$TPMD_TX_PREFIX
-		awk ' { print FILENAME": " $0 } ' testpmd.out.$TPMD_TX_PREFIX
-		awk ' { print FILENAME": " $0 } ' testpmd.in.$TPMD_RX_PREFIX
-		awk ' { print FILENAME": " $0 } ' testpmd.out.$TPMD_RX_PREFIX
-	fi
-	cleanup_interfaces
-	exit $status
-}
 
 declare -i SCLK
 declare -i RCLK
@@ -144,11 +162,11 @@ CFG=(
 	"ep0_lookaside_crypto.cfg"
 	"ep0_lookaside_protocol.cfg"
 	# Inline protocol Outbound config files
-	"ep0_inline_protocol_ob.cfg"
-	"ep0_inline_protocol_ob.cfg"
-	"ep0_inline_protocol_ob.cfg"
-	"ep0_inline_protocol_ob.cfg"
-	"ep0_inline_protocol_ob.cfg"
+	"ep0_inline_protocol_ob_sp.cfg"
+	"ep0_inline_protocol_ob_sp.cfg"
+	"ep0_inline_protocol_ob_sp.cfg"
+	"ep0_inline_protocol_ob_sp.cfg"
+	"ep0_inline_protocol_ob_sp.cfg"
 )
 
 #Inline Protocol inbound specific config files
@@ -156,11 +174,33 @@ CFG=(
 IP_IB_CFG=(
 	""
 	""
-	"ep0_inline_protocol_ib.cfg"
-	"ep0_inline_protocol_ib.cfg"
-	"ep0_inline_protocol_ib.cfg"
-	"ep0_inline_protocol_ib.cfg"
-	"ep0_inline_protocol_ib.cfg"
+	"ep0_inline_protocol_ib_sp.cfg"
+	"ep0_inline_protocol_ib_sp.cfg"
+	"ep0_inline_protocol_ib_sp.cfg"
+	"ep0_inline_protocol_ib_sp.cfg"
+	"ep0_inline_protocol_ib_sp.cfg"
+)
+
+# Dual Port Inbound configs for Inline protocol
+IP_IB_CFG_DP=(
+	""
+	""
+	"ep0_inline_protocol_ib_dp.cfg"
+	"ep0_inline_protocol_ib_dp.cfg"
+	"ep0_inline_protocol_ib_dp.cfg"
+	"ep0_inline_protocol_ib_dp.cfg"
+	"ep0_inline_protocol_ib_dp.cfg"
+)
+
+# Dual Port Outbound configs for Inline protocol
+IP_OB_CFG_DP=(
+	""
+	""
+	"ep0_inline_protocol_ob_dp.cfg"
+	"ep0_inline_protocol_ob_dp.cfg"
+	"ep0_inline_protocol_ob_dp.cfg"
+	"ep0_inline_protocol_ob_dp.cfg"
+	"ep0_inline_protocol_ob_dp.cfg"
 )
 
 # Specific config files for Perf cases with Inline Protocol Single-SA
@@ -222,7 +262,8 @@ function run_ipsec_secgw()
 	echo "ipsec-secgw outb"
 	if [[ $Y -ge 2 ]]; then
 		if [[ $IS_CN10K -ne 0 ]]; then
-			local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3"
+			local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3"
+			IS_RXPPS_TXTPMD=1
 			case "$Y" in
 				2)
 					# Inline Protocol Event Mode
@@ -239,16 +280,14 @@ function run_ipsec_secgw()
 				5)
 					# Inline Protocol Event Vector Perf Mode (Single-SA)
 					run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -e --single-sa 0'
-					IS_RXPPS_TXTPMD=1
 					;;
 				6)
 					# Inline Protocol Poll Perf Mode (Single-SA)
 					run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
-					IS_RXPPS_TXTPMD=1
 					;;
 			esac
 		else
-			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${IP_OB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
 		fi
 	else
 		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -f ${CFG[$Y]} --config=$config'
@@ -264,7 +303,8 @@ function run_ipsec_secgw_inb()
 
 	if [[ $Y -ge 2 ]]; then
 		if [[ $IS_CN10K -ne 0 ]]; then
-			local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
+			local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
+			IS_RXPPS_TXTPMD=1
 			case "$Y" in
 				2)
 					# Inline Protocol Event Mode
@@ -281,16 +321,14 @@ function run_ipsec_secgw_inb()
 				5)
 					# Inline Protocol Event Vector Perf Mode (Single-SA)
 					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode event --cryptodev_mask 0 -l --vector-size 64 --event-vector --event-schedule-type parallel -s 8192 --vector-pool-sz 8192 --single-sa 0'
-					IS_RXPPS_TXTPMD=1
 					;;
 				6)
 					# Inline Protocol Poll Perf Mode (Single-SA)
 					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
-					IS_RXPPS_TXTPMD=1
 					;;
 			esac
 		else
-			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${IP_IB_CFG[$Y]} --transfer-mode event --event-schedule-type parallel'
+			run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${IP_IB_CFG_DP[$Y]} --transfer-mode event --event-schedule-type parallel'
 		fi
 	else
 		run_test '$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x1 -f ${CFG[$Y]} --config=$config'
@@ -318,62 +356,96 @@ function sig_handler()
 	if [[ $status -ne 0 ]]; then
 		echo "$1 Handler"
 		ipsec_exit
-		testpmd_quit "$TPMD_TX_PREFIX"
-		testpmd_quit "$TPMD_RX_PREFIX"
+		quit_testpmd "$TPMD_TX_PREFIX"
+		quit_testpmd "$TPMD_RX_PREFIX"
 	fi
 	cleanup_interfaces
 	exit $status
 }
 
+find_exec()
+{
+	local dut=$1
+	local test_name=$2
+
+	$TARGET_SSH_CMD $dut find $REMOTE_DIR -type f -executable -iname $test_name
+}
+
+exec_testpmd_cmd_gen()
+{
+	$TARGET_SSH_CMD $GENERATOR_BOARD "cd $REMOTE_DIR;" \
+		"sudo TESTPMD_OP=$1 $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT) $2 $3"
+}
+
 function pmd_tx_launch()
 {
-	testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0x3800 -a $LIF1" \
-		"--nb-cores=2 --forward-mode=txonly --tx-ip=192.168.$X.1,192.168.$X.2"
-	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
-	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
-	# Ratelimit Tx to 50Gbps on LBK
-	testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "launch_tx_outb" $TPMD_TX_PREFIX $X
+	else
+		testpmd_launch "$TPMD_TX_PREFIX" \
+			"-c 0x3800 -a $LIF1" \
+			"--nb-cores=2 --forward-mode=txonly --tx-ip=192.168.$X.1,192.168.$X.2"
+		testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
+		testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
+		# Ratelimit Tx to 50Gbps on LBK
+		testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
+	fi
 }
 
 function pmd_tx_launch_for_inb()
 {
 	local pcap=$SCRIPTPATH/pcap/enc_$1_$2.pcap
-	if [[ $Y -gt 4 ]]; then
-		testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
-		"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx"
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "launch_tx_inb" $TPMD_TX_PREFIX $pcap
 	else
-		testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
-		"--nb-cores=2 --no-flush-rx"
+		if [[ $Y -gt 4 ]]; then
+			testpmd_launch "$TPMD_TX_PREFIX" \
+			"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
+			"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx"
+		else
+			testpmd_launch "$TPMD_TX_PREFIX" \
+			"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
+			"--nb-cores=2 --no-flush-rx"
+		fi
+		testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
+		testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
+		# Ratelimit Tx to 50Gbps on LBK
+		testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
 	fi
-	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
-	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
-	# Ratelimit Tx to 50Gbps on LBK
-	testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
 }
 
 function pmd_rx_launch()
 {
-	testpmd_launch "$TPMD_RX_PREFIX" \
-		"-c 0x700 -a $LIF4" \
-		"--nb-cores=2 --forward-mode=rxonly"
-	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
-	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl tx off 0"
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "launch_rx" $TPMD_RX_PREFIX
+	else
+		testpmd_launch "$TPMD_RX_PREFIX" \
+			"-c 0x700 -a $LIF4" \
+			"--nb-cores=2 --forward-mode=rxonly"
+		testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
+		testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl tx off 0"
+	fi
 }
 
 function pmd_rx_dry_run()
 {
-	local prefix=$1
-	local port=$2
-	local in=testpmd.in.$prefix
+	local port="0"
 
-	prev=$(testpmd_log_sz $prefix)
-	curr=$prev
-	echo "show port stats $port" >> $in
-	while [ $prev -eq $curr ]; do sleep 0.1; curr=$(testpmd_log_sz $prefix); done
-	testpmd_prompt $prefix
+	PREFIX=("$TPMD_RX_PREFIX" "$TPMD_TX_PREFIX")
+	for prefix in "${PREFIX[@]}"
+	do
+		if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+			rxpps=$(exec_testpmd_cmd_gen "rx_pps" $prefix $port)
+		else
+			local in=testpmd.in.$prefix
+
+			prev=$(testpmd_log_sz $prefix)
+			curr=$prev
+			echo "show port stats $port" >> $in
+			while [ $prev -eq $curr ]; do sleep 0.1; curr=$(testpmd_log_sz $prefix); done
+			testpmd_prompt $prefix
+		fi
+	done
 }
 
 function rx_stats()
@@ -383,13 +455,18 @@ function rx_stats()
 	local in=testpmd.in.$prefix
 	local out=testpmd.out.$prefix
 
-	prev=$(testpmd_log_sz $prefix)
-	curr=$prev
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		rxpps=$(exec_testpmd_cmd_gen "rx_pps" $prefix $port)
+		echo $rxpps
+	else
+		prev=$(testpmd_log_sz $prefix)
+		curr=$prev
 
-	echo "show port stats $port" >> $in
-	while [ $prev -eq $curr ]; do sleep 0.1; curr=$(testpmd_log_sz $prefix); done
-	testpmd_prompt $prefix
-	cat $out | tail -n4 | head -n1
+		echo "show port stats $port" >> $in
+		while [ $prev -eq $curr ]; do sleep 0.1; curr=$(testpmd_log_sz $prefix); done
+		testpmd_prompt $prefix
+		cat $out | tail -n4 | head -n1
+	fi
 }
 
 function capture_rx_pps()
@@ -402,7 +479,11 @@ function capture_rx_pps()
 	else
 		stats=$(rx_stats "$TPMD_RX_PREFIX" "0")
 	fi
-	echo $stats | awk '{print $2}'
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		echo $stats
+	else
+		echo $stats | awk '{print $2}'
+	fi
 }
 
 # Configure interfaces
@@ -425,10 +506,45 @@ function cleanup_interfaces()
 	$SUDO $VFIO_DEVBIND -b $NICVF $LIF4
 }
 
+function start_testpmd()
+{
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "start" $TPMD_RX_PREFIX
+		exec_testpmd_cmd_gen "start" $TPMD_TX_PREFIX
+	else
+		testpmd_cmd "$TPMD_RX_PREFIX" "start"
+		testpmd_cmd "$TPMD_TX_PREFIX" "start"
+	fi
+}
+
 function stop_testpmd()
 {
-	testpmd_cmd "$TPMD_TX_PREFIX" "stop"
-	testpmd_cmd "$TPMD_RX_PREFIX" "stop"
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "stop" $TPMD_TX_PREFIX
+		exec_testpmd_cmd_gen "stop" $TPMD_RX_PREFIX
+	else
+		testpmd_cmd "$TPMD_TX_PREFIX" "stop"
+		testpmd_cmd "$TPMD_RX_PREFIX" "stop"
+	fi
+}
+
+function set_pktsize_testpmd()
+{
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "pktsize" "$TPMD_TX_PREFIX" $1
+	else
+		testpmd_cmd "$TPMD_TX_PREFIX" "set txpkts $1"
+	fi
+}
+
+function quit_testpmd()
+{
+	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
+		exec_testpmd_cmd_gen "log" $1 >testpmd.out.$1
+		exec_testpmd_cmd_gen "quit" $1
+	else
+		testpmd_quit $1
+	fi
 }
 
 function write_mops()
@@ -471,10 +587,8 @@ function outb_perf()
 
 		i=1
 		rx_pps=0
-		testpmd_cmd "$TPMD_RX_PREFIX" "start"
-		testpmd_cmd "$TPMD_TX_PREFIX" "start"
-		pmd_rx_dry_run "$TPMD_RX_PREFIX" "0"
-		pmd_rx_dry_run "$TPMD_TX_PREFIX" "0"
+		start_testpmd
+		pmd_rx_dry_run
 		# Wait for few seconds for traffic to stabilize
 		sleep $TXWAIT
 		while [ $i -le $NUM_CAPTURE ]; do
@@ -508,10 +622,8 @@ function inb_perf()
 		pmd_tx_launch_for_inb $1 $pktsz
 		i=1
 		rx_pps=0
-		testpmd_cmd "$TPMD_RX_PREFIX" "start"
-		testpmd_cmd "$TPMD_TX_PREFIX" "start"
-		pmd_rx_dry_run "$TPMD_RX_PREFIX" "0"
-		pmd_rx_dry_run "$TPMD_TX_PREFIX" "0"
+		start_testpmd
+		pmd_rx_dry_run
 		# Wait for few seconds for traffic to stabilize
 		sleep $TXWAIT
 		while [ $i -le $NUM_CAPTURE ]; do
@@ -524,7 +636,7 @@ function inb_perf()
 		ACT_PPS_TABLE[$rn,$2]=$avg_pps
 		echo "pktsize: $pktsz avg_pps: $avg_pps"
 		echo "Test Passed"
-		testpmd_quit "$TPMD_TX_PREFIX"
+		quit_testpmd "$TPMD_TX_PREFIX"
 		sleep $WS
 		((++rn))
 	done
@@ -635,18 +747,6 @@ trap "sig_handler QUIT" QUIT
 trap "sig_handler EXIT" EXIT
 
 
-LIF1=0002:01:00.5
-LIF2=0002:01:00.6
-LIF3=0002:01:00.7
-LIF4=0002:01:01.0
-
-SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
-EVENT_VF=$SSO_DEV
-
-IPSEC_LOG=ipsec.log
-VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
-
-rm -f $IPSEC_LOG
 setup_interfaces
 
 Y=0
@@ -673,8 +773,8 @@ while [ $Y -lt $NUM_MODES ]; do
 	pmd_rx_launch
 	pmd_tx_launch
 	aes_cbc_sha1_hmac_outb
-	testpmd_quit "$TPMD_TX_PREFIX"
-	testpmd_quit "$TPMD_RX_PREFIX"
+	quit_testpmd "$TPMD_TX_PREFIX"
+	quit_testpmd "$TPMD_RX_PREFIX"
 
 	sleep $WS
 
@@ -694,8 +794,8 @@ while [ $Y -lt $NUM_MODES ]; do
 	pmd_rx_launch
 	pmd_tx_launch
 	aes_gcm_outb
-	testpmd_quit "$TPMD_TX_PREFIX"
-	testpmd_quit "$TPMD_RX_PREFIX"
+	quit_testpmd "$TPMD_TX_PREFIX"
+	quit_testpmd "$TPMD_RX_PREFIX"
 	ipsec_exit
 	sleep $WS
 
@@ -704,14 +804,14 @@ while [ $Y -lt $NUM_MODES ]; do
 	run_ipsec_secgw_inb
 	pmd_rx_launch
 	aes_cbc_sha1_hmac_inb
-	testpmd_quit "$TPMD_RX_PREFIX"
+	quit_testpmd "$TPMD_RX_PREFIX"
 
 	sleep $WS
 
 	echo ""
 	pmd_rx_launch
 	aes_gcm_inb
-	testpmd_quit "$TPMD_RX_PREFIX"
+	quit_testpmd "$TPMD_RX_PREFIX"
 	ipsec_exit
 	((++Y))
 done
