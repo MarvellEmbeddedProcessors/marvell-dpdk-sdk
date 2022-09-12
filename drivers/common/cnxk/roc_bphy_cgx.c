@@ -21,11 +21,11 @@
  *
  * Hence common longer mask may be used.
  */
-#define CGX_CMRX_RX_LMACS		      0x128
-#define CGX_CMRX_RX_LMACS_LMACS		      GENMASK_ULL(3, 0)
-#define CGX_CMRX_SCRATCH0		      0x1050
-#define CGX_CMRX_SCRATCH1		      0x1058
-#define CGX_MTI_MAC100X_COMMAND_CONFIG	      0x8010
+#define CGX_CMRX_RX_LMACS                     0x128
+#define CGX_CMRX_RX_LMACS_LMACS               GENMASK_ULL(3, 0)
+#define CGX_CMRX_SCRATCH0                     0x1050
+#define CGX_CMRX_SCRATCH1                     0x1058
+#define CGX_MTI_MAC100X_COMMAND_CONFIG        0x8010
 #define CGX_MTI_MAC100X_COMMAND_CONFIG_RX_ENA BIT_ULL(1)
 #define CGX_MTI_MAC100X_COMMAND_CONFIG_TX_ENA BIT_ULL(0)
 
@@ -222,11 +222,13 @@ roc_bphy_cgx_dev_fini(struct roc_bphy_cgx *roc_cgx)
 static bool
 roc_bphy_cgx_lmac_exists(struct roc_bphy_cgx *roc_cgx, unsigned int lmac)
 {
-	return (lmac < MAX_LMACS_PER_CGX) && (roc_cgx->lmac_bmap & BIT_ULL(lmac));
+	return (lmac < MAX_LMACS_PER_CGX) &&
+	       (roc_cgx->lmac_bmap & BIT_ULL(lmac));
 }
 
 static int
-roc_bphy_cgx_start_stop_rxtx(struct roc_bphy_cgx *roc_cgx, unsigned int lmac, bool start)
+roc_bphy_cgx_start_stop_rxtx(struct roc_bphy_cgx *roc_cgx, unsigned int lmac,
+			     bool start)
 {
 	uint64_t val, reg, rx_field, tx_field;
 
