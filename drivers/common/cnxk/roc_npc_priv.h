@@ -112,13 +112,13 @@ typedef union npc_kex_cap_terms_t {
 		uint64_t vlan_id_0 : 1;
 		/** Last VLAN ID (inner) */
 		uint64_t vlan_id_x : 1;
-		/** PCP in the first VLAN header (#ODP_PMR_VLAN_PCP_0) */
+		/** PCP in the first VLAN header */
 		uint64_t vlan_pcp_0 : 1;
 		/** destination MAC address */
 		uint64_t dmac : 1;
 		/** IP Protocol or IPv6 Next Header */
 		uint64_t ip_proto : 1;
-		/** DSCP in IP header (#ODP_PMR_IP_DSCP) */
+		/** DSCP in IP header */
 		uint64_t ip_dscp : 1;
 		/** Destination UDP port, implies IPPROTO=17 */
 		uint64_t udp_dport : 1;

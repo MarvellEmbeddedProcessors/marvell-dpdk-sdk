@@ -248,7 +248,7 @@ npc_get_kex_capability(struct npc *npc)
 	/* IP proto: offset 9B, len 1B */
 	kex_cap.bit.ip_proto = npc_is_kex_enabled(npc, NPC_LID_LC, NPC_LT_LC_IP, 9 * 8, 1 * 8);
 	/* IPv4 dscp: offset 1B, len 1B, IPv6 dscp: offset 0B, len 2B */
-	kex_cap.bit.ip_dscp = npc_is_kex_enabled(npc, NPC_LID_LC, NPC_LT_LC_IP, 1 * 8, 1 * 8) &
+	kex_cap.bit.ip_dscp = npc_is_kex_enabled(npc, NPC_LID_LC, NPC_LT_LC_IP, 1 * 8, 1 * 8) &&
 			      npc_is_kex_enabled(npc, NPC_LID_LC, NPC_LT_LC_IP6, 0, 2 * 8);
 	/* UDP dport: offset 2B, len 2B */
 	kex_cap.bit.udp_dport = npc_is_kex_enabled(npc, NPC_LID_LD, NPC_LT_LD_UDP, 2 * 8, 2 * 8);
