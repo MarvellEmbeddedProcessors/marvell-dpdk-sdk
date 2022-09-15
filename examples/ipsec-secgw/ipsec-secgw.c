@@ -1739,9 +1739,9 @@ check_ptype(int portid)
 			l3_ipv4 = 1;
 		if (ptypes[i] & RTE_PTYPE_L3_IPV6)
 			l3_ipv6 = 1;
-		if (ptypes[i] & RTE_PTYPE_TUNNEL_ESP)
+		if ((ptypes[i] & RTE_PTYPE_TUNNEL_MASK) == RTE_PTYPE_TUNNEL_ESP)
 			tunnel_esp = 1;
-		if (ptypes[i] & RTE_PTYPE_L4_UDP)
+		if ((ptypes[i] & RTE_PTYPE_L4_MASK) == RTE_PTYPE_L4_UDP)
 			l4_udp = 1;
 	}
 
