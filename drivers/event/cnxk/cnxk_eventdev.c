@@ -423,8 +423,7 @@ cnxk_sso_start(struct rte_eventdev *event_dev, cnxk_sso_hws_reset_t reset_fn,
 		qos[i].iaq_prcnt = dev->qos_parse_data[i].iaq_prcnt;
 		qos[i].taq_prcnt = dev->qos_parse_data[i].taq_prcnt;
 	}
-	rc = roc_sso_hwgrp_qos_config(&dev->sso, qos, dev->qos_queue_cnt,
-				      dev->xae_cnt);
+	rc = roc_sso_hwgrp_qos_config(&dev->sso, qos, dev->qos_queue_cnt);
 	if (rc < 0) {
 		plt_sso_dbg("failed to configure HWGRP QoS rc = %d", rc);
 		return -EINVAL;
