@@ -224,7 +224,6 @@ testpmd_launch $PRFX \
 	"--no-flush-rx --nb-cores=1"
 
 testpmd_cmd $PRFX "port stop all"
-testpmd_cmd $PRFX "set verbose 10"
 testpmd_cmd $PRFX "port start all"
 testpmd_cmd $PRFX "start"
 
