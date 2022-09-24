@@ -49,8 +49,9 @@ nix_inl_cq_sz_clamp_up(struct roc_nix *nix, struct rte_mempool *mp,
 	struct roc_nix_rq *inl_rq;
 	uint64_t limit;
 
+	/* For CN10KB and above, LBP needs minimum CQ size */
 	if (!roc_errata_cpt_hang_on_x2p_bp())
-		return nb_desc;
+		return RTE_MAX(nb_desc, (uint32_t)4096);
 
 	/* CQ should be able to hold all buffers in first pass RQ's aura
 	 * this RQ's aura.

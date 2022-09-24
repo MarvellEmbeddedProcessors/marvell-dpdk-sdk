@@ -244,7 +244,7 @@ roc_model_is_cnf10kb_a0(void)
 }
 
 static inline uint64_t
-roc_model_is_cn103xx(void)
+roc_model_is_cn10kb(void)
 {
 	return roc_model->flag & ROC_MODEL_CN103xx;
 }
