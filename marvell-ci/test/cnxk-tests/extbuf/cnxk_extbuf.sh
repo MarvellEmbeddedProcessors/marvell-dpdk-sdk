@@ -25,7 +25,7 @@ echo "================================"
 (stdbuf -o 0 ./cnxk-extbuf \
 	--file-prefix $RX_PREFIX \
 	-c 0x3 \
-	-a 0002:01:00.2 \
+	-a 0002:01:00.2,tx_compl_ena=1 \
 	-- \
 	--max-pkts 100 \
 	--rx 2>&1) > $RX_LOG &
@@ -44,7 +44,7 @@ echo "================================"
 (./cnxk-extbuf \
 	--file-prefix $TX_PREFIX \
 	-c 0x5 \
-	-a 0002:01:00.1 \
+	-a 0002:01:00.1,tx_compl_ena=1 \
 	-- \
 	--max-pkts 100 2>&1) > $TX_LOG
 

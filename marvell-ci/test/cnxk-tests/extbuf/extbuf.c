@@ -64,6 +64,7 @@ static bool keep_running = true;
 struct app_arg {
 	bool tx_mode;
 	bool perf_mode;
+	bool use_static_buffer;
 	unsigned int n_queue;
 	unsigned int n_desc;
 	unsigned int max_pkts;
@@ -87,6 +88,7 @@ struct port_info {
 	unsigned int portid;
 	unsigned int n_queue;
 	struct rte_mempool *pool;
+	struct rte_mempool *pinned_pool;
 	uint64_t last_count;
 	uint64_t max_pps;
 } __rte_cache_aligned;
@@ -218,6 +220,13 @@ initialize(struct port_info *pinfo, struct app_arg *arg)
 	if (pinfo->pool == NULL)
 		EXIT("Cannot init mbuf pool\n");
 
+	snprintf(name, sizeof(name), "mbuf_pinned_pool_%u", portid);
+	pinfo->pinned_pool =
+		rte_pktmbuf_pool_create(name, nb_mbufs, MEMPOOL_CACHE_SIZE, 0,
+				MTU, rte_socket_id());
+	if (pinfo->pool == NULL)
+		EXIT("Cannot init mbuf pool\n");
+
 	NOTICE("Initializing port %u... ", portid);
 
 	ret = rte_eth_dev_info_get(portid, &dev_info);
@@ -317,6 +326,9 @@ finalize(struct port_info *pinfo)
 
 	/* Free mempool */
 	rte_mempool_free(pinfo->pool);
+
+	if (pinfo->pinned_pool)
+		rte_mempool_free(pinfo->pinned_pool);
 }
 
 static void
@@ -327,9 +339,25 @@ dummy_free_cb(void *addr, void *opaque)
 }
 
 static void
+free_cb_compl(void *addr, void *opaque)
+{
+	struct rte_mbuf *m = (struct rte_mbuf *)addr;
+	rte_pktmbuf_free(m);
+	RTE_SET_USED(opaque);
+}
+
+static void
 init_shinfo(struct rte_mbuf_ext_shared_info *s)
 {
 	s->free_cb = dummy_free_cb;
+	s->fcb_opaque = NULL;
+	rte_mbuf_ext_refcnt_set(s, 1);
+}
+
+static void
+init_shinfo_compl(struct rte_mbuf_ext_shared_info *s)
+{
+	s->free_cb = free_cb_compl;
 	s->fcb_opaque = NULL;
 	rte_mbuf_ext_refcnt_set(s, 1);
 }
@@ -568,6 +596,78 @@ free_usrbuf:
 }
 
 static int
+launch_lcore_tx_perf_compl(void *args)
+{
+	struct rte_mbuf_ext_shared_info s[MAX_PKT_BURST];
+	unsigned int lcore, j, portid, qid;
+	struct rte_mbuf *m[MAX_PKT_BURST];
+	struct rte_mbuf *pinned_m[MAX_PKT_BURST];
+	struct thread_info *tinfo = args;
+	struct queue_info *qinfo;
+	struct port_info *pinfo;
+	int sent = 0;
+
+	rte_mb();
+	lcore = rte_lcore_id();
+	pinfo = tinfo->pinfo;
+	portid = pinfo->portid;
+	qid = tinfo->qid;
+	qinfo = &pinfo->qinfo[qid];
+	NOTICE("Entering TX Perf Completion main loop on lcore %u portid=%u qid=%u\n",
+	       lcore, portid, qid);
+	fflush(stdout);
+
+	while (keep_running) {
+		if (rte_pktmbuf_alloc_bulk(pinfo->pool, m, MAX_PKT_BURST)) {
+			ERROR("Failed to allocate mbuf\n");
+			break;
+		}
+
+		if (rte_pktmbuf_alloc_bulk(pinfo->pinned_pool, pinned_m, MAX_PKT_BURST)) {
+			ERROR("Failed to allocate pinned_mbuf\n");
+			break;
+		}
+
+		/* Attach the user memory to the segments */
+		for (j = 0; j < MAX_PKT_BURST; j++) {
+			init_shinfo_compl(&s[j]);
+			rte_pktmbuf_attach_extbuf(
+				m[j], pinned_m[j], (uint64_t)pinned_m[j],
+				sizeof(struct rte_mbuf), &s[j]);
+			m[j]->data_len = sizeof(struct rte_mbuf);
+			m[j]->data_off = 0;
+			m[j]->next = NULL;
+			m[j]->pkt_len = sizeof(struct rte_mbuf);
+		}
+
+		sent = rte_eth_tx_burst(portid, qid, m, MAX_PKT_BURST);
+		if (unlikely(sent != MAX_PKT_BURST)) {
+			int retry = 0;
+
+			while (sent < MAX_PKT_BURST &&
+			       retry < MAX_TX_BURST_RETRIES) {
+				sent += rte_eth_tx_burst(portid, qid, m + sent,
+							 MAX_PKT_BURST - sent);
+				retry++;
+			}
+			if (sent != MAX_PKT_BURST) {
+				rte_pktmbuf_free_bulk(m + sent,
+						      MAX_PKT_BURST - sent);
+				qinfo->dropped += MAX_PKT_BURST - sent;
+			}
+		}
+		qinfo->pkts += sent;
+
+		if (tinfo->arg->max_pkts &&
+		    qinfo->pkts >= tinfo->arg->max_pkts)
+			ERROR("Max packets reached\n");
+	}
+
+	/* Free user buffer */
+	return 0;
+}
+
+static int
 launch_lcore_tx_perf(void *args)
 {
 	struct rte_mbuf_ext_shared_info s[MAX_PKT_BURST];
@@ -664,6 +764,7 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 {
 	arg->tx_mode = true;
 	arg->perf_mode = false;
+	arg->use_static_buffer = false;
 	arg->n_queue = 1;
 	arg->n_desc = 1024;
 	arg->max_pkts = 0;
@@ -674,6 +775,11 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 			arg->tx_mode = false;
 		} else if (strncmp(argv[1], "--perf", 6) == 0) {
 			arg->perf_mode = true;
+			if (strncmp(argv[3], "--use-static-buffer", 19) == 0)
+				arg->use_static_buffer = true;
+			argv = argv + 2;
+			argc = argc - 2;
+
 		} else if (strncmp(argv[1], "--nqueue", 8) == 0) {
 			if (argc < 3)
 				return -1;
@@ -757,12 +863,16 @@ main(int argc, char **argv)
 	for (p = 0; p < n_port; p++) {
 		for (q = 0; q < arg.n_queue; q++) {
 			lcore_function_t *f;
-
-			if (arg.tx_mode)
-				f = arg.perf_mode ? launch_lcore_tx_perf :
-						    launch_lcore_tx;
-			else
+			if (arg.tx_mode) {
+				if (arg.perf_mode)
+					f = arg.use_static_buffer ?
+						launch_lcore_tx_perf :
+						launch_lcore_tx_perf_compl;
+				else
+					f = launch_lcore_tx;
+			} else {
 				f = launch_lcore_rx;
+			}
 
 			c = p * arg.n_queue + q;
 			tinfo[c].pinfo = &pinfo[p];
