@@ -1111,7 +1111,7 @@ test_ipsec_post_process(struct rte_mbuf *m, const struct ipsec_test_data *td,
 			if (flags->udp_encap_custom_ports) {
 				const struct rte_udp_hdr *udph;
 
-				udph = (const struct rte_udp_hdr *)((char *)iph4 +
+				udph = (const struct rte_udp_hdr *)(output_text +
 					sizeof(struct rte_ipv4_hdr));
 				if ((rte_be_to_cpu_16(udph->src_port) != UDP_CUSTOM_SPORT) ||
 				    (rte_be_to_cpu_16(udph->dst_port) != UDP_CUSTOM_DPORT)) {
@@ -1130,7 +1130,7 @@ test_ipsec_post_process(struct rte_mbuf *m, const struct ipsec_test_data *td,
 			if (flags->udp_encap_custom_ports) {
 				const struct rte_udp_hdr *udph;
 
-				udph = (const struct rte_udp_hdr *)((char *)iph6 +
+				udph = (const struct rte_udp_hdr *)(output_text +
 					sizeof(struct rte_ipv6_hdr));
 				if ((rte_be_to_cpu_16(udph->src_port) != UDP_CUSTOM_SPORT) ||
 				    (rte_be_to_cpu_16(udph->dst_port) != UDP_CUSTOM_DPORT)) {
