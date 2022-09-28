@@ -364,11 +364,6 @@ roc_bphy_cgx_set_link_mode(struct roc_bphy_cgx *roc_cgx, unsigned int lmac,
 {
 	uint64_t scr1, scr0;
 
-	if (roc_model_is_cn9k() &&
-	    (mode->use_portm_idx || mode->portm_idx || mode->mode_group_idx)) {
-		return -ENOTSUP;
-	}
-
 	if (!roc_cgx)
 		return -EINVAL;
 
@@ -377,6 +372,11 @@ roc_bphy_cgx_set_link_mode(struct roc_bphy_cgx *roc_cgx, unsigned int lmac,
 
 	if (!mode)
 		return -EINVAL;
+
+	if (roc_model_is_cn9k() &&
+	    (mode->use_portm_idx || mode->portm_idx || mode->mode_group_idx)) {
+		return -ENOTSUP;
+	}
 
 	scr1 = FIELD_PREP(SCR1_ETH_CMD_ID, ETH_CMD_MODE_CHANGE) |
 	       FIELD_PREP(SCR1_ETH_MODE_CHANGE_ARGS_SPEED, mode->speed) |
