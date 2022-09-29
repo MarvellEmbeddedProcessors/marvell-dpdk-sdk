@@ -1398,10 +1398,10 @@ event_timer_arm_expiry(void)
 	n = rte_event_dequeue_burst(evdev, TEST_PORT_ID, evs, RTE_DIM(evs), 0);
 	TEST_ASSERT_EQUAL(n, 0, "Dequeued unexpected timer expiry event");
 
-	/* Delay 100 ms to account for the adapter tick window + additional 1 ms
-	 * reduced from timeout - should let us dequeue one event
+	/* Delay 100 ms to account for the adapter tick window - should let us
+	 * dequeue one event
 	 */
-	rte_delay_ms(100 + 1);
+	rte_delay_ms(100);
 
 	n = rte_event_dequeue_burst(evdev, TEST_PORT_ID, evs, RTE_DIM(evs), 0);
 	TEST_ASSERT_EQUAL(n, 1, "Dequeued incorrect number (%d) of timer "
