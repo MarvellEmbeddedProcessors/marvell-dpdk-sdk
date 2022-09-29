@@ -1354,11 +1354,7 @@ nix_tm_prepare_default_tree(struct roc_nix *roc_nix)
 		node->id = nonleaf_id;
 		node->parent_id = parent;
 		node->priority = 0;
-		/* Default VF root RR_QUANTUM is in sync with kernel */
-		if (lvl == ROC_TM_LVL_ROOT && !nix_tm_have_tl1_access(nix))
-			node->weight = 0;
-		else
-			node->weight = NIX_TM_DFLT_RR_WT;
+		node->weight = NIX_TM_DFLT_RR_WT;
 		node->shaper_profile_id = ROC_NIX_TM_SHAPER_PROFILE_NONE;
 		node->lvl = lvl;
 		node->tree = ROC_NIX_TM_DEFAULT;
