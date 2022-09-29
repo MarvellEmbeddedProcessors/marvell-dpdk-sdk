@@ -793,7 +793,7 @@ cn10k_sso_configure_queue_stash(struct rte_eventdev *event_dev)
 		stash[i].stash_offset = dev->stash_parse_data[i].stash_offset;
 		stash[i].stash_count = dev->stash_parse_data[i].stash_length;
 	}
-	rc = roc_sso_hwgrp_stash_config(&dev->sso, stash, dev->qos_queue_cnt);
+	rc = roc_sso_hwgrp_stash_config(&dev->sso, stash, dev->stash_cnt);
 	if (rc < 0)
 		plt_warn("failed to configure HWGRP WQE stashing rc = %d", rc);
 }
