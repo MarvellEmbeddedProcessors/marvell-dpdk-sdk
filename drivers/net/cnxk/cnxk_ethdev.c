@@ -1826,6 +1826,10 @@ struct eth_dev_ops cnxk_eth_dev_ops = {
 	.set_queue_rate_limit = cnxk_nix_tm_set_queue_rate_limit,
 	.tm_ops_get = cnxk_nix_tm_ops_get,
 	.mtr_ops_get = cnxk_nix_mtr_ops_get,
+	.cman_info_get = cnxk_nix_cman_info_get,
+	.cman_config_init = cnxk_nix_cman_config_init,
+	.cman_config_set = cnxk_nix_cman_config_set,
+	.cman_config_get = cnxk_nix_cman_config_get,
 };
 
 void
