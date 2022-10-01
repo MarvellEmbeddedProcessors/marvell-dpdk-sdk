@@ -1152,6 +1152,10 @@ test_crypto_adapter_create(void)
 static int
 test_crypto_adapter_qp_add_del(void)
 {
+	struct rte_event_crypto_adapter_queue_conf queue_conf = {
+		.ev = response_info,
+	};
+
 	uint32_t cap;
 	int ret;
 
@@ -1160,7 +1164,7 @@ test_crypto_adapter_qp_add_del(void)
 
 	if (cap & RTE_EVENT_CRYPTO_ADAPTER_CAP_INTERNAL_PORT_QP_EV_BIND) {
 		ret = rte_event_crypto_adapter_queue_pair_add(TEST_ADAPTER_ID,
-				TEST_CDEV_ID, TEST_CDEV_QP_ID, &response_info);
+				TEST_CDEV_ID, TEST_CDEV_QP_ID, &queue_conf);
 	} else
 		ret = rte_event_crypto_adapter_queue_pair_add(TEST_ADAPTER_ID,
 					TEST_CDEV_ID, TEST_CDEV_QP_ID, NULL);
@@ -1181,6 +1185,10 @@ configure_event_crypto_adapter(enum rte_event_crypto_adapter_mode mode)
 		.dequeue_depth = 8,
 		.enqueue_depth = 8,
 		.new_event_threshold = 1200,
+	};
+
+	struct rte_event_crypto_adapter_queue_conf queue_conf = {
+		.ev = response_info,
 	};
 
 	uint32_t cap;
@@ -1215,7 +1223,7 @@ adapter_create:
 
 	if (cap & RTE_EVENT_CRYPTO_ADAPTER_CAP_INTERNAL_PORT_QP_EV_BIND) {
 		ret = rte_event_crypto_adapter_queue_pair_add(TEST_ADAPTER_ID,
-				TEST_CDEV_ID, TEST_CDEV_QP_ID, &response_info);
+				TEST_CDEV_ID, TEST_CDEV_QP_ID, &queue_conf);
 	} else
 		ret = rte_event_crypto_adapter_queue_pair_add(TEST_ADAPTER_ID,
 				TEST_CDEV_ID, TEST_CDEV_QP_ID, NULL);
