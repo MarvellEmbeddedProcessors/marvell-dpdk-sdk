@@ -6885,10 +6885,6 @@ test_snow3g_decryption_with_digest_test_case_1(void)
 static int
 test_snow3g_cipher_auth_test_case_1(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_cipher_auth(&snow3g_test_case_3);
 }
 
@@ -6906,10 +6902,6 @@ test_snow3g_auth_cipher_test_case_1(void)
 static int
 test_snow3g_auth_cipher_test_case_2(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_test_case_2, IN_PLACE, 0);
 }
@@ -6917,10 +6909,6 @@ test_snow3g_auth_cipher_test_case_2(void)
 static int
 test_snow3g_auth_cipher_test_case_2_oop(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_test_case_2, OUT_OF_PLACE, 0);
 }
@@ -6955,10 +6943,6 @@ test_snow3g_auth_cipher_test_case_3_sgl(void)
 	/* rte_crypto_mbuf_to_vec does not support incomplete mbuf build */
 	if (global_api_test_type == CRYPTODEV_RAW_API_TEST)
 		return TEST_SKIPPED;
-	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_test_case_3, IN_PLACE, 0);
 }
@@ -6966,10 +6950,6 @@ test_snow3g_auth_cipher_test_case_3_sgl(void)
 static int
 test_snow3g_auth_cipher_test_case_3_oop_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_test_case_3, OUT_OF_PLACE, 0);
 }
@@ -7050,10 +7030,6 @@ test_snow3g_auth_cipher_verify_test_case_1(void)
 static int
 test_snow3g_auth_cipher_verify_test_case_2(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_test_case_2, IN_PLACE, 1);
 }
@@ -7061,10 +7037,6 @@ test_snow3g_auth_cipher_verify_test_case_2(void)
 static int
 test_snow3g_auth_cipher_verify_test_case_2_oop(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_test_case_2, OUT_OF_PLACE, 1);
 }
@@ -7096,10 +7068,6 @@ test_snow3g_auth_cipher_verify_part_digest_enc_oop(void)
 static int
 test_snow3g_auth_cipher_verify_test_case_3_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_test_case_3, IN_PLACE, 1);
 }
@@ -7107,10 +7075,6 @@ test_snow3g_auth_cipher_verify_test_case_3_sgl(void)
 static int
 test_snow3g_auth_cipher_verify_test_case_3_oop_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_test_case_3, OUT_OF_PLACE, 1);
 }
@@ -7177,10 +7141,6 @@ test_snow3g_auth_cipher_verify_total_digest_enc_2_oop_sgl(void)
 static int
 test_snow3g_auth_cipher_with_digest_test_case_1(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_snow3g_auth_cipher(
 		&snow3g_test_case_7, IN_PLACE, 0);
 }
@@ -7378,10 +7338,6 @@ test_zuc_cipher_auth_test_case_2(void)
 static int
 test_zuc_auth_cipher_test_case_1(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher(
 		&zuc_auth_cipher_test_case_1, IN_PLACE, 0);
 }
@@ -7389,10 +7345,6 @@ test_zuc_auth_cipher_test_case_1(void)
 static int
 test_zuc_auth_cipher_test_case_1_oop(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher(
 		&zuc_auth_cipher_test_case_1, OUT_OF_PLACE, 0);
 }
@@ -7400,10 +7352,6 @@ test_zuc_auth_cipher_test_case_1_oop(void)
 static int
 test_zuc_auth_cipher_test_case_1_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher_sgl(
 		&zuc_auth_cipher_test_case_1, IN_PLACE, 0);
 }
@@ -7411,10 +7359,6 @@ test_zuc_auth_cipher_test_case_1_sgl(void)
 static int
 test_zuc_auth_cipher_test_case_1_oop_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher_sgl(
 		&zuc_auth_cipher_test_case_1, OUT_OF_PLACE, 0);
 }
@@ -7436,10 +7380,6 @@ test_zuc_auth_cipher_test_case_2_oop(void)
 static int
 test_zuc_auth_cipher_verify_test_case_1(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher(
 		&zuc_auth_cipher_test_case_1, IN_PLACE, 1);
 }
@@ -7447,10 +7387,6 @@ test_zuc_auth_cipher_verify_test_case_1(void)
 static int
 test_zuc_auth_cipher_verify_test_case_1_oop(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher(
 		&zuc_auth_cipher_test_case_1, OUT_OF_PLACE, 1);
 }
@@ -7458,10 +7394,6 @@ test_zuc_auth_cipher_verify_test_case_1_oop(void)
 static int
 test_zuc_auth_cipher_verify_test_case_1_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher_sgl(
 		&zuc_auth_cipher_test_case_1, IN_PLACE, 1);
 }
@@ -7469,10 +7401,6 @@ test_zuc_auth_cipher_verify_test_case_1_sgl(void)
 static int
 test_zuc_auth_cipher_verify_test_case_1_oop_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_zuc_auth_cipher_sgl(
 		&zuc_auth_cipher_test_case_1, OUT_OF_PLACE, 1);
 }
@@ -7955,10 +7883,6 @@ test_mixed_auth_cipher_sgl(const struct mixed_cipher_auth_test_data *tdata,
 static int
 test_aes_cmac_aes_ctr_digest_enc_test_case_1(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, IN_PLACE, 0);
 }
@@ -7966,10 +7890,6 @@ test_aes_cmac_aes_ctr_digest_enc_test_case_1(void)
 static int
 test_aes_cmac_aes_ctr_digest_enc_test_case_1_oop(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, OUT_OF_PLACE, 0);
 }
@@ -7977,10 +7897,6 @@ test_aes_cmac_aes_ctr_digest_enc_test_case_1_oop(void)
 static int
 test_aes_cmac_aes_ctr_digest_enc_test_case_1_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher_sgl(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, IN_PLACE, 0);
 }
@@ -7988,10 +7904,6 @@ test_aes_cmac_aes_ctr_digest_enc_test_case_1_sgl(void)
 static int
 test_aes_cmac_aes_ctr_digest_enc_test_case_1_oop_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher_sgl(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, OUT_OF_PLACE, 0);
 }
@@ -8013,10 +7925,6 @@ test_aes_cmac_aes_ctr_digest_enc_test_case_2_oop(void)
 static int
 test_verify_aes_cmac_aes_ctr_digest_enc_test_case_1(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, IN_PLACE, 1);
 }
@@ -8031,10 +7939,6 @@ test_verify_aes_cmac_aes_ctr_digest_enc_test_case_2(void)
 static int
 test_verify_aes_cmac_aes_ctr_digest_enc_test_case_1_oop(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, OUT_OF_PLACE, 1);
 }
@@ -8042,10 +7946,6 @@ test_verify_aes_cmac_aes_ctr_digest_enc_test_case_1_oop(void)
 static int
 test_verify_aes_cmac_aes_ctr_digest_enc_test_case_1_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher_sgl(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, IN_PLACE, 1);
 }
@@ -8053,10 +7953,6 @@ test_verify_aes_cmac_aes_ctr_digest_enc_test_case_1_sgl(void)
 static int
 test_verify_aes_cmac_aes_ctr_digest_enc_test_case_1_oop_sgl(void)
 {
-	if (gbl_driver_id == rte_cryptodev_driver_id_get(
-			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
-		return TEST_SKIPPED;
-
 	return test_mixed_auth_cipher_sgl(
 		&auth_aes_cmac_cipher_aes_ctr_test_case_1, OUT_OF_PLACE, 1);
 }
