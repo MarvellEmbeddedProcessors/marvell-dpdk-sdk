@@ -1045,6 +1045,22 @@ typedef int (*eth_ip_reassembly_conf_get_t)(struct rte_eth_dev *dev,
 typedef int (*eth_ip_reassembly_conf_set_t)(struct rte_eth_dev *dev,
 		const struct rte_eth_ip_reassembly_params *conf);
 
+/** @internal Get congestion management information. */
+typedef int (*eth_cman_info_get_t)(struct rte_eth_dev *dev,
+				struct rte_eth_cman_info *info);
+
+/** @internal Init congestion management structure with default values. */
+typedef int (*eth_cman_config_init_t)(struct rte_eth_dev *dev,
+				struct rte_eth_cman_config *config);
+
+/** @internal Configure congestion management on a port. */
+typedef int (*eth_cman_config_set_t)(struct rte_eth_dev *dev,
+				const struct rte_eth_cman_config *config);
+
+/** @internal Retrieve congestion management configuration of a port. */
+typedef int (*eth_cman_config_get_t)(struct rte_eth_dev *dev,
+				struct rte_eth_cman_config *config);
+
 /**
  * @internal A structure containing the functions exported by an Ethernet driver.
  */
@@ -1252,6 +1268,15 @@ struct eth_dev_ops {
 	eth_ip_reassembly_conf_get_t ip_reassembly_conf_get;
 	/** Set IP reassembly configuration */
 	eth_ip_reassembly_conf_set_t ip_reassembly_conf_set;
+
+	/** Get congestion management information */
+	eth_cman_info_get_t cman_info_get;
+	/** Initialize congestion management structure with default values */
+	eth_cman_config_init_t cman_config_init;
+	/** Configure congestion management */
+	eth_cman_config_set_t cman_config_set;
+	/** Retrieve congestion management configuration */
+	eth_cman_config_get_t cman_config_get;
 };
 
 /**

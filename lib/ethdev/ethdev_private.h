@@ -9,6 +9,9 @@
 
 #include "rte_ethdev.h"
 
+/* Convert all error to -EIO if device is removed. */
+int eth_err(uint16_t port_id, int ret);
+
 /*
  * Convert rte_eth_dev pointer to port ID.
  * NULL will be translated to RTE_MAX_ETHPORTS.

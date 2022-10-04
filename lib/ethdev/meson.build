@@ -7,12 +7,14 @@ sources = files(
         'ethdev_trace_points.c',
         'rte_class_eth.c',
         'rte_ethdev.c',
+        'rte_ethdev_cman.c',
         'rte_flow.c',
         'rte_mtr.c',
         'rte_tm.c',
 )
 
 headers = files(
+        'rte_cman.h',
         'rte_ethdev.h',
         'rte_ethdev_trace.h',
         'rte_ethdev_trace_fp.h',
