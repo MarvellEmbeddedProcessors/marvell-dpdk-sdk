@@ -39,7 +39,6 @@ roc_plt_init(void)
 			}
 			if (roc_model_init(mz->addr)) {
 				plt_err("Failed to init roc_model");
-
 				rte_memzone_free(mz);
 				return -EINVAL;
 			}

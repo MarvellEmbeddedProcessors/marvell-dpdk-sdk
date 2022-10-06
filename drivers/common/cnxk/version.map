@@ -241,8 +241,8 @@ INTERNAL {
 	roc_nix_npc_promisc_ena_dis;
 	roc_nix_npc_rx_ena_dis;
 	roc_nix_npc_mcast_config;
-	roc_nix_pfc_mode_set;
 	roc_nix_pfc_mode_get;
+	roc_nix_pfc_mode_set;
 	roc_nix_ptp_clock_read;
 	roc_nix_ptp_info_cb_register;
 	roc_nix_ptp_info_cb_unregister;
