@@ -3126,7 +3126,8 @@ main(int32_t argc, char **argv)
 		if ((socket_ctx[socket_id].mbuf_pool != NULL) &&
 			(socket_ctx[socket_id].sa_in == NULL) &&
 			(socket_ctx[socket_id].sa_out == NULL)) {
-			sa_init(&socket_ctx[socket_id], socket_id, lcore_conf);
+			sa_init(&socket_ctx[socket_id], socket_id, lcore_conf,
+				eh_conf->mode_params);
 			sp4_init(&socket_ctx[socket_id], socket_id);
 			sp6_init(&socket_ctx[socket_id], socket_id);
 			rt_init(&socket_ctx[socket_id], socket_id);

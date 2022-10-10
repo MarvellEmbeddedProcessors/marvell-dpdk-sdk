@@ -1233,7 +1233,8 @@ static int
 sa_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 		uint32_t nb_entries, uint32_t inbound,
 		struct socket_ctx *skt_ctx,
-		struct ipsec_ctx *ips_ctx[])
+		struct ipsec_ctx *ips_ctx[],
+		const struct eventmode_conf *em_conf)
 {
 	struct ipsec_sa *sa;
 	uint32_t i, idx;
@@ -1405,7 +1406,8 @@ sa_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 				return -EINVAL;
 			}
 		} else {
-			rc = create_lookaside_session(ips_ctx, skt_ctx, sa, ips);
+			rc = create_lookaside_session(ips_ctx, skt_ctx,
+						      em_conf, sa, ips);
 			if (rc != 0) {
 				RTE_LOG(ERR, IPSEC_ESP,
 					"create_lookaside_session() failed\n");
@@ -1428,17 +1430,19 @@ sa_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 static inline int
 sa_out_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 		uint32_t nb_entries, struct socket_ctx *skt_ctx,
-		struct ipsec_ctx *ips_ctx[])
+		struct ipsec_ctx *ips_ctx[],
+		const struct eventmode_conf *em_conf)
 {
-	return sa_add_rules(sa_ctx, entries, nb_entries, 0, skt_ctx, ips_ctx);
+	return sa_add_rules(sa_ctx, entries, nb_entries, 0, skt_ctx, ips_ctx, em_conf);
 }
 
 static inline int
 sa_in_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 		uint32_t nb_entries, struct socket_ctx *skt_ctx,
-		struct ipsec_ctx *ips_ctx[])
+		struct ipsec_ctx *ips_ctx[],
+		const struct eventmode_conf *em_conf)
 {
-	return sa_add_rules(sa_ctx, entries, nb_entries, 1, skt_ctx, ips_ctx);
+	return sa_add_rules(sa_ctx, entries, nb_entries, 1, skt_ctx, ips_ctx, em_conf);
 }
 
 /*
@@ -1524,7 +1528,8 @@ fill_ipsec_session(struct rte_ipsec_session *ss, struct rte_ipsec_sa *sa)
  */
 static int
 ipsec_sa_init(struct ipsec_sa *lsa, struct rte_ipsec_sa *sa, uint32_t sa_size,
-		struct socket_ctx *skt_ctx, struct ipsec_ctx *ips_ctx[])
+		struct socket_ctx *skt_ctx, struct ipsec_ctx *ips_ctx[],
+		const struct eventmode_conf *em_conf)
 {
 	int rc;
 	struct rte_ipsec_sa_prm prm;
@@ -1566,7 +1571,7 @@ ipsec_sa_init(struct ipsec_sa *lsa, struct rte_ipsec_sa *sa, uint32_t sa_size,
 	if (lsa->fallback_sessions == 1) {
 		struct rte_ipsec_session *ipfs = ipsec_get_fallback_session(lsa);
 		if (ipfs->security.ses == NULL) {
-			rc = create_lookaside_session(ips_ctx, skt_ctx, lsa, ipfs);
+			rc = create_lookaside_session(ips_ctx, skt_ctx, em_conf, lsa, ipfs);
 			if (rc != 0)
 				return rc;
 		}
@@ -1582,7 +1587,8 @@ ipsec_sa_init(struct ipsec_sa *lsa, struct rte_ipsec_sa *sa, uint32_t sa_size,
  */
 static int
 ipsec_satbl_init(struct sa_ctx *ctx, uint32_t nb_ent, int32_t socket,
-		struct socket_ctx *skt_ctx, struct ipsec_ctx *ips_ctx[])
+		struct socket_ctx *skt_ctx, struct ipsec_ctx *ips_ctx[],
+		const struct eventmode_conf *em_conf)
 {
 	int32_t rc, sz;
 	uint32_t i, idx;
@@ -1620,7 +1626,7 @@ ipsec_satbl_init(struct sa_ctx *ctx, uint32_t nb_ent, int32_t socket,
 		sa = (struct rte_ipsec_sa *)((uintptr_t)ctx->satbl + sz * i);
 		lsa = ctx->sa + idx;
 
-		rc = ipsec_sa_init(lsa, sa, sz, skt_ctx, ips_ctx);
+		rc = ipsec_sa_init(lsa, sa, sz, skt_ctx, ips_ctx, em_conf);
 	}
 
 	return rc;
@@ -1663,7 +1669,8 @@ sa_spi_present(struct sa_ctx *sa_ctx, uint32_t spi, int inbound)
 
 void
 sa_init(struct socket_ctx *ctx, int32_t socket_id,
-		struct lcore_conf *lcore_conf)
+	struct lcore_conf *lcore_conf,
+	const struct eventmode_conf *em_conf)
 {
 	int32_t rc;
 	const char *name;
@@ -1695,11 +1702,11 @@ sa_init(struct socket_ctx *ctx, int32_t socket_id,
 			rte_exit(EXIT_FAILURE, "failed to init SAD\n");
 		RTE_LCORE_FOREACH(lcore_id)
 			ipsec_ctx[lcore_id] = &lcore_conf[lcore_id].inbound;
-		sa_in_add_rules(ctx->sa_in, sa_in, nb_sa_in, ctx, ipsec_ctx);
+		sa_in_add_rules(ctx->sa_in, sa_in, nb_sa_in, ctx, ipsec_ctx, em_conf);
 
 		if (app_sa_prm.enable != 0) {
 			rc = ipsec_satbl_init(ctx->sa_in, nb_sa_in,
-				socket_id, ctx, ipsec_ctx);
+				socket_id, ctx, ipsec_ctx, em_conf);
 			if (rc != 0)
 				rte_exit(EXIT_FAILURE,
 					"failed to init inbound SAs\n");
@@ -1717,11 +1724,11 @@ sa_init(struct socket_ctx *ctx, int32_t socket_id,
 
 		RTE_LCORE_FOREACH(lcore_id)
 			ipsec_ctx[lcore_id] = &lcore_conf[lcore_id].outbound;
-		sa_out_add_rules(ctx->sa_out, sa_out, nb_sa_out, ctx, ipsec_ctx);
+		sa_out_add_rules(ctx->sa_out, sa_out, nb_sa_out, ctx, ipsec_ctx, em_conf);
 
 		if (app_sa_prm.enable != 0) {
 			rc = ipsec_satbl_init(ctx->sa_out, nb_sa_out,
-				socket_id, ctx, ipsec_ctx);
+				socket_id, ctx, ipsec_ctx, em_conf);
 			if (rc != 0)
 				rte_exit(EXIT_FAILURE,
 					"failed to init outbound SAs\n");
