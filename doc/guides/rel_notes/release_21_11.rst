@@ -158,6 +158,12 @@ New Features
 
   * Added Intel e1000 support on Windows.
 
+* **Added support for mulitiple mbuf pools per ethdev Rx queue.**
+
+  The capability allows application to provide many mempools of different
+  size and PMD and/or NIC to choose a memory pool based on the packet's
+  length and/or Rx buffers availability.
+
 * **Updated Intel iavf driver.**
 
   * Added Intel iavf support on Windows.
