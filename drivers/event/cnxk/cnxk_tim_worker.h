@@ -461,8 +461,8 @@ cnxk_tim_add_entry_brst(struct cnxk_tim_ring *const tim_ring,
 	int16_t chunk_remainder;
 	uint16_t index = 0;
 	uint64_t lock_sema;
-	int16_t rem, crem;
 	uint8_t lock_cnt;
+	int16_t rem;
 
 __retry:
 	cnxk_tim_get_target_bucket(tim_ring, rel_bkt, &bkt, &mirr_bkt);
