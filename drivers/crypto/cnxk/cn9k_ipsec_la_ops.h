@@ -72,7 +72,7 @@ process_outb_sa(struct rte_crypto_op *cop, struct cn9k_ipsec_sa *sa, struct cpt_
 	}
 #endif
 
-	esn = __atomic_add_fetch(&sa->esn, 1, __ATOMIC_SEQ_CST);
+	esn = ++sa->esn;
 
 	/* Set ESN seq hi */
 	hdr->esn = rte_cpu_to_be_32(esn >> 32);
