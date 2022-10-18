@@ -12,6 +12,13 @@ source $CNXKTESTPATH/common/testpmd/common.env
 PRFX="fwd-gen"
 PORT0="${PORT0:-0002:02:00.0}"
 
+if [ -f $1/oxk-devbind-basic.sh ]
+then
+	VFIO_DEVBIND="$1/oxk-devbind-basic.sh"
+else
+	VFIO_DEVBIND=$(find $1 -iname oxk-devbind-basic.sh)
+fi
+
 function sig_handler()
 {
         local status=$?
@@ -33,7 +40,6 @@ trap "sig_handler INT" INT
 
 case $TEST_OP in
 	launch)
-		VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
 		$VFIO_DEVBIND -b vfio-pci $PORT0
 		num_cores=$(grep -c ^processor /proc/cpuinfo)
 		((num_cores-=1))
@@ -47,8 +53,21 @@ case $TEST_OP in
 		testpmd_cmd $PRFX "set flow_ctrl rx off 0"
 		testpmd_cmd $PRFX "set flow_ctrl tx off 0"
 		;;
+	launch_basic)
+		$VFIO_DEVBIND -b vfio-pci $PORT0
+		num_cores=$(grep -c ^processor /proc/cpuinfo)
+		((num_cores-=1))
+		num_cores=${GEN_CORES:-$num_cores}
+		((fwd_cores=num_cores-1))
+		testpmd_launch $PRFX \
+			"-l 1-$num_cores -a $PORT0" \
+			"--no-flush-rx --nb-cores=$fwd_cores \
+			-i" </dev/null 2>/dev/null
+		testpmd_cmd $PRFX "set flow_ctrl rx off 0"
+		testpmd_cmd $PRFX "set flow_ctrl tx off 0"
+		;;
 	start)
-		testpmd_cmd $PRFX "start tx_first 64"
+		testpmd_cmd $PRFX "start tx_first 256"
 		testpmd_cmd $PRFX "show port stats all"
 		;;
 	stop)

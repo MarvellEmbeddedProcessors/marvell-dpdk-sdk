@@ -4,6 +4,7 @@
 
 set -e
 
+GENERATOR_BOARD=${GENERATOR_BOARD:-}
 CNXKTESTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
 
@@ -52,10 +53,17 @@ GEN_LOG_FULL=gen.out.full
 START_STR=">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
 END_STR="<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
 
+! $(cat /proc/device-tree/compatible | grep -q "cn10k")
+IS_CN10K=$?
 
 if [[ -z "$GENERATOR_BOARD" ]]; then
 	echo "Generator board details missing!!"
 	WITH_GEN_BOARD=0
+else
+	echo "Found Generator board details $GENERATOR_BOARD"
+	if [[ $IS_CN10K -ne 0 ]]; then
+		WITH_GEN_BOARD=1
+	fi
 fi
 
 if [[ $WITH_GEN_BOARD -eq 0 ]]
@@ -183,7 +191,12 @@ ref_pps() {
 
 launch_gen() {
 	echo $START_STR ${test_name[$1]} >>$GEN_LOG_FULL
+	if [[ $WITH_GEN_BOARD -eq 1 ]] && [[ "${test_cmd[$idx]}" == "testpmd" ]]
+	then
+	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=launch_basic $G_ENV $gen $GEN_ARG"
+	else
 	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=launch $G_ENV $gen $GEN_ARG"
+	fi
 }
 
 start_gen() {
@@ -455,7 +468,7 @@ register_fwd_test "L3FWD_1C"          "l3fwd"   "" \
 			  "-p 0x1 --config (0,0,23) -P"
 
 register_fwd_test "L2FWD_1C"          "l2fwd"   "" \
-			  "-p 0x1 -T 0"
+			  "-p 0x1 -T 0 -P"
 
 run_fwd_tests
 
