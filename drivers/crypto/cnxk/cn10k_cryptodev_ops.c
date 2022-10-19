@@ -465,7 +465,7 @@ put:
 	return i;
 }
 
-static uint16_t __rte_hot
+static inline uint16_t __rte_hot
 cn10k_cpt_crypto_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events,
 				 const bool is_sg_ver2)
 {
