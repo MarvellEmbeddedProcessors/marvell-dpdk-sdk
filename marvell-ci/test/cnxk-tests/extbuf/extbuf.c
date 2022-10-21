@@ -32,6 +32,7 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 #include <rte_log.h>
+#include "extbuf_event.h"
 
 #define SRC_IP_ADDR	     ((198U << 24) | (18 << 16) | (0 << 8) | 1)
 #define DST_IP_ADDR	     ((198U << 24) | (18 << 16) | (0 << 8) | 2)
@@ -65,6 +66,7 @@ struct app_arg {
 	bool tx_mode;
 	bool perf_mode;
 	bool use_static_buffer;
+	bool event_tx_compl;
 	unsigned int n_queue;
 	unsigned int n_desc;
 	unsigned int max_pkts;
@@ -101,6 +103,26 @@ struct thread_info {
 	unsigned int lcore;
 	bool launched;
 } __rte_cache_aligned;
+
+static void
+print_event_stats(struct global_event_resources *rsrc, bool show_pps)
+{
+	uint64_t pps = 0;
+	const char topLeft[] = {27, '[', '1', ';', '1', 'H', '\0'};
+	const char clr[] = {27, '[', '2', 'J', '\0'};
+	pps = ((rsrc->tx_pkts - rsrc->lst_count) * 1000) / PRINT_DELAY_MS;
+	if (show_pps) {
+		if (pps > rsrc->lst_pps)
+			NOTICE("Max PPS for tx completion= %ld\n", pps);
+		else
+			NOTICE("Max PPS for tx completion= %ld\n", rsrc->lst_pps);
+		return;
+	}
+	NOTICE("%s%s", clr, topLeft);
+	NOTICE("PPS = %ld\n", pps);
+	rsrc->lst_count = rsrc->tx_pkts;
+	rsrc->lst_pps = pps;
+}
 
 static void
 print_stats(struct port_info *pinfo, unsigned int n_port, struct app_arg *arg,
@@ -318,7 +340,7 @@ finalize(struct port_info *pinfo)
 	portid = pinfo->portid;
 
 	/* Close port */
-	NOTICE("Closing port %d...", portid);
+	NOTICE("Closing port %d...\n", portid);
 	ret = rte_eth_dev_stop(portid);
 	if (ret != 0)
 		EXIT("rte_eth_dev_stop: err=%d, port=%d\n", ret, portid);
@@ -765,6 +787,7 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 	arg->tx_mode = true;
 	arg->perf_mode = false;
 	arg->use_static_buffer = false;
+	arg->event_tx_compl = false;
 	arg->n_queue = 1;
 	arg->n_desc = 1024;
 	arg->max_pkts = 0;
@@ -779,7 +802,8 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 				arg->use_static_buffer = true;
 			argv = argv + 2;
 			argc = argc - 2;
-
+		} else if (strncmp(argv[1], "--event-tx-compl", 16) == 0) {
+			arg->event_tx_compl = true;
 		} else if (strncmp(argv[1], "--nqueue", 8) == 0) {
 			if (argc < 3)
 				return -1;
@@ -811,6 +835,7 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 int
 main(int argc, char **argv)
 {
+	struct global_event_resources *rsrc = NULL;
 	struct port_info pinfo[RTE_MAX_ETHPORTS];
 	struct thread_info tinfo[RTE_MAX_LCORE];
 	struct queue_info qinfo[RTE_MAX_LCORE];
@@ -859,8 +884,15 @@ main(int argc, char **argv)
 		n_port++;
 	}
 
+	if (arg.event_tx_compl) {
+		rsrc = initialize_event(n_port);
+		rsrc->keep_running = (uint8_t *)&keep_running;
+		lcore_function_t *f;
+		f = event_loop_single;
+		rte_eal_mp_remote_launch(f, rsrc, SKIP_MAIN);
+	}
 	/* Launch rx/tx threads per queue */
-	for (p = 0; p < n_port; p++) {
+	for (p = 0; p < n_port && !arg.event_tx_compl; p++) {
 		for (q = 0; q < arg.n_queue; q++) {
 			lcore_function_t *f;
 			if (arg.tx_mode) {
@@ -891,12 +923,16 @@ main(int argc, char **argv)
 	while (keep_running) {
 		rte_delay_ms(PRINT_DELAY_MS);
 		rte_mb();
-		print_stats(pinfo, n_port, &arg, true);
+		if (arg.event_tx_compl) {
+			print_event_stats(rsrc, false);
+		} else {
+			print_stats(pinfo, n_port, &arg, true);
+		}
 	}
 
 cleanup:
 	/* Wait for threads to exit out */
-	for (p = 0; p < n_port; p++) {
+	for (p = 0; p < n_port && !arg.event_tx_compl; p++) {
 		for (q = 0; q < arg.n_queue; q++) {
 			c = p * arg.n_queue + q;
 			if (!tinfo[c].launched)
@@ -910,10 +946,16 @@ cleanup:
 	for (p = 0; p < n_port; p++)
 		finalize(&pinfo[p]);
 
+	if (arg.event_tx_compl) {
+		print_event_stats(rsrc, true);
+		finalize_event(rsrc);
+	}
+
 	/* Print final stats */
 	rte_mb();
 	rte_eal_cleanup();
-	print_stats(pinfo, n_port, &arg, false);
+	if (!arg.event_tx_compl)
+		print_stats(pinfo, n_port, &arg, false);
 
 	return ret;
 }
