@@ -1269,10 +1269,12 @@ cnxk_on_ipsec_outb_sa_create(struct rte_security_ipsec_xform *ipsec,
 	}
 
 	ip4 = (struct rte_ipv4_hdr *)&template->ip4.ipv4_hdr;
+
+	sport = 4500;
+	dport = 4500;
+
 	/* If custom port values are provided, Overwrite default port values. */
 	if (ipsec->options.udp_encap) {
-		sport = 4500;
-		dport = 4500;
 
 		if (ipsec->udp.sport)
 			sport = ipsec->udp.sport;
