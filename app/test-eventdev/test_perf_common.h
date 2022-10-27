@@ -26,6 +26,8 @@
 #include "evt_options.h"
 #include "evt_test.h"
 
+#define TEST_PERF_CA_ID 0
+
 struct test_perf;
 
 struct worker_data {
@@ -36,25 +38,18 @@ struct worker_data {
 	struct test_perf *t;
 } __rte_cache_aligned;
 
+struct crypto_adptr_data {
+	uint8_t cdev_id;
+	uint16_t cdev_qp_id;
+	void **crypto_sess;
+};
 struct prod_data {
 	uint8_t dev_id;
 	uint8_t port_id;
 	uint8_t queue_id;
-	uint8_t cdev_id;
-	uint16_t cdev_qp_id;
-	union {
-		struct rte_cryptodev_sym_session **sym_sess;
-		struct rte_cryptodev_asym_session **asym_sess;
-	};
+	struct crypto_adptr_data ca;
 	struct test_perf *t;
 } __rte_cache_aligned;
-
-struct crypto_adptr_data {
-	uint8_t id;
-	struct rte_mempool *op_pool;
-	struct rte_mempool *sess_pool;
-	struct rte_mempool *sess_priv_pool;
-};
 
 struct test_perf {
 	/* Don't change the offset of "done". Signal handler use this memory
@@ -73,7 +68,9 @@ struct test_perf {
 	uint8_t sched_type_list[EVT_MAX_STAGES] __rte_cache_aligned;
 	struct rte_event_timer_adapter *timer_adptr[
 		RTE_EVENT_TIMER_ADAPTER_NUM_MAX] __rte_cache_aligned;
-	struct crypto_adptr_data crypto_adptr;
+	struct rte_mempool *ca_op_pool;
+	struct rte_mempool *ca_sess_pool;
+	struct rte_mempool *ca_sess_priv_pool;
 } __rte_cache_aligned;
 
 struct perf_elt {

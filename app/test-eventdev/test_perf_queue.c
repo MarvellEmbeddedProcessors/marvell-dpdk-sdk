@@ -327,8 +327,6 @@ perf_queue_eventdev_setup(struct evt_test *test, struct evt_options *opt)
 				return ret;
 			}
 		}
-
-		rte_event_crypto_adapter_start(t->crypto_adptr.id);
 	}
 
 	return 0;
