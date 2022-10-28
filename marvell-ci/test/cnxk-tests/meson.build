@@ -69,6 +69,7 @@ test_subdirs = [
         'l2fwd_tmc',
         'tx_vlan',
         'ipsec_reassembly_perf',
+        'lso_test',
 ]
 
 foreach dir:test_subdirs
