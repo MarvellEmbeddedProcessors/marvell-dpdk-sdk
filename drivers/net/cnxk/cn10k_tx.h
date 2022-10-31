@@ -3098,8 +3098,8 @@ again:
 		wd.data[0] |= (uint64_t)lmt_id;
 
 		if (flags & NIX_TX_VWQE_F)
-			cn10k_nix_vwqe_wait_fc(
-				txq, cn10k_nix_pkts_per_vec_brst(flags) >> 1);
+			cn10k_nix_vwqe_wait_fc(txq,
+				cn10k_nix_pkts_per_vec_brst(flags) >> 1);
 		/* STEOR0 */
 		roc_lmt_submit_steorl(wd.data[0], pa);
 
@@ -3116,8 +3116,7 @@ again:
 		wd.data[1] |= (uint64_t)(lmt_id + 16);
 
 		if (flags & NIX_TX_VWQE_F)
-			cn10k_nix_vwqe_wait_fc(
-				txq,
+			cn10k_nix_vwqe_wait_fc(txq,
 				burst - (cn10k_nix_pkts_per_vec_brst(flags) >>
 					 1));
 		/* STEOR1 */
