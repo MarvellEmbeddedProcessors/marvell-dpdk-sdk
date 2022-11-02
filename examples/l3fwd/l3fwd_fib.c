@@ -10,7 +10,6 @@
 
 #include <rte_fib.h>
 #include <rte_fib6.h>
-#include <rte_malloc.h>
 
 #include "l3fwd.h"
 #if defined RTE_ARCH_X86

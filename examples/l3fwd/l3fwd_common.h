@@ -7,6 +7,8 @@
 #ifndef _L3FWD_COMMON_H_
 #define _L3FWD_COMMON_H_
 
+#include <rte_malloc.h>
+
 #include "pkt_group.h"
 
 #ifdef DO_RFC_1812_CHECKS
