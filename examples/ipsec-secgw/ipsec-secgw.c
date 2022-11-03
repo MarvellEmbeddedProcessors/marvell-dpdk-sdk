@@ -105,6 +105,8 @@ struct ethaddr_info ethaddr_tbl[RTE_MAX_ETHPORTS] = {
 	{ 0, ETHADDR(0x00, 0x16, 0x3e, 0x49, 0x9e, 0xdd) }
 };
 
+struct offloads tx_offloads;
+
 /*
  * To hold ethernet header per port, which will be applied
  * to outgoing packets.
@@ -1997,6 +1999,12 @@ port_init(uint16_t portid, uint64_t req_rx_offloads, uint64_t req_tx_offloads,
 	if (!ptype_supported)
 		printf("Port %d: softly parse packet type info\n", portid);
 
+	tx_offloads.ipv4_offloads = RTE_MBUF_F_TX_IPV4;
+	tx_offloads.ipv6_offloads = RTE_MBUF_F_TX_IPV6;
+	/* Update per lcore checksum offload support only if all ports support it */
+	if (local_port_conf.txmode.offloads & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM)
+		tx_offloads.ipv4_offloads |= RTE_MBUF_F_TX_IP_CKSUM;
+
 	/* init one TX queue per lcore */
 	tx_queueid = 0;
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
@@ -2024,10 +2032,8 @@ port_init(uint16_t portid, uint64_t req_rx_offloads, uint64_t req_tx_offloads,
 		qconf->tx_queue_id[portid] = tx_queueid;
 
 		/* Pre-populate pkt offloads based on capabilities */
-		qconf->outbound.ipv4_offloads = RTE_MBUF_F_TX_IPV4;
-		qconf->outbound.ipv6_offloads = RTE_MBUF_F_TX_IPV6;
-		if (local_port_conf.txmode.offloads & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM)
-			qconf->outbound.ipv4_offloads |= RTE_MBUF_F_TX_IP_CKSUM;
+		qconf->outbound.ipv4_offloads = tx_offloads.ipv4_offloads;
+		qconf->outbound.ipv6_offloads = tx_offloads.ipv6_offloads;
 
 		tx_queueid++;
 
