@@ -98,9 +98,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 0
 				},
 				.digest_size = {
-					.min = 20,
+					.min = 1,
 					.max = 20,
-					.increment = 0
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -118,9 +118,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 1
 				},
 				.digest_size = {
-					.min = 12,
+					.min = 1,
 					.max = 20,
-					.increment = 8
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -138,9 +138,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 0
 				},
 				.digest_size = {
-					.min = 28,
+					.min = 1,
 					.max = 28,
-					.increment = 0
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -158,9 +158,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 1
 				},
 				.digest_size = {
-					.min = 28,
+					.min = 1,
 					.max = 28,
-					.increment = 0
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -178,9 +178,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 0
 				},
 				.digest_size = {
-					.min = 32,
+					.min = 1,
 					.max = 32,
-					.increment = 0
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -198,9 +198,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 1
 				},
 				.digest_size = {
-					.min = 16,
+					.min = 1,
 					.max = 32,
-					.increment = 16
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -218,9 +218,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 0
 				},
 				.digest_size = {
-					.min = 48,
+					.min = 1,
 					.max = 48,
-					.increment = 0
+					.increment = 1
 					},
 			}, }
 		}, }
@@ -238,9 +238,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 1
 				},
 				.digest_size = {
-					.min = 24,
+					.min = 1,
 					.max = 48,
-					.increment = 24
+					.increment = 1
 					},
 			}, }
 		}, }
@@ -258,9 +258,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 0
 				},
 				.digest_size = {
-					.min = 64,
+					.min = 1,
 					.max = 64,
-					.increment = 0
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -278,9 +278,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 1
 				},
 				.digest_size = {
-					.min = 32,
+					.min = 1,
 					.max = 64,
-					.increment = 32
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -298,9 +298,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 0
 				},
 				.digest_size = {
-					.min = 16,
+					.min = 1,
 					.max = 16,
-					.increment = 0
+					.increment = 1
 				},
 			}, }
 		}, }
@@ -318,9 +318,9 @@ static const struct rte_cryptodev_capabilities caps_sha1_sha2[] = {
 					.increment = 8
 				},
 				.digest_size = {
-					.min = 12,
+					.min = 1,
 					.max = 16,
-					.increment = 4
+					.increment = 1
 				},
 			}, }
 		}, }
