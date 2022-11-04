@@ -9,5 +9,6 @@ sources = files(
         'otx2_ep_vf.c',
         'cnxk_ep_vf.c',
         'otx_ep_irq.c',
+        'otx_ep_mbox.c',
 )
 
