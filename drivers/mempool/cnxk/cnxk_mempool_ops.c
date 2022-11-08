@@ -131,7 +131,7 @@ cnxk_mempool_free(struct rte_mempool *mp)
 	 * rte_mempool_create_empty(). In such cases the NPA pool will not be
 	 * allocated.
 	 */
-	if (roc_npa_aura_handle_to_base(mp->pool_id) == NULL)
+	if (roc_npa_aura_handle_to_base(mp->pool_id) == 0)
 		return;
 
 	rc = roc_npa_pool_destroy(mp->pool_id);
