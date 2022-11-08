@@ -19,6 +19,7 @@ struct cn10k_ipsec_sa {
 	uint16_t max_extended_len;
 	uint16_t iv_offset;
 	uint8_t iv_length;
+	uint8_t ip_csum;
 	bool is_outbound;
 	/** Queue pair */
 	struct cnxk_cpt_qp *qp;

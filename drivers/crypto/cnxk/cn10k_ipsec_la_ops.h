@@ -104,6 +104,7 @@ process_inb_sa(struct rte_crypto_op *cop, struct cn10k_ipsec_sa *sa,
 	inst->w4.u64 = sa->inst.w4 | rte_pktmbuf_pkt_len(m_src);
 	dptr = rte_pktmbuf_mtod(m_src, uint64_t);
 	inst->dptr = dptr;
+	m_src->ol_flags |= (uint64_t)sa->ip_csum;
 
 	return 0;
 }
