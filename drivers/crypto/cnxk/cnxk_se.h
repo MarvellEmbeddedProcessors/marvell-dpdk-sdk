@@ -51,10 +51,11 @@ struct cnxk_se_sess {
 	uint64_t cpt_inst_w2;
 	struct cnxk_cpt_qp *qp;
 	struct roc_se_ctx roc_se_ctx;
+	struct roc_cpt_lf *lf;
 } __rte_cache_aligned;
 
-static __rte_always_inline int
-fill_sess_gmac(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess);
+static __rte_always_inline int fill_sess_gmac(struct rte_crypto_sym_xform *xform,
+					      struct cnxk_se_sess *sess);
 
 static inline void
 cpt_pack_iv(uint8_t *iv_src, uint8_t *iv_dst)

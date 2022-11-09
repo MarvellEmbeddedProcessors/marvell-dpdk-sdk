@@ -634,6 +634,11 @@ cnxk_cpt_inst_w7_get(struct cnxk_se_sess *sess, struct roc_cpt *roc_cpt)
 
 	inst_w7.s.cptr = (uint64_t)&sess->roc_se_ctx.se_ctx;
 
+	if (roc_cpt->cpt_revision == ROC_CPT_REVISION_ID_106XX)
+		inst_w7.s.ctx_val = 1;
+	else
+		inst_w7.s.cptr += 8;
+
 	/* Set the engine group */
 	if (sess->zsk_flag || sess->aes_ctr_eea2 || sess->is_sha3)
 		inst_w7.s.egrp = roc_cpt->eng_grp[CPT_ENG_TYPE_SE];
@@ -666,6 +671,8 @@ sym_session_configure(struct roc_cpt *roc_cpt, int driver_id,
 	ret = cnxk_sess_fill(roc_cpt, xform, sess_priv);
 	if (ret)
 		goto priv_put;
+
+	sess_priv->lf = roc_cpt->lf[0];
 
 	if (sess_priv->cpt_op & ROC_SE_OP_CIPHER_MASK) {
 		switch (sess_priv->roc_se_ctx.fc_type) {
@@ -711,6 +718,9 @@ sym_session_configure(struct roc_cpt *roc_cpt, int driver_id,
 
 	set_sym_session_private_data(sess, driver_id, sess_priv);
 
+	if (roc_cpt->cpt_revision == ROC_CPT_REVISION_ID_106XX)
+		roc_se_ctx_init(&sess_priv->roc_se_ctx);
+
 	return 0;
 
 priv_put:
@@ -745,6 +755,11 @@ sym_session_clear(int driver_id, struct rte_cryptodev_sym_session *sess)
 		return;
 
 	sess_priv = priv;
+
+	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
+	roc_cpt_lf_ctx_flush(sess_priv->lf, &sess_priv->roc_se_ctx.se_ctx, true);
+
+	plt_delay_ms(1);
 
 	if (sess_priv->roc_se_ctx.auth_key != NULL)
 		plt_free(sess_priv->roc_se_ctx.auth_key);
