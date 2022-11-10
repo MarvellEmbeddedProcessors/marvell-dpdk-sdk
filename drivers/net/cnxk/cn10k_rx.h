@@ -1382,13 +1382,14 @@ cn10k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts,
 					/* ROC_IE_OT_UCC_SUCCESS_PKT_UDP_ZEROCSUM */
 					(RTE_MBUF_F_RX_IP_CKSUM_GOOD |
 					RTE_MBUF_F_RX_L4_CKSUM_GOOD) >> 1,
-					2, 1, 2, 2, 2, 2, 1, 2,
+					3, 1, 3, 3, 3, 3, 1, 3, 1,
 				},
 				{
 					1, 1, 1,
 					/* ROC_IE_OT_UCC_SUCCESS_PKT_IP_GOODCSUM */
 					RTE_MBUF_F_RX_IP_CKSUM_GOOD >> 1,
-					1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+					/* Rest 0 to indicate RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED */
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				},
 			}};
 
