@@ -72,6 +72,9 @@
 #define NUMA_NO_CONFIG 0xFF
 #define UMA_NO_CONFIG  0xFF
 
+/* Maximum number of pools supported per Rx queue */
+#define MAX_MEMPOOL 8
+
 typedef uint8_t  lcoreid_t;
 typedef uint16_t portid_t;
 typedef uint16_t queueid_t;
