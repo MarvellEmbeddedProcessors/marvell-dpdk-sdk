@@ -58,8 +58,8 @@ launch_testpmd_tx_outb()
 launch_testpmd_tx_inb()
 {
 	testpmd_launch $1 \
-		"-c 0x1F800 --vdev net_pcap0,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,infinite_rx=1 -a $PORT0" \
-		"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx" \
+		"-c 0x3F800 --vdev net_pcap0,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,infinite_rx=1 -a $PORT0" \
+		"--nb-cores=5 --txq=5 --rxq=5 --no-flush-rx" \
 		</dev/null 2>/dev/null &
 	sleep 1
 	testpmd_cmd $1 "set flow_ctrl rx off 0"
