@@ -500,6 +500,14 @@ find_exec()
 	$TARGET_SSH_CMD $dut find $REMOTE_DIR -type f -executable -iname $test_name
 }
 
+function exec_genboard_cleanup()
+{
+	if [[ $WITH_GEN_BOARD -eq 1 ]]; then
+		$TARGET_SSH_CMD $GENERATOR_BOARD "sudo pkill -f dpdk*;"
+		echo "Gen board previous test processes cleanup up"
+	fi
+}
+
 exec_testpmd_cmd_gen()
 {
 	$TARGET_SSH_CMD $GENERATOR_BOARD "cd $REMOTE_DIR;" \
@@ -944,6 +952,7 @@ SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 EVENT_VF=$SSO_DEV
 
 setup_interfaces
+exec_genboard_cleanup
 
 Y=0
 
