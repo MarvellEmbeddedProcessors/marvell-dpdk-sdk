@@ -200,19 +200,23 @@ nix_tm_update_markfmt(struct nix *nix, enum roc_nix_tm_mark type,
 int
 nix_tm_mark_init(struct nix *nix)
 {
-	struct mbox *mbox = (&nix->dev)->mbox;
+	struct mbox *mbox = mbox_get((&nix->dev)->mbox);
 	struct nix_mark_format_cfg_rsp *rsp;
 	struct nix_mark_format_cfg *req;
 	int rc, i, j;
 
 	/* Check for supported revisions */
-	if (roc_model_is_cn96_ax() || roc_model_is_cn95_a0())
-		return 0;
+	if (roc_model_is_cn96_ax() || roc_model_is_cn95_a0()) {
+		rc = 0;
+		goto exit;
+	}
 
 	/* Null mark format */
 	req = mbox_alloc_msg_nix_mark_format_cfg(mbox);
-	if (req == NULL)
-		return -ENOSPC;
+	if (req == NULL) {
+		rc =  -ENOSPC;
+		goto exit;
+	}
 
 	rc = mbox_process_msg(mbox, (void *)&rsp);
 	if (rc) {
@@ -268,6 +272,7 @@ nix_tm_mark_init(struct nix *nix)
 	nix_tm_update_markfmt(nix, ROC_NIX_TM_MARK_IPV6_DSCP, 0, 0);
 	nix_tm_update_markfmt(nix, ROC_NIX_TM_MARK_IPV6_ECN, 0, 0);
 exit:
+	mbox_put(mbox);
 	return rc;
 }
 

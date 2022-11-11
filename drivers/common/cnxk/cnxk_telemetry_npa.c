@@ -61,10 +61,11 @@ cnxk_tel_npa_aura(int aura_id, struct plt_tel_data *d)
 	if (plt_bitmap_get(lf->npa_bmp, aura_id))
 		return -1;
 
-	req = mbox_alloc_msg_npa_aq_enq(lf->mbox);
+	req = mbox_alloc_msg_npa_aq_enq(mbox_get(lf->mbox));
 	if (!req) {
 		plt_err("Failed to alloc aq enq for npa");
-		return -1;
+		rc = -1;
+		goto exit;
 	}
 
 	req->aura_id = aura_id;
@@ -74,7 +75,7 @@ cnxk_tel_npa_aura(int aura_id, struct plt_tel_data *d)
 	rc = mbox_process_msg(lf->mbox, (void *)&rsp);
 	if (rc) {
 		plt_err("Failed to get pool(%d) context", aura_id);
-		return rc;
+		goto exit;
 	}
 
 	aura = &rsp->aura;
@@ -109,7 +110,10 @@ cnxk_tel_npa_aura(int aura_id, struct plt_tel_data *d)
 	CNXK_TEL_DICT_INT(d, aura, err_qint_idx, w5_);
 	CNXK_TEL_DICT_U64(d, aura, thresh, w6_);
 
-	return 0;
+	rc = 0;
+exit:
+	mbox_put(lf->mbox);
+	return rc;
 }
 
 static int
@@ -128,10 +132,11 @@ cnxk_tel_npa_pool(int pool_id, struct plt_tel_data *d)
 	if (plt_bitmap_get(lf->npa_bmp, pool_id))
 		return -1;
 
-	req = mbox_alloc_msg_npa_aq_enq(lf->mbox);
+	req = mbox_alloc_msg_npa_aq_enq(mbox_get(lf->mbox));
 	if (!req) {
 		plt_err("Failed to alloc aq enq for npa");
-		return -1;
+		rc = -1;
+		goto exit;
 	}
 
 	req->aura_id = pool_id;
@@ -141,7 +146,7 @@ cnxk_tel_npa_pool(int pool_id, struct plt_tel_data *d)
 	rc = mbox_process_msg(lf->mbox, (void *)&rsp);
 	if (rc) {
 		plt_err("Failed to get pool(%d) context", pool_id);
-		return rc;
+		goto exit;
 	}
 
 	pool = &rsp->pool;
@@ -175,7 +180,10 @@ cnxk_tel_npa_pool(int pool_id, struct plt_tel_data *d)
 	CNXK_TEL_DICT_INT(d, pool, thresh_qint_idx, w8_);
 	CNXK_TEL_DICT_INT(d, pool, err_qint_idx, w8_);
 
-	return 0;
+	rc = 0;
+exit:
+	mbox_put(lf->mbox);
+	return rc;
 }
 
 static int
