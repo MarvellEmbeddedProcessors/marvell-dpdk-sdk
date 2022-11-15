@@ -314,6 +314,9 @@ fill_sg_comp_from_iov(struct roc_se_sglist_comp *list, uint32_t i,
 		if (extra_offset)
 			extra_offset -= size;
 		i++;
+
+		if (unlikely(!size))
+			break;
 	}
 
 	*psize = size;
@@ -369,6 +372,8 @@ fill_sg2_comp_from_iov(struct roc_se_sg2list_comp *list, uint32_t i, struct roc_
 	int32_t j;
 	uint32_t extra_len = extra_buf ? extra_buf->size : 0;
 	uint32_t size = *psize;
+
+	rte_prefetch2(psize);
 
 	for (j = 0; j < from->buf_cnt; j++) {
 		struct roc_se_sg2list_comp *to = &list[i / 3];
@@ -436,6 +441,9 @@ fill_sg2_comp_from_iov(struct roc_se_sg2list_comp *list, uint32_t i, struct roc_
 		if (extra_offset)
 			extra_offset -= size;
 		i++;
+
+		if (unlikely(!size))
+			break;
 	}
 
 	*psize = size;
