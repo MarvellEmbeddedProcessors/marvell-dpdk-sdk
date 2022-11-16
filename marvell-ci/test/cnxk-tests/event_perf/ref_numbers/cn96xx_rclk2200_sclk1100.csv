@@ -7,7 +7,7 @@ cores, RESULT
 ------------------------------------------------------------------------
 L3FWD_EVENT (ordered queue) output in packets per second
 cores, RESULT
-1, 8649640
+1, 7836572
 8, 60791425
 16, 89527491
 
