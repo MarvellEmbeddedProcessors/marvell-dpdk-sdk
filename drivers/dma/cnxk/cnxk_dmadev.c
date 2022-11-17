@@ -285,7 +285,7 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src,
 	union dpi_instr_hdr_s *header = &dpivf->conf[vchan].hdr;
 	struct cnxk_dpi_compl_s *comp_ptr;
 	rte_iova_t fptr, lptr;
-	int num_words = 0;
+	uint32_t num_words = 0;
 	int rc;
 
 	comp_ptr = dpi_conf->c_desc.compl_ptr[dpi_conf->c_desc.tail];
@@ -322,11 +322,12 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src,
 	if (!rc) {
 		if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 			rte_wmb();
-			plt_write64(num_words,
-				    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
+			num_words += dpivf->num_words;
+			plt_write64(num_words, dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 			dpivf->stats.submitted++;
-		}
-		dpivf->num_words += num_words;
+			dpivf->num_words = 0;
+		} else
+			dpivf->num_words += num_words;
 	}
 
 	return dpivf->desc_idx++;
@@ -343,7 +344,7 @@ cnxk_dmadev_copy_sg(void *dev_private, uint16_t vchan,
 	union dpi_instr_hdr_s *header = &dpivf->conf[vchan].hdr;
 	const struct rte_dma_sge *fptr, *lptr;
 	struct cnxk_dpi_compl_s *comp_ptr;
-	int num_words = 0;
+	uint32_t num_words = 0;
 	int i, rc;
 
 	comp_ptr = dpi_conf->c_desc.compl_ptr[dpi_conf->c_desc.tail];
@@ -387,11 +388,12 @@ cnxk_dmadev_copy_sg(void *dev_private, uint16_t vchan,
 	if (!rc) {
 		if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 			rte_wmb();
-			plt_write64(num_words,
-				    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
+			num_words += dpivf->num_words;
+			plt_write64(num_words, dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 			dpivf->stats.submitted += nb_src;
-		}
-		dpivf->num_words += num_words;
+			dpivf->num_words = 0;
+		} else
+			dpivf->num_words += num_words;
 	}
 
 	return (rc < 0) ? rc : dpivf->desc_idx++;
@@ -500,18 +502,17 @@ cn10k_dmadev_copy_sg(void *dev_private, uint16_t vchan,
 }
 
 static uint16_t
-cnxk_dmadev_completed(void *dev_private, uint16_t vchan, const uint16_t nb_cpls,
-		      uint16_t *last_idx, bool *has_error)
+cnxk_dmadev_completed(void *dev_private, uint16_t vchan, const uint16_t nb_cpls, uint16_t *last_idx,
+		      bool *has_error)
 {
 	struct cnxk_dpi_vf_s *dpivf = dev_private;
-	int cnt;
+	int cnt, idx = dpivf->conf[vchan].c_desc.head;
 
 	if (dpivf->stats.submitted == dpivf->stats.completed)
 		return 0;
 
 	for (cnt = 0; cnt < nb_cpls; cnt++) {
-		struct cnxk_dpi_compl_s *comp_ptr =
-			dpivf->conf[vchan].c_desc.compl_ptr[cnt];
+		struct cnxk_dpi_compl_s *comp_ptr = dpivf->conf[vchan].c_desc.compl_ptr[idx];
 
 		if (comp_ptr->cdata) {
 			if (comp_ptr->cdata == DPI_REQ_CDATA)
@@ -520,27 +521,27 @@ cnxk_dmadev_completed(void *dev_private, uint16_t vchan, const uint16_t nb_cpls,
 			dpivf->stats.errors++;
 			break;
 		}
+		comp_ptr->cdata = DPI_REQ_CDATA;
+		idx = (idx + 1) % dpivf->conf[vchan].c_desc.max_cnt;
 	}
 
-	*last_idx = cnt - 1;
-	dpivf->conf[vchan].c_desc.tail = cnt;
+	*last_idx = idx ? idx - 1 : dpivf->conf[vchan].c_desc.max_cnt - 1;
+	dpivf->conf[vchan].c_desc.head = idx;
 	dpivf->stats.completed += cnt;
 
 	return cnt;
 }
 
 static uint16_t
-cnxk_dmadev_completed_status(void *dev_private, uint16_t vchan,
-			     const uint16_t nb_cpls, uint16_t *last_idx,
-			     enum rte_dma_status_code *status)
+cnxk_dmadev_completed_status(void *dev_private, uint16_t vchan, const uint16_t nb_cpls,
+			     uint16_t *last_idx, enum rte_dma_status_code *status)
 {
 	struct cnxk_dpi_vf_s *dpivf = dev_private;
-	int cnt;
+	int cnt, idx = dpivf->conf[vchan].c_desc.head;
 
 	RTE_SET_USED(last_idx);
 	for (cnt = 0; cnt < nb_cpls; cnt++) {
-		struct cnxk_dpi_compl_s *comp_ptr =
-			dpivf->conf[vchan].c_desc.compl_ptr[cnt];
+		struct cnxk_dpi_compl_s *comp_ptr = dpivf->conf[vchan].c_desc.compl_ptr[idx];
 		status[cnt] = comp_ptr->cdata;
 		if (status[cnt]) {
 			if (status[cnt] == DPI_REQ_CDATA)
@@ -548,10 +549,12 @@ cnxk_dmadev_completed_status(void *dev_private, uint16_t vchan,
 
 			dpivf->stats.errors++;
 		}
+		comp_ptr->cdata = DPI_REQ_CDATA;
+		idx = (idx + 1) % dpivf->conf[vchan].c_desc.max_cnt;
 	}
 
-	*last_idx = cnt - 1;
-	dpivf->conf[vchan].c_desc.tail = 0;
+	*last_idx = idx ? idx - 1 : dpivf->conf[vchan].c_desc.max_cnt - 1;
+	dpivf->conf[vchan].c_desc.head = idx;
 	dpivf->stats.completed += cnt;
 
 	return cnt;
@@ -565,13 +568,14 @@ cnxk_dmadev_submit(void *dev_private, uint16_t vchan __rte_unused)
 	rte_wmb();
 	plt_write64(dpivf->num_words, dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 	dpivf->stats.submitted++;
+	dpivf->num_words = 0;
 
 	return 0;
 }
 
 static int
-cnxk_stats_get(const struct rte_dma_dev *dev, uint16_t vchan,
-	       struct rte_dma_stats *rte_stats, uint32_t size)
+cnxk_stats_get(const struct rte_dma_dev *dev, uint16_t vchan, struct rte_dma_stats *rte_stats,
+	       uint32_t size)
 {
 	struct cnxk_dpi_vf_s *dpivf = dev->fp_obj->dev_private;
 	struct rte_dma_stats *stats = &dpivf->stats;
