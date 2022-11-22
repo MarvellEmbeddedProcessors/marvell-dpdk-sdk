@@ -392,6 +392,10 @@ The command line options are:
     Set TX segment sizes or total packet length. Valid for ``tx-only``
     and ``flowgen`` forwarding modes.
 
+* ``--multi-rx-mempool``
+
+    Enable multi-rx-mempool, multiple mbuf pools per Rx queue, support.
+
 *   ``--txonly-multi-flow``
 
     Generate multiple flows in txonly mode.

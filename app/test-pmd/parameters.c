@@ -86,7 +86,8 @@ usage(char* progname)
 	       "in NUMA mode.\n");
 	printf("  --mbuf-size=N,[N1[,..Nn]: set the data size of mbuf to "
 	       "N bytes. If multiple numbers are specified the extra pools "
-	       "will be created to receive with packet split features\n");
+	       "will be created to receive packets based on the features "
+	       "supported, like packet split, multi-rx-mempool.\n");
 	printf("  --total-num-mbufs=N: set the number of mbufs to be allocated "
 	       "in mbuf pools.\n");
 	printf("  --max-pkt-len=N: set the maximum size of packet to N bytes.\n");
@@ -163,6 +164,7 @@ usage(char* progname)
 	printf("  --rxpkts=X[,Y]*: set RX segment sizes to split.\n");
 	printf("  --txpkts=X[,Y]*: set TX segment sizes"
 		" or total packet length.\n");
+	printf("  --multi-rx-mempool: enable multi-rx-mempool support\n");
 	printf("  --txonly-multi-flow: generate multiple flows in txonly mode\n");
 	printf("  --tx-ip=src,dst: IP addresses in Tx-only mode\n");
 	printf("  --tx-udp=src[,dst]: UDP ports in Tx-only mode\n");
@@ -675,6 +677,7 @@ launch_args_parse(int argc, char** argv)
 		{ "rxoffs",			1, 0, 0 },
 		{ "rxpkts",			1, 0, 0 },
 		{ "txpkts",			1, 0, 0 },
+		{ "multi-rx-mempool",           0, 0, 0 },
 		{ "txonly-multi-flow",		0, 0, 0 },
 		{ "rxq-share",			2, 0, 0 },
 		{ "eth-link-speed",		1, 0, 0 },
@@ -1350,6 +1353,8 @@ launch_args_parse(int argc, char** argv)
 				else
 					rte_exit(EXIT_FAILURE, "bad txpkts\n");
 			}
+			if (!strcmp(lgopts[opt_idx].name, "multi-rx-mempool"))
+				multi_rx_mempool = 1;
 			if (!strcmp(lgopts[opt_idx].name, "txonly-multi-flow"))
 				txonly_multi_flow = 1;
 			if (!strcmp(lgopts[opt_idx].name, "rxq-share")) {
