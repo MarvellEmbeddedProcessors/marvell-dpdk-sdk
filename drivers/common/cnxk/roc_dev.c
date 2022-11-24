@@ -740,8 +740,8 @@ mbox_register_vf_irq(struct plt_pci_device *pci_dev, struct dev *dev)
 	return rc;
 }
 
-static int
-mbox_register_irq(struct plt_pci_device *pci_dev, struct dev *dev)
+int
+dev_mbox_register_irq(struct plt_pci_device *pci_dev, struct dev *dev)
 {
 	if (dev_is_vf(dev))
 		return mbox_register_vf_irq(pci_dev, dev);
@@ -885,8 +885,8 @@ vf_flr_unregister_irqs(struct plt_pci_device *pci_dev, struct dev *dev)
 	return 0;
 }
 
-static int
-vf_flr_register_irqs(struct plt_pci_device *pci_dev, struct dev *dev)
+int
+dev_vf_flr_register_irqs(struct plt_pci_device *pci_dev, struct dev *dev)
 {
 	struct plt_intr_handle *handle = pci_dev->intr_handle;
 	int i, rc;
@@ -1204,7 +1204,7 @@ dev_init(struct dev *dev, struct plt_pci_device *pci_dev)
 		goto mbox_fini;
 
 	/* Register mbox interrupts */
-	rc = mbox_register_irq(pci_dev, dev);
+	rc = dev_mbox_register_irq(pci_dev, dev);
 	if (rc)
 		goto mbox_fini;
 
@@ -1247,7 +1247,7 @@ dev_init(struct dev *dev, struct plt_pci_device *pci_dev)
 
 	/* Register VF-FLR irq handlers */
 	if (!dev_is_vf(dev)) {
-		rc = vf_flr_register_irqs(pci_dev, dev);
+		rc = dev_vf_flr_register_irqs(pci_dev, dev);
 		if (rc)
 			goto iounmap;
 	}
