@@ -261,6 +261,8 @@ struct roc_npc_flow {
 #define ROC_NPC_MAX_FLOW_PATTERNS 32
 	struct roc_npc_flow_dump_data dump_data[ROC_NPC_MAX_FLOW_PATTERNS];
 	uint16_t num_patterns;
+	uint8_t is_inline_dev;
+	bool use_pre_alloc;
 
 	TAILQ_ENTRY(roc_npc_flow) next;
 };
@@ -359,6 +361,8 @@ int __roc_api roc_npc_mcam_read_counter(struct roc_npc *roc_npc,
 					uint32_t ctr_id, uint64_t *count);
 int __roc_api roc_npc_mcam_clear_counter(struct roc_npc *roc_npc,
 					 uint32_t ctr_id);
+int __roc_api roc_npc_inl_mcam_read_counter(uint32_t ctr_id, uint64_t *count);
+int __roc_api roc_npc_inl_mcam_clear_counter(uint32_t ctr_id);
 int __roc_api roc_npc_mcam_free_all_resources(struct roc_npc *roc_npc);
 void __roc_api roc_npc_flow_dump(FILE *file, struct roc_npc *roc_npc);
 void __roc_api roc_npc_flow_mcam_dump(FILE *file, struct roc_npc *roc_npc,
