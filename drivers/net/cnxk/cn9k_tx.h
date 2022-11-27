@@ -82,7 +82,7 @@ cn9k_nix_tx_skeleton(struct cn9k_eth_txq *txq, uint64_t *cmd,
 }
 
 static __rte_always_inline void
-cn9k_nix_sec_fc_wait_one(struct cn9k_eth_txq *txq)
+cn9k_nix_sec_fc_wait_one(const struct cn9k_eth_txq *txq)
 {
 	uint64_t nb_desc = txq->cpt_desc;
 	uint64_t *fc = txq->cpt_fc;
