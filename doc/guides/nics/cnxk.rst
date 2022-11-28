@@ -379,6 +379,20 @@ Runtime Config Options
 
       -a 0002:1d:00.0,sdp_channel_mask=0x700/0xf00
 
+- ``Transmit completion handler`` (default ``0``)
+
+   When transmit completion handler is enabled , PMD invokes callback handler
+   provided by application for every packet which has external buf attached to mbuf
+   and frees main mbuf, external buffer is provided to applicatoin. Once external
+   buffer is handed over to application, its application responsibility either to
+   free of reuse external buffer
+
+   using ``tx_compl_ena`` ``devargs`` parameter.
+
+   For example::
+
+      -a 0002:01:00.1,tx_compl_ena=1
+
    With the above configuration, RTE Flow rules API will set the channel
    and channel mask as 0x700 and 0xF00 in the MCAM entries of the  flow rules
    created on the SDP device. This option needs to be used when more than one
