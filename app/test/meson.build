@@ -469,7 +469,9 @@ dpdk_test = executable('dpdk-test',
              driver_install_path),
         install: true)
 
-has_hugepage = run_command(py3, 'has_hugepage.py', check: true).stdout().strip() != '0'
+# This needs to be overriden so that if the build machines doesn't have huge pages
+# the tests don't get disabled
+has_hugepage = true
 message('hugepage availability: @0@'.format(has_hugepage))
 
 # some perf tests (eg: memcpy perf autotest)take very long

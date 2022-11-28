@@ -1,0 +1,18 @@
+[binaries]
+c = ['clang', '-target', 'aarch64-linux-gnu', '-isystem', '/usr/aarch64-linux-gnu/include']
+cpp = 'aarch64-linux-gnu-cpp'
+ar = 'aarch64-linux-gnu-gcc-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'aarch64-linux-gnu-pkg-config'
+pcap-config = ''
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'armv8-a'
+endian = 'little'
+
+[properties]
+platform = 'generic'
+
+[built-in options]

@@ -82,6 +82,9 @@ subdir('drivers')
 subdir('usertools')
 subdir('app')
 
+# build marvell specific tests
+subdir('marvell-ci/test/cnxk-tests')
+
 # build docs
 subdir('doc')
 
