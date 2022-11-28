@@ -325,13 +325,18 @@ npa_aura_pool_pair_alloc(struct npa_lf *lf, const uint32_t block_size,
 	    block_size > ROC_NPA_MAX_BLOCK_SZ)
 		return NPA_ERR_INVALID_BLOCK_SZ;
 
+	roc_npa_dev_lock();
 	/* Get aura_id from resource bitmap */
 	aura_id = find_free_aura(lf, flags);
-	if (aura_id < 0)
+	if (aura_id < 0) {
+		roc_npa_dev_unlock();
 		return NPA_ERR_AURA_ID_ALLOC;
+	}
 
 	/* Mark pool as reserved */
 	plt_bitmap_clear(lf->npa_bmp, aura_id);
+
+	roc_npa_dev_unlock();
 
 	/* Configuration based on each aura has separate pool(aura-pool pair) */
 	pool_id = aura_id;
@@ -401,7 +406,9 @@ npa_aura_pool_pair_alloc(struct npa_lf *lf, const uint32_t block_size,
 stack_mem_free:
 	plt_memzone_free(mz);
 aura_res_put:
+	roc_npa_dev_lock();
 	plt_bitmap_set(lf->npa_bmp, aura_id);
+	roc_npa_dev_unlock();
 exit:
 	return rc;
 }
@@ -501,7 +508,9 @@ npa_aura_pool_pair_free(struct npa_lf *lf, uint64_t aura_handle)
 	rc |= npa_stack_dma_free(lf, name, pool_id);
 	memset(&lf->aura_attr[aura_id], 0, sizeof(struct npa_aura_attr));
 
+	roc_npa_dev_lock();
 	plt_bitmap_set(lf->npa_bmp, aura_id);
+	roc_npa_dev_unlock();
 
 	return rc;
 }
@@ -920,4 +929,22 @@ roc_npa_dev_fini(struct roc_npa *roc_npa)
 
 	npa->dev.drv_inited = false;
 	return dev_fini(&npa->dev, npa->pci_dev);
+}
+
+void
+roc_npa_dev_lock(void)
+{
+	struct idev_cfg *idev = idev_get_cfg();
+
+	if (idev != NULL)
+		plt_spinlock_lock(&idev->npa_dev_lock);
+}
+
+void
+roc_npa_dev_unlock(void)
+{
+	struct idev_cfg *idev = idev_get_cfg();
+
+	if (idev != NULL)
+		plt_spinlock_unlock(&idev->npa_dev_lock);
 }
