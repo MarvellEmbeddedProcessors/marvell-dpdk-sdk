@@ -5,6 +5,7 @@
 set -e
 
 GENERATOR_BOARD=${GENERATOR_BOARD:-}
+PLAT=${PLAT:-}
 CNXKTESTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
 
@@ -193,25 +194,25 @@ launch_gen() {
 	echo $START_STR ${test_name[$1]} >>$GEN_LOG_FULL
 	if [[ $WITH_GEN_BOARD -eq 1 ]] && [[ "${test_cmd[$idx]}" == "testpmd" ]]
 	then
-	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=launch_basic $G_ENV $gen $GEN_ARG"
+	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=launch_basic $G_ENV $gen $GEN_ARG"
 	else
-	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=launch $G_ENV $gen $GEN_ARG"
+	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=launch $G_ENV $gen $GEN_ARG"
 	fi
 }
 
 start_gen() {
-	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=start $gen"
+	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=start $gen"
 }
 
 stop_gen() {
-	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=stop $gen"
+	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=stop $gen"
 }
 
 cleanup_gen() {
-	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=log $gen" >>$GEN_LOG_FULL
+	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=log $gen" >>$GEN_LOG_FULL
 	echo $END_STR ${test_name[$idx]} >>$GEN_LOG_FULL
 
-	$remote_ssh "$SUDO PORT0=$GEN_PORT TEST_OP=cleanup $gen"
+	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=cleanup $gen"
 }
 
 testpmd_pps_local() {
@@ -250,7 +251,7 @@ check_pps() {
 		then
 			rx_pps=$(testpmd_pps_local)
 		else
-			rx_pps=$($remote_ssh "$SUDO TEST_OP=rx_pps $gen")
+			rx_pps=$($remote_ssh "$SUDO PLAT=$PLAT TEST_OP=rx_pps $gen")
 		fi
 
 		if [[ rx_pps -lt pass_pps ]]; then

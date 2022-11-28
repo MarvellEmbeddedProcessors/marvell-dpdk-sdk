@@ -11,6 +11,7 @@ source $CNXKTESTPATH/common/testpmd/common.env
 
 PRFX="fwd-gen"
 PORT0="${PORT0:-0002:02:00.0}"
+PLAT=${PLAT:?}
 
 if [ -f $1/oxk-devbind-basic.sh ]
 then
@@ -45,6 +46,13 @@ case $TEST_OP in
 		((num_cores-=1))
 		num_cores=${GEN_CORES:-$num_cores}
 		((fwd_cores=num_cores-1))
+
+		# Limit the number forwarding cores on cn10k.
+		# Tx rate peaks (99 MPPS) after 10 cores and drop after 18.
+		if [[ $PLAT == "cn10k" ]]; then
+			fwd_cores=$(( fwd_cores < 12 ? fwd_cores : 12 ))
+		fi
+
 		testpmd_launch $PRFX \
 			"-l 1-$num_cores -a $PORT0" \
 			"--no-flush-rx --nb-cores=$fwd_cores --forward-mode=flowgen \
@@ -59,6 +67,13 @@ case $TEST_OP in
 		((num_cores-=1))
 		num_cores=${GEN_CORES:-$num_cores}
 		((fwd_cores=num_cores-1))
+
+		# Limit the number forwarding cores on cn10k.
+		# Tx rate peaks (99 MPPS) after 10 cores and drop after 18.
+		if [[ $PLAT == "cn10k" ]]; then
+			fwd_cores=$(( fwd_cores < 12 ? fwd_cores : 12 ))
+		fi
+
 		testpmd_launch $PRFX \
 			"-l 1-$num_cores -a $PORT0" \
 			"--no-flush-rx --nb-cores=$fwd_cores \
