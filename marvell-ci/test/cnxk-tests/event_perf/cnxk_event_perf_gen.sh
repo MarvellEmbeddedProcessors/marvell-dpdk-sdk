@@ -6,6 +6,7 @@ CNXKTESTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )/.."
 source $CNXKTESTPATH/common/testpmd/common.env
 IF0=${IF0:-0002:02:00.0}
 PRFX="event_perf"
+PLAT=${PLAT:?}
 
 trap "cleanup $?" EXIT
 
@@ -21,6 +22,13 @@ cleanup()
 launch_testpmd()
 {
 	local fwd_cores=$(($(grep -c ^processor /proc/cpuinfo) - 1))
+
+	# Limit the number forwarding cores on cn10k.
+	# Tx rate peaks (99 MPPS) after 10 cores and drop after 18.
+	if [[ $PLAT == "cn10k" ]]; then
+		fwd_cores=$(( fwd_cores < 12 ? fwd_cores : 12 ))
+	fi
+
 	testpmd_launch $PRFX \
 		"-l 0-$fwd_cores -a $IF0" \
 		"--nb-cores=$fwd_cores --rxq=$fwd_cores --txq=$fwd_cores \

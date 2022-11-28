@@ -108,13 +108,13 @@ find_exec()
 exec_testpmd_cmd()
 {
 	$TARGET_SSH_CMD $GENERATOR_BOARD "cd $REMOTE_DIR;" \
-		"sudo TESTPMD_OP=$1 $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT)"
+		"sudo PLAT=$PLAT TESTPMD_OP=$1 $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT)"
 }
 
 launch_testpmd()
 {
 	$TARGET_SSH_CMD $GENERATOR_BOARD "cd $REMOTE_DIR;" \
-		"sudo TESTPMD_OP=launch $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT)"
+		"sudo PLAT=$PLAT TESTPMD_OP=launch $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT)"
 }
 
 gen_needed()
