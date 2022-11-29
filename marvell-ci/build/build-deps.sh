@@ -67,17 +67,19 @@ function setup_libpcap()
 
 function setup_ipsec_mb()
 {
-	local patch="0001-enable-cross-compilation.patch"
+	local patch1="0001-enable-cross-compilation.patch"
+	local patch2="0001-Fix-build-error-with-AES_BLOCK_SIZE.patch"
 
 	mkdir -p $BUILD_ROOT/ipsec_mb
 
 	pushd $BUILD_ROOT/ipsec_mb
 	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/main/ipsec-mb-main.tar.gz
 	tar -zxvf ipsec-mb-main.tar.gz --strip-components=1
-	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch
-	SHARED=n CC=aarch64-marvell-linux-gnu-gcc \
+	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch1
+	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch2
+	SHARED=y CC=aarch64-marvell-linux-gnu-gcc STRIP=aarch64-marvell-linux-gnu-strip \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT
-	SHARED=n CC=aarch64-marvell-linux-gnu-gcc \
+	SHARED=y CC=aarch64-marvell-linux-gnu-gcc STRIP=aarch64-marvell-linux-gnu-strip \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT install
 	popd
 }

@@ -1,31 +1,23 @@
-From 65a4b960a0cecaf8099deb499be3385964d13a88 Mon Sep 17 00:00:00 2001
+From 71677ff503e61d0b9387e53e66897eba403e6a92 Mon Sep 17 00:00:00 2001
 From: Ashwin Sekhar T K <asekhar@marvell.com>
-Date: Fri, 3 Jun 2022 05:12:14 +0000
+Date: Thu, 15 Dec 2022 19:28:48 +0530
 Subject: [PATCH] enable cross compilation
 
 Signed-off-by: Ashwin Sekhar T K <asekhar@marvell.com>
 ---
- lib/Makefile | 8 ++++++--
- 1 file changed, 6 insertions(+), 2 deletions(-)
+ lib/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
 
 diff --git a/lib/Makefile b/lib/Makefile
-index 4168b45..9503aae 100644
+index 4168b45..5aa4271 100644
 --- a/lib/Makefile
 +++ b/lib/Makefile
-@@ -84,6 +84,7 @@ INCLUDE_DIRS := include . no-aesni
- INCLUDES := $(foreach i,$(INCLUDE_DIRS),-I $i)
- 
- CC ?= gcc
-+STRIP ?= strip
- # MINGW should be non-zero value if detected
- MINGW ?= $(shell $(CC) -dM -E - < /dev/null | grep -i mingw | wc -l | sed 's/^ *//')
- 
-@@ -781,17 +782,20 @@ install: $(LIB_DIR)/$(LIBNAME)
+@@ -781,11 +781,14 @@ install: $(LIB_DIR)/$(LIBNAME)
  	install -m 0444 $(MAN2) $(MAN_DIR)
  	install -d $(LIB_INSTALL_DIR)
  ifeq ($(SHARED),y)
 -	install -s -m $(LIBPERM) $(LIB_DIR)/$(LIBNAME) $(LIB_INSTALL_DIR)
-+	install -s --strip-program=$(STRIP) -m $(LIBPERM) \
++	install -s --strip-program=aarch64-marvell-linux-gnu-strip -m $(LIBPERM) \
 +		$(LIB_DIR)/$(LIBNAME) $(LIB_INSTALL_DIR)
  else
  	# must not strip symbol table for static libs
@@ -36,13 +28,6 @@ index 4168b45..9503aae 100644
  ifeq ($(SHARED),y)
  	cd $(LIB_INSTALL_DIR); \
  		ln -f -s $(LIB).so.$(VERSION) $(LIB).so.$(SO_VERSION); \
- 		ln -f -s $(LIB).so.$(SO_VERSION) $(LIB).so
- ifneq ($(NOLDCONFIG),y)
--	ldconfig
-+	ldconfig -N
- endif
- endif
- 
 -- 
-2.17.1
+2.25.1
 
