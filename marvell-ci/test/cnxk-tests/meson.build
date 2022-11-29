@@ -62,7 +62,6 @@ test_subdirs = [
         'meter_test',
         'bphy_irq',
         'queue_intr_test',
-        'ipsec_msns',
         'dpdk_config_test',
         'trace_autotest',
         'mbuf_perf',
