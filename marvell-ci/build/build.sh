@@ -91,7 +91,11 @@ cd $PROJECT_ROOT
 # Do any pre-build stuff
 ${BUILD_SETUP_CMD:-}
 
-meson $BUILD_DIR --prefix $PREFIX_DIR $EXTRA_ARGS
+meson $BUILD_DIR \
+	--prefix $PREFIX_DIR \
+	$EXTRA_ARGS \
+	-Dc_args="${CFLAGS:-}" \
+	-Dc_link_args="${LDFLAGS:-}"
 
 ninja -C $BUILD_DIR -j $MAKE_J $VERBOSE
 ninja -C $BUILD_DIR -j $MAKE_J $VERBOSE install
