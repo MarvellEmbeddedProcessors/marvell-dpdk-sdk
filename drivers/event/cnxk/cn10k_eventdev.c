@@ -2,6 +2,7 @@
  * Copyright(C) 2021 Marvell.
  */
 
+#include "cn10k_tx_worker.h"
 #include "cn10k_worker.h"
 #include "cnxk_eventdev.h"
 #include "cnxk_worker.h"
