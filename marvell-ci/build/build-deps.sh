@@ -77,9 +77,9 @@ function setup_ipsec_mb()
 	tar -zxvf ipsec-mb-main.tar.gz --strip-components=1
 	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch1
 	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch2
-	SHARED=n CC=aarch64-marvell-linux-gnu-gcc \
+	SHARED=y CC=aarch64-marvell-linux-gnu-gcc STRIP=aarch64-marvell-linux-gnu-strip \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT
-	SHARED=n CC=aarch64-marvell-linux-gnu-gcc \
+	SHARED=y CC=aarch64-marvell-linux-gnu-gcc STRIP=aarch64-marvell-linux-gnu-strip \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT install
 	popd
 }
