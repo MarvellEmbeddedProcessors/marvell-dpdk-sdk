@@ -743,11 +743,6 @@ static __rte_always_inline uint64_t
 cnxk_nix_prefree_seg(struct rte_mbuf *m)
 {
 	if (likely(rte_mbuf_refcnt_read(m) == 1)) {
-		if (RTE_MBUF_HAS_EXTBUF(m)) {
-			rte_pktmbuf_free_seg(m);
-			return 1;
-		}
-
 		if (!RTE_MBUF_DIRECT(m))
 			return cnxk_pktmbuf_detach(m);
 
@@ -755,11 +750,6 @@ cnxk_nix_prefree_seg(struct rte_mbuf *m)
 		m->nb_segs = 1;
 		return 0;
 	} else if (rte_mbuf_refcnt_update(m, -1) == 0) {
-		if (RTE_MBUF_HAS_EXTBUF(m)) {
-			rte_pktmbuf_free_seg(m);
-			return 1;
-		}
-
 		if (!RTE_MBUF_DIRECT(m))
 			return cnxk_pktmbuf_detach(m);
 
