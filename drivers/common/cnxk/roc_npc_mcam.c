@@ -772,6 +772,7 @@ npc_program_mcam(struct npc *npc, struct npc_parse_state *pst, bool mcam_alloc)
 	struct idev_cfg *idev;
 	uint16_t layer_info;
 	uint64_t lt, flags;
+	struct mbox *mbox;
 
 	/* Skip till Layer A data start */
 	while (bit < NPC_PARSE_KEX_S_LA_OFFSET) {
@@ -843,12 +844,15 @@ npc_program_mcam(struct npc *npc, struct npc_parse_state *pst, bool mcam_alloc)
 		skip_base_rule = true;
 
 	if (pst->is_vf && pst->flow->nix_intf == NIX_INTF_RX && !skip_base_rule) {
-		(void)mbox_alloc_msg_npc_read_base_steer_rule(npc->mbox);
-		rc = mbox_process_msg(npc->mbox, (void *)&base_rule_rsp);
+		mbox = mbox_get(npc->mbox);
+		(void)mbox_alloc_msg_npc_read_base_steer_rule(mbox);
+		rc = mbox_process_msg(mbox, (void *)&base_rule_rsp);
 		if (rc) {
+			mbox_put(mbox);
 			plt_err("Failed to fetch VF's base MCAM entry");
 			return rc;
 		}
+		mbox_put(mbox);
 		base_entry = &base_rule_rsp->entry_data;
 		for (idx = 0; idx < ROC_NPC_MAX_MCAM_WIDTH_DWORDS; idx++) {
 			pst->flow->mcam_data[idx] |= base_entry->kw[idx];

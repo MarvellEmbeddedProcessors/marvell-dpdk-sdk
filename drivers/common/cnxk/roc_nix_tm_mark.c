@@ -109,9 +109,11 @@ nix_tm_update_red_algo(struct nix *nix, bool red_send)
 			tm_node->red_algo = NIX_REDALG_STD;
 
 		/* Update txschq config  */
-		req = mbox_alloc_msg_nix_txschq_cfg(mbox);
-		if (req == NULL)
+		req = mbox_alloc_msg_nix_txschq_cfg(mbox_get(mbox));
+		if (req == NULL) {
+			mbox_put(mbox);
 			return -ENOSPC;
+		}
 
 		req->lvl = tm_node->hw_lvl;
 		k = prepare_tm_shaper_red_algo(tm_node, req->reg, req->regval,
@@ -119,8 +121,11 @@ nix_tm_update_red_algo(struct nix *nix, bool red_send)
 		req->num_regs = k;
 
 		rc = mbox_process(mbox);
-		if (rc)
+		if (rc) {
+			mbox_put(mbox);
 			return rc;
+		}
+		mbox_put(mbox);
 	}
 	return 0;
 }
