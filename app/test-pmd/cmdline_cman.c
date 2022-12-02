@@ -2,6 +2,8 @@
  * Copyright(C) 2022 Marvell International Ltd.
  */
 
+#include <stdlib.h>
+
 #include <cmdline_parse.h>
 #include <cmdline_parse_num.h>
 #include <cmdline_parse_string.h>
