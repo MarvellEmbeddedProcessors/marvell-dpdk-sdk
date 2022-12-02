@@ -72,6 +72,7 @@ test_subdirs = [
         'lso_test',
         'cman_test',
         'multi_pool_pkt_tx',
+        'flow_ctrl',
 ]
 
 foreach dir:test_subdirs
