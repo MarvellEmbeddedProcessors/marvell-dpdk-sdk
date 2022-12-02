@@ -20,6 +20,7 @@ DPDK_22 {
 	rte_event_crypto_adapter_stats_get;
 	rte_event_crypto_adapter_stats_reset;
 	rte_event_crypto_adapter_stop;
+	rte_event_crypto_adapter_vector_limits_get;
 	rte_event_dequeue_timeout_ticks;
 	rte_event_dev_attr_get;
 	rte_event_dev_close;
