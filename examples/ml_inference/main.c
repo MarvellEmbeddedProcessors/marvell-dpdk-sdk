@@ -3,6 +3,7 @@
  */
 
 #include <getopt.h>
+#include <linux/limits.h>
 #include <stdio.h>
 
 #include <rte_eal.h>
@@ -268,10 +269,18 @@ main(int argc, char **argv)
 			fprintf(stderr, "Failed to create memzone: %s\n",
 				ml_model.model_name);
 			fclose(fp);
+			ret = -ENOMEM;
 			goto error_stop;
 		}
 		ml_model.model_buffer = mz->addr;
-		fread(ml_model.model_buffer, 1, ml_model.model_size, fp);
+
+		if (fread(ml_model.model_buffer, 1, ml_model.model_size, fp) !=
+		    ml_model.model_size) {
+			fprintf(stderr, "Failed read model file: %s\n", ml_opts.models[idx]);
+			fclose(fp);
+			ret = -1;
+			goto error_stop;
+		}
 		fclose(fp);
 
 		ret = rte_ml_model_create(dev_id, &ml_model,
@@ -317,7 +326,7 @@ main(int argc, char **argv)
 			fprintf(stderr, "Invalid input file size = %d\n",
 				fsize);
 			fclose(fp);
-			ret = -1;
+			ret = -EINVAL;
 			goto error_model_destroy;
 		}
 
@@ -328,11 +337,18 @@ main(int argc, char **argv)
 		if (mz == NULL) {
 			fprintf(stderr, "Failed to create memzone: %s\n", str);
 			fclose(fp);
-			ret = -1;
+			ret = -ENOMEM;
 			goto error_model_destroy;
 		}
 		ml_models[idx].ibuff = mz->addr;
-		fread(ml_models[idx].ibuff, 1, ml_models[idx].isize, fp);
+
+		if (fread(ml_models[idx].ibuff, 1, ml_models[idx].isize, fp) !=
+		    ml_models[idx].isize) {
+			fprintf(stderr, "Failed reading input file: %s\n", ml_opts.inputs[idx]);
+			fclose(fp);
+			ret = -1;
+			goto error_model_destroy;
+		}
 		fclose(fp);
 
 		/* Create output buffer */
@@ -342,8 +358,7 @@ main(int argc, char **argv)
 						 ML_ALIGN_SIZE);
 		if (mz == NULL) {
 			fprintf(stderr, "Failed to create memzone: %s\n", str);
-			fclose(fp);
-			ret = -1;
+			ret = -ENOMEM;
 			goto error_model_destroy;
 		}
 		ml_models[idx].obuff = mz->addr;
