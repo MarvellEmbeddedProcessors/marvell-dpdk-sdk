@@ -19,6 +19,7 @@
 #include <rte_test.h>
 
 #include "cnxk_eventdev.h"
+#include "cnxk_eventdev_dp.h"
 
 /* TODO: Below changes are to pass CI in ASIM, revert after chipback */
 #ifdef ASIM_HACKS
