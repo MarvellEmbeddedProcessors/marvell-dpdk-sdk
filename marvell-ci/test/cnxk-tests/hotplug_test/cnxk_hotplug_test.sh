@@ -127,21 +127,20 @@ trap "sig_handler QUIT" QUIT
 trap "sig_handler EXIT" EXIT
 
 echo "dpdk-hotplug_mp running with no ports"
-$VFIO_DEVBIND -u $PORT0 $PORT3 $PORT2 $PORT4
 sleep 1
-hotplug_launch "--proc-type=auto" "primary"
+hotplug_launch "-a 0002:11:22.1 --proc-type=auto" "primary"
 sleep 2
-hotplug_launch "--proc-type=auto" "secondary"
+hotplug_launch "-a 0002:11:22.1 --proc-type=auto" "secondary"
 
 sleep 1
-$VFIO_DEVBIND -b vfio-pci $PORT0
+$VFIO_DEVBIND -b vfio-pci $PORT2
 sleep 2
 # Start capturing
-hotplug_cmd $CAP_PRFX "attach $PORT0"
+hotplug_cmd $CAP_PRFX "attach $PORT2"
 sleep 3
 hotplug_cmd $CAP_PRFX "list"
 sleep 2
-hotplug_cmd $CAP_PRFX "detach $PORT0"
+hotplug_cmd $CAP_PRFX "detach $PORT2"
 sleep 3
 hotplug_cmd $CAP_PRFX "list"
 sleep 2
@@ -152,7 +151,7 @@ sleep 1
 
 port_id_prim=`sed -n '/attach/,/detach/p' $out_prim | \
 	grep -A 1 "list all etherdev" | tail -n1 | awk '{print $2}'`
-port_id_sec=`cat $out_sec | grep "Probe PCI driver:" | tail -n 1 | awk '{print $9}'`
+port_id_sec=`cat $out_sec | grep "Probe PCI driver:" | tail -n 1 | awk '{print $8}'`
 
 if [ "$port_id_prim" = "$port_id_sec" ]; then
 	echo "Hotplug attach sccuess"
@@ -172,4 +171,3 @@ else
 	echo "Hotplug detach failure"
 	exit 1;
 fi
-$VFIO_DEVBIND -b vfio-pci $PORT0 $PORT3 $PORT2 $PORT4
