@@ -17,6 +17,7 @@ GENERATOR_SCRIPT=${GENERATOR_SCRIPT:-cnxk_event_perf_gen.sh}
 TARGET_SSH_CMD=${TARGET_SSH_CMD:-"ssh -o LogLevel=ERROR -o ServerAliveInterval=30 \
 	-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"}
 TARGET_SSH_CMD="$TARGET_SSH_CMD -n"
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-"/tmp/dpdk/deps/lib"}
 RES_SEPERATOR="------------------------------------------------------------------------"
 if [[ $PLAT == cn10k ]]; then
 	REF_FILE=${REF_FILE:-ref_numbers/cn106xx_rclk2000_sclk1000.csv}
@@ -114,7 +115,8 @@ exec_testpmd_cmd()
 launch_testpmd()
 {
 	$TARGET_SSH_CMD $GENERATOR_BOARD "cd $REMOTE_DIR;" \
-		"sudo PLAT=$PLAT TESTPMD_OP=launch $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT)"
+		"sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH PLAT=$PLAT TESTPMD_OP=launch " \
+		"$(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT)"
 }
 
 gen_needed()
@@ -186,7 +188,8 @@ measure_test_perf()
 	for num_cores in "${CORES[@]}"; do
 		printf "$num_cores, " >> $out_file
 		test_args=$(get_test_args $test_name $num_cores $sched_mode)
-		sudo $timeout $unbuffer $test_path $test_args &> $test_log &
+		sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH $timeout $unbuffer \
+			$test_path $test_args &> $test_log &
 		while ! (tail -n1 $test_log | grep -q "$pattern"); do
 			sleep 1
 		done
