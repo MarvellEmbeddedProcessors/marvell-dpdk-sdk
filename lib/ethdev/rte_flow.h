@@ -42,6 +42,9 @@
 extern "C" {
 #endif
 
+#define RTE_FLOW_LOG(level, ...) \
+	rte_log(RTE_LOG_##level, rte_eth_dev_logtype, "" __VA_ARGS__)
+
 /**
  * Flow rule attributes.
  *
@@ -4852,6 +4855,87 @@ int
 rte_flow_flex_item_release(uint16_t port_id,
 			   const struct rte_flow_item_flex_handle *handle,
 			   struct rte_flow_error *error);
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Information about flow engine resources.
+ * The zero value means a resource is not supported.
+ *
+ */
+struct rte_flow_port_info {
+	/*
+	 * Maximum number of queues for asynchronous operations.
+	 */
+	uint32_t max_nb_queues;
+	/*
+	 * Maximum number of counters.
+	 * @see RTE_FLOW_ACTION_TYPE_COUNT
+	 */
+	uint32_t max_nb_counters;
+	/*
+	 * Maximum number of aging objects.
+	 * @see RTE_FLOW_ACTION_TYPE_AGE
+	 */
+	uint32_t max_nb_aging_objects;
+	/*
+	 * Maximum number traffic meters.
+	 * @see RTE_FLOW_ACTION_TYPE_METER
+	 */
+	uint32_t max_nb_meters;
+	/*
+	 * Maximum number connection trackings.
+	 * @see RTE_FLOW_ACTION_TYPE_CONNTRACK
+	 */
+	uint32_t max_nb_conn_tracks;
+	/*
+	 * Port supported flags (RTE_FLOW_PORT_FLAG_*).
+	 */
+	uint32_t supported_flags;
+};
+
+/*
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Information about flow engine asynchronous queues.
+ * The value only valid if @p port_attr.max_nb_queues is not
+ *
+ */
+struct rte_flow_queue_info {
+	/*
+	 * Maximum number of operations a queue can hold.
+	 */
+	uint32_t max_size;
+};
+
+/*
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * Get information about flow engine resources.
+ *
+ * @param port_id
+ *   Port identifier of Ethernet device.
+ * @param[out] port_info
+ *   A pointer to a structure of type *rte_flow_port_info*
+ *   to be filled with the resources information of the port.
+ * @param[out] queue_info
+ *   A pointer to a structure of type *rte_flow_queue_info*
+ *   to be filled with the asynchronous queues information.
+ * @param[out] error
+ *   Perform verbose error reporting if not NULL.
+ *   PMDs initialize this structure in case of error only.
+ *
+ * @return
+ *   0 on success, a negative errno value otherwise and rte_e
+ */
+__rte_experimental
+int
+rte_flow_info_get(uint16_t port_id, struct rte_flow_port_info *port_info,
+		  struct rte_flow_queue_info *queue_info,
+		  struct rte_flow_error *error);
 
 #ifdef __cplusplus
 }

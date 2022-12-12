@@ -263,6 +263,7 @@ EXPERIMENTAL {
 	rte_eth_ip_reassembly_capability_get;
 	rte_eth_ip_reassembly_conf_get;
 	rte_eth_ip_reassembly_conf_set;
+	rte_flow_info_get;
 
 	# added in 22.07
 	rte_mtr_color_in_protocol_get;
