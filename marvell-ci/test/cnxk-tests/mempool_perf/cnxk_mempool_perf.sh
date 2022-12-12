@@ -9,6 +9,7 @@ TEST_LOG=cnxk_mempool_perf.log
 PREFIX="cmpt"
 TOLERANCE=${TOLERANCE:-3}
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-"/tmp/dpdk/deps/lib"}
 
 # Find the cnxk_mempool_perf application
 if [[ -f $SCRIPTPATH/cnxk_mempool_perf ]]; then
@@ -37,8 +38,8 @@ function test_mempool_perf()
 	local result
 
 	# Run the cnxk_mempool_perf application
-	$SUDO DPDK_TEST=cnxk_mempool_perf $unbuffer $TEST_BIN \
-		--file-prefix $PREFIX |& tee $TEST_LOG
+	$SUDO LD_LIBRARY_PATH=$LD_LIBRARY_PATH DPDK_TEST=cnxk_mempool_perf \
+		$unbuffer $TEST_BIN --file-prefix $PREFIX |& tee $TEST_LOG
 
 	result=$(grep "$pattern" $TEST_LOG | awk -F '=' '{print $8}' | sort -g | tail -n1)
 	echo "Result=$result"
