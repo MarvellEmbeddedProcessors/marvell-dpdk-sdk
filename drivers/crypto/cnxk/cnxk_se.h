@@ -919,7 +919,13 @@ cpt_enc_hmac_prep(uint32_t flags, uint64_t d_offs, uint64_t d_lens,
 	offset_ctrl = rte_cpu_to_be_64(((uint64_t)encr_offset << 16) | ((uint64_t)iv_offset << 8) |
 				       ((uint64_t)auth_offset));
 
-	if (likely(fc_params->meta_buf.vaddr == NULL)) {
+	/*
+	 * In cn9k, cn10k since we have a limitation of
+	 * IV & Offset control word not part of instruction
+	 * and need to be part of Data Buffer, we check if
+	 * head room is there and then only do the Direct mode processing
+	 */
+	if (likely((flags & ROC_SE_SINGLE_BUF_INPLACE) && (flags & ROC_SE_SINGLE_BUF_HEADROOM))) {
 		void *dm_vaddr = fc_params->bufs[0].vaddr;
 
 		/* Use Direct mode */
@@ -1071,7 +1077,13 @@ cpt_dec_hmac_prep(uint32_t flags, uint64_t d_offs, uint64_t d_lens,
 	offset_ctrl = rte_cpu_to_be_64(((uint64_t)encr_offset << 16) | ((uint64_t)iv_offset << 8) |
 				       ((uint64_t)auth_offset));
 
-	if (likely(fc_params->meta_buf.vaddr == NULL)) {
+	/*
+	 * In cn9k, cn10k since we have a limitation of
+	 * IV & Offset control word not part of instruction
+	 * and need to be part of Data Buffer, we check if
+	 * head room is there and then only do the Direct mode processing
+	 */
+	if (likely((flags & ROC_SE_SINGLE_BUF_INPLACE) && (flags & ROC_SE_SINGLE_BUF_HEADROOM))) {
 		void *dm_vaddr = fc_params->bufs[0].vaddr;
 
 		/* Use Direct mode */
@@ -1127,7 +1139,6 @@ cpt_pdcp_chain_alg_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 	uint32_t encr_data_len, auth_data_len, aad_len, passthr_len, pad_len, hdr_len;
 	uint32_t encr_offset, auth_offset, iv_offset = 0;
 	uint8_t *auth_iv = NULL, *cipher_iv = NULL;
-	void *m_vaddr = params->meta_buf.vaddr;
 	uint8_t pdcp_ci_alg, pdcp_auth_alg;
 	union cpt_inst_w4 cpt_inst_w4;
 	struct roc_se_ctx *se_ctx;
@@ -1192,7 +1203,8 @@ cpt_pdcp_chain_alg_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 
 	inputlen += (encr_offset + pad_len);
 
-	if (likely(m_vaddr == NULL)) {
+	if (likely(((req_flags & ROC_SE_SINGLE_BUF_INPLACE)) &&
+		   ((req_flags & ROC_SE_SINGLE_BUF_HEADROOM)))) {
 
 		dm_vaddr = params->bufs[0].vaddr;
 
@@ -1219,6 +1231,7 @@ cpt_pdcp_chain_alg_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 
 	} else {
 		struct roc_sglist_comp *scatter_comp, *gather_comp;
+		void *m_vaddr = params->meta_buf.vaddr;
 		uint32_t i, g_size_bytes, s_size_bytes;
 		uint8_t *in_buffer;
 		uint32_t size;
@@ -1435,7 +1448,14 @@ cpt_pdcp_alg_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 	cpt_inst_w4.s.param1 = encr_data_len;
 	cpt_inst_w4.s.param2 = auth_data_len;
 
-	if (likely(params->meta_buf.vaddr == NULL)) {
+	/*
+	 * In cn9k, cn10k since we have a limitation of
+	 * IV & Offset control word not part of instruction
+	 * and need to be part of Data Buffer, we check if
+	 * head room is there and then only do the Direct mode processing
+	 */
+	if (likely((req_flags & ROC_SE_SINGLE_BUF_INPLACE) &&
+		   (req_flags & ROC_SE_SINGLE_BUF_HEADROOM))) {
 		void *dm_vaddr = params->bufs[0].vaddr;
 
 		/* Use Direct mode */
@@ -2609,7 +2629,6 @@ fill_pdcp_chain_params(struct rte_crypto_op *cop, struct cnxk_se_sess *sess,
 		}
 	}
 
-	fc_params.meta_buf.vaddr = NULL;
 	if (unlikely(!((flags & ROC_SE_SINGLE_BUF_INPLACE) &&
 		       (flags & ROC_SE_SINGLE_BUF_HEADROOM)))) {
 		mdata = alloc_op_meta(&fc_params.meta_buf, m_info->mlen, m_info->pool, infl_req);
