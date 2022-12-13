@@ -460,7 +460,7 @@ cnxk_tim_add_entry_brst(struct cnxk_tim_ring *const tim_ring,
 	int16_t chunk_remainder;
 	uint16_t index = 0;
 	uint64_t lock_sema;
-	int16_t rem, crem;
+	int16_t rem;
 	uint8_t lock_cnt;
 
 __retry:
