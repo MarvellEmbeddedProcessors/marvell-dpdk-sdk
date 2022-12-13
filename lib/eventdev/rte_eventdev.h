@@ -1068,11 +1068,9 @@ rte_event_dev_close(uint8_t dev_id);
  */
 struct rte_event_vector {
 	uint16_t nb_elem;
-	/**< Total number of elements in this event vector. */
+	/**< Number of elements valid in this event vector. */
 	uint16_t elem_offset : 12;
-	/**< Offset into the vector array where valid elements start from.
-	 * The valid elements count would be nb_elem - elem_offset.
-	 */
+	/**< Offset into the vector array where valid elements start from. */
 	uint16_t rsvd : 3;
 	/**< Reserved for future use */
 	uint16_t attr_valid : 1;

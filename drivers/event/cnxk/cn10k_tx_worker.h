@@ -169,12 +169,11 @@ cn10k_sso_hws_event_tx(struct cn10k_sso_hws *ws, struct rte_event *ev, uint64_t 
 	if (ev->event_type & RTE_EVENT_TYPE_VECTOR) {
 		struct rte_mbuf **mbufs = ev->vec->mbufs;
 		uint64_t meta = *(uint64_t *)ev->vec;
-		uint16_t offset, nb_pkts;
+		uint16_t offset, nb_pkts, left;
 		int32_t space;
 
 		nb_pkts = meta & 0xFFFF;
 		offset = (meta >> 16) & 0xFFF;
-		nb_pkts -= offset;
 		if (meta & BIT(31)) {
 			txq = (struct cn10k_eth_txq
 				       *)(txq_data[(txq_data[meta >> 32] >>
@@ -193,14 +192,16 @@ cn10k_sso_hws_event_tx(struct cn10k_sso_hws *ws, struct rte_event *ev, uint64_t 
 			nb_pkts = cn10k_sso_vwqe_split_tx(ws, mbufs + offset, nb_pkts, cmd,
 							  txq_data, flags);
 		}
-		if (!((meta & 0xFFFF) - nb_pkts - offset))
+		left = (meta & 0xFFFF) - nb_pkts;
+
+		if (!left) {
 			rte_mempool_put(rte_mempool_from_obj(ev->vec), ev->vec);
-		else
-			*(uint64_t *)ev->vec = (meta & ~0xFFF0000UL) |
-					       ((uint32_t)nb_pkts + offset)
-						       << 16;
+		} else {
+			*(uint64_t *)ev->vec =
+				(meta & ~0xFFFFFFFUL) | (((uint32_t)nb_pkts + offset) << 16) | left;
+		}
 		rte_prefetch0(ws);
-		return !((meta & 0xFFFF) - nb_pkts - offset);
+		return !left;
 	}
 
 	m = ev->mbuf;
