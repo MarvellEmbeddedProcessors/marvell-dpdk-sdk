@@ -1115,15 +1115,15 @@ fail:
 #define EAL_MEMZONE_INFO_REQ		"/eal/memzone_info"
 #define EAL_HEAP_LIST_REQ		"/eal/heap_list"
 #define EAL_HEAP_INFO_REQ		"/eal/heap_info"
-#define EAL_MEMSEG_LIST_ARR_REQ		"/eal/memseg_list_array"
+#define EAL_MEMSEG_LISTS_REQ		"/eal/memseg_lists"
 #define EAL_MEMSEG_LIST_INFO_REQ	"/eal/memseg_list_info"
 #define EAL_MEMSEG_INFO_REQ		"/eal/memseg_info"
-#define EAL_ELEMENT_LIST_REQ		"/eal/element_list"
-#define EAL_ELEMENT_INFO_REQ		"/eal/element_info"
+#define EAL_ELEMENT_LIST_REQ		"/eal/mem_element_list"
+#define EAL_ELEMENT_INFO_REQ		"/eal/mem_element_info"
 
 #ifdef RTE_EXEC_ENV_LINUX
-#define SYSMEMORY_LIST_REQ		"/sysmem/sys_heap_list"
-#define SYSMEMORY_INFO_REQ		"/sysmem/sys_heap_info"
+#define SYSMEMORY_LIST_REQ             "/sysmem/sys_heap_list"
+#define SYSMEMORY_INFO_REQ             "/sysmem/sys_heap_info"
 #endif
 
 #define ADDR_STR			15
@@ -1275,10 +1275,43 @@ handle_eal_memzone_list_request(const char *cmd __rte_unused,
 	return 0;
 }
 
+/* n_vals is the number of params to be parsed. */
 static int
-handle_eal_memseg_list_array_request(const char *cmd __rte_unused,
-				     const char *params __rte_unused,
-				     struct rte_tel_data *d)
+parse_params(const char *params, uint32_t *vals, size_t n_vals)
+{
+	char dlim[2] = ",";
+	char *params_args;
+	size_t count = 0;
+	char *token;
+
+	if (vals == NULL || params == NULL || strlen(params) == 0)
+		return -1;
+
+	/* strtok expects char * and param is const char *. Hence on using
+	 * params as "const char *" compiler throws warning.
+	 */
+	params_args = strdup(params);
+	if (params_args == NULL)
+		return -1;
+
+	token = strtok(params_args, dlim);
+	while (token && isdigit(*token) && count < n_vals) {
+		vals[count++] = strtoul(token, NULL, 10);
+		token = strtok(NULL, dlim);
+	}
+
+	free(params_args);
+
+	if (count < n_vals)
+		return -1;
+
+	return 0;
+}
+
+static int
+handle_eal_memseg_lists_request(const char *cmd __rte_unused,
+				const char *params __rte_unused,
+				struct rte_tel_data *d)
 {
 	struct rte_mem_config *mcfg;
 	int i;
@@ -1309,22 +1342,13 @@ handle_eal_memseg_list_info_request(const char *cmd __rte_unused,
 	struct rte_fbarray *arr;
 	uint32_t ms_list_idx;
 	int ms_idx;
+	/* size of an array == num params to be parsed. */
+	uint32_t vals[1] = {0};
 
-	if (params == NULL || strlen(params) == 0)
+	if (parse_params(params, vals, RTE_DIM(vals)) < 0)
 		return -1;
 
-	if (strncasecmp(params, "help", strlen(params)) == 0) {
-		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
-		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<memseg-list-id>", EAL_MEMSEG_LIST_INFO_REQ);
-		rte_tel_data_string(d, buff);
-		return 0;
-	}
-
-	if (!isdigit(*params))
-		return -1;
-
-	ms_list_idx = strtoul(params, NULL, 10);
+	ms_list_idx = vals[0];
 	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS)
 		return -1;
 
@@ -1355,54 +1379,26 @@ handle_eal_memseg_info_request(const char *cmd __rte_unused,
 			       const char *params, struct rte_tel_data *d)
 {
 	struct rte_mem_config *mcfg;
-	uint64_t ms_start_addr, ms_end_addr, ms_size;
+	uint64_t ms_start_addr, ms_end_addr, ms_size, hugepage_size;
 	struct rte_memseg_list *msl;
 	const struct rte_memseg *ms;
 	struct rte_fbarray *arr;
 	char addr[ADDR_STR];
 	uint32_t ms_list_idx = 0;
 	uint32_t ms_idx = 0;
-	uint32_t msl_len;
-	char dlim[2] = ",";
-	char *token;
-	char *params_args;
+	int32_t ms_socket_id;
+	uint32_t ms_flags;
+	/* size of an array == num params to be parsed. */
+	uint32_t vals[2] = {0};
 
-	if (params == NULL || strlen(params) == 0)
+	if (parse_params(params, vals, RTE_DIM(vals)) < 0)
 		return -1;
 
-	if (strncasecmp(params, "help", strlen(params)) == 0) {
-		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
-		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<memseg-list-id>,<memseg-id>",
-			 EAL_MEMSEG_INFO_REQ);
-		rte_tel_data_string(d, buff);
-		return 0;
-	}
-
-	/* strtok expects char * and param is const char *. Hence on using
-	 * params as "const char *" compiler throws warning.
-	 */
-	params_args = strdup(params);
-	token = strtok(params_args, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
+	ms_list_idx = vals[0];
+	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS)
 		return -1;
-	}
 
-	ms_list_idx = strtoul(token, NULL, 10);
-	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS) {
-		free(params_args);
-		return -1;
-	}
-
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-	ms_idx = strtoul(token, NULL, 10);
-
-	free(params_args);
+	ms_idx = vals[1];
 
 	rte_mcfg_mem_read_lock();
 
@@ -1414,8 +1410,6 @@ handle_eal_memseg_info_request(const char *cmd __rte_unused,
 	}
 
 	arr = &msl->memseg_arr;
-	msl_len = arr->len;
-
 	ms = rte_fbarray_get(arr, ms_idx);
 	if (ms == NULL) {
 		rte_mcfg_mem_read_unlock();
@@ -1425,19 +1419,24 @@ handle_eal_memseg_info_request(const char *cmd __rte_unused,
 
 	ms_start_addr = ms->addr_64;
 	ms_end_addr = (uint64_t)RTE_PTR_ADD(ms_start_addr, ms->len);
-	ms_size = ms->hugepage_sz;
+	ms_size = ms->len;
+	hugepage_size = ms->hugepage_sz;
+	ms_socket_id = ms->socket_id;
+	ms_flags = ms->flags;
 
 	rte_mcfg_mem_read_unlock();
 
 	rte_tel_data_start_dict(d);
 	rte_tel_data_add_dict_int(d, "Memseg_list_index", ms_list_idx);
 	rte_tel_data_add_dict_int(d, "Memseg_index", ms_idx);
-	rte_tel_data_add_dict_int(d, "Memseg_list_len", msl_len);
 	snprintf(addr, ADDR_STR, "0x%"PRIx64, ms_start_addr);
 	rte_tel_data_add_dict_string(d, "Start_addr", addr);
 	snprintf(addr, ADDR_STR, "0x%"PRIx64, ms_end_addr);
 	rte_tel_data_add_dict_string(d, "End_addr", addr);
-	rte_tel_data_add_dict_int(d, "Size", ms_size);
+	rte_tel_data_add_dict_u64(d, "Size", ms_size);
+	rte_tel_data_add_dict_u64(d, "Hugepage_size", hugepage_size);
+	rte_tel_data_add_dict_int(d, "Socket_id", ms_socket_id);
+	rte_tel_data_add_dict_int(d, "flags", ms_flags);
 
 	return 0;
 }
@@ -1456,60 +1455,22 @@ handle_eal_element_list_request(const char *cmd __rte_unused,
 	uint32_t ms_list_idx = 0;
 	uint32_t heap_id = 0;
 	uint32_t ms_idx = 0;
-	char dlim[2] = ",";
 	int elem_count = 0;
-	char *token;
-	char *params_args;
+	/* size of an array == num params to be parsed. */
+	uint32_t vals[3] = {0};
 
-	if (params == NULL || strlen(params) == 0)
+	if (parse_params(params, vals, RTE_DIM(vals)) < 0)
 		return -1;
 
-	if (strncasecmp(params, "help", strlen(params)) == 0) {
-		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
-		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<heap-id>,<memseg-list-id>,<memseg-id>",
-			 EAL_ELEMENT_LIST_REQ);
-		rte_tel_data_string(d, buff);
-		return 0;
-	}
-
-	/* strtok expects char * and param is const char *. Hence on using
-	 * params as "const char *" compiler throws warning.
-	 */
-	params_args = strdup(params);
-	token = strtok(params_args, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
+	heap_id = vals[0];
+	if (heap_id >= RTE_MAX_HEAPS)
 		return -1;
-	}
 
-	heap_id = strtoul(token, NULL, 10);
-	if (heap_id >= RTE_MAX_HEAPS) {
-		free(params_args);
+	ms_list_idx = vals[1];
+	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS)
 		return -1;
-	}
 
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-
-	ms_list_idx = strtoul(token, NULL, 10);
-	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS) {
-		free(params_args);
-		return -1;
-	}
-
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-
-	ms_idx = strtoul(token, NULL, 10);
-
-	free(params_args);
+	ms_idx = vals[2];
 
 	rte_mcfg_mem_read_lock();
 
@@ -1567,77 +1528,24 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 	uint32_t ms_idx = 0;
 	uint32_t start_elem = 0, end_elem = 0;
 	uint32_t count = 0, elem_count = 0;
-	char dlim[2] = ",";
 	char str[ADDR_STR];
-	char *params_args;
-	char *token;
+	/* size of an array == num params to be parsed. */
+	uint32_t vals[5] = {0};
 
-	if (params == NULL || strlen(params) == 0)
+	if (parse_params(params, vals, RTE_DIM(vals)) < 0)
 		return -1;
 
-	if (strncasecmp(params, "help", strlen(params)) == 0) {
-		char buff[RTE_TEL_MAX_SINGLE_STRING_LEN];
-		snprintf(buff, RTE_TEL_MAX_SINGLE_STRING_LEN,
-			 "%s,<heap-id>,<memseg-list-id>,<memseg-id>,"
-			 "<elem-start-id>,<elem-end-id>",
-			 EAL_ELEMENT_INFO_REQ);
-		rte_tel_data_string(d, buff);
-		return 0;
-	}
-
-	/* strtok expects char * and param is const char *. Hence on using
-	 * params as "const char *" compiler throws warning.
-	 */
-	params_args = strdup(params);
-	token = strtok(params_args, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
+	heap_id = vals[0];
+	if (heap_id >= RTE_MAX_HEAPS)
 		return -1;
-	}
 
-	heap_id = strtoul(token, NULL, 10);
-	if (heap_id >= RTE_MAX_HEAPS) {
-		free(params_args);
+	ms_list_idx = vals[1];
+	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS)
 		return -1;
-	}
 
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-
-	ms_list_idx = strtoul(token, NULL, 10);
-	if (ms_list_idx >= RTE_MAX_MEMSEG_LISTS) {
-		free(params_args);
-		return -1;
-	}
-
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-
-	ms_idx = strtoul(token, NULL, 10);
-
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-
-	start_elem = strtoul(token, NULL, 10);
-
-	token = strtok(NULL, dlim);
-	if (token == NULL || !isdigit(*token)) {
-		free(params_args);
-		return -1;
-	}
-
-	end_elem = strtoul(token, NULL, 10);
-
-	free(params_args);
+	ms_idx = vals[2];
+	start_elem = vals[3];
+	end_elem = vals[4];
 
 	if (end_elem < start_elem)
 		return -1;
@@ -1702,7 +1610,7 @@ handle_eal_element_info_request(const char *cmd __rte_unused,
 			 "Pad" : "Error");
 		rte_tel_data_add_dict_string(c, "element_state", str);
 
-		snprintf(str, ADDR_STR, "%s.%u", "element", count);
+		snprintf(str, ADDR_STR, "%s_%u", "element", count);
 		if (rte_tel_data_add_dict_container(d, str, c, 0) != 0) {
 			rte_tel_data_free(c);
 			break;
@@ -2050,22 +1958,22 @@ RTE_INIT(memory_telemetry)
 			EAL_HEAP_INFO_REQ, handle_eal_heap_info_request,
 			"Returns malloc heap stats. Parameters: int heap_id");
 	rte_telemetry_register_cmd(
-			EAL_MEMSEG_LIST_ARR_REQ,
-			handle_eal_memseg_list_array_request,
-			"Returns hugepage list. Takes no parameters");
+			EAL_MEMSEG_LISTS_REQ,
+			handle_eal_memseg_lists_request,
+			"Returns array of memseg list IDs. Takes no parameters");
 	rte_telemetry_register_cmd(
 			EAL_MEMSEG_LIST_INFO_REQ,
 			handle_eal_memseg_list_info_request,
-			"Returns memseg list. Parameters: int memseg_list_id");
+			"Returns memseg list info. Parameters: int memseg_list_id");
 	rte_telemetry_register_cmd(
 			EAL_MEMSEG_INFO_REQ, handle_eal_memseg_info_request,
 			"Returns memseg info. Parameter: int memseg_list_id,int memseg_id");
 	rte_telemetry_register_cmd(EAL_ELEMENT_LIST_REQ,
 			handle_eal_element_list_request,
-			"Returns element info. Parameters: int heap_id, int memseg_list_id, int memseg_id");
+			"Returns array of heap element IDs. Parameters: int heap_id, int memseg_list_id, int memseg_id");
 	rte_telemetry_register_cmd(EAL_ELEMENT_INFO_REQ,
 			handle_eal_element_info_request,
-			"Returns element info. Parameters: int heap_id, memseg_list_id, memseg_id, start_elem_id, end_elem_id");
+			"Returns element info. Parameters: int heap_id, int memseg_list_id, int memseg_id, int start_elem_id, int end_elem_id");
 
 #ifdef RTE_EXEC_ENV_LINUX
 	rte_telemetry_register_cmd(SYSMEMORY_LIST_REQ,
