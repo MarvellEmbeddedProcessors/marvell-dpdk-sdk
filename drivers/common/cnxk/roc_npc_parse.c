@@ -395,26 +395,22 @@ npc_parse_lb_vlan(struct npc_parse_state *pst)
 	if (rc)
 		return rc;
 
-	if (vlan_count == 1) {
-		return npc_update_vlan_parse_state(pst, pattern_list[0], lid, lt, lflags,
-						   vlan_count);
-	} else if (vlan_count == 2) {
-		rc = npc_update_vlan_parse_state(pst, pattern_list[0], lid, lt, lflags, vlan_count);
-		if (rc)
-			return rc;
-
-		pst->pattern = last_pattern + 2;
-	} else if (vlan_count == 3) {
+	if (vlan_count == 3) {
 		if (pattern_list[2]->spec != NULL && pattern_list[2]->mask != NULL &&
 		    pattern_list[2]->last != NULL)
 			return NPC_ERR_PATTERN_NOTSUP;
 
-		rc = npc_update_vlan_parse_state(pst, pattern_list[0], lid, lt, lflags, 2);
-		if (rc)
-			return rc;
-
-		pst->pattern = last_pattern + 3;
+		/* Matching can be done only for two tags. */
+		vlan_count = 2;
+		last_pattern++;
 	}
+
+	rc = npc_update_vlan_parse_state(pst, pattern_list[0], lid, lt, lflags, vlan_count);
+	if (rc)
+		return rc;
+
+	if (vlan_count > 1)
+		pst->pattern = last_pattern + vlan_count;
 
 	return 0;
 }

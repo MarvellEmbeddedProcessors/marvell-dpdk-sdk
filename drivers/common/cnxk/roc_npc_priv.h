@@ -417,6 +417,7 @@ int npc_mcam_alloc_entry(struct npc *npc, struct roc_npc_flow *mcam,
 			 int *resp_count);
 int npc_mcam_alloc_entries(struct mbox *mbox, int ref_mcam, int *alloc_entry, int req_count,
 			   int prio, int *resp_count, bool is_conti);
+
 int npc_mcam_ena_dis_entry(struct npc *npc, struct roc_npc_flow *mcam, bool enable);
 int npc_mcam_write_entry(struct mbox *mbox, struct roc_npc_flow *mcam);
 int npc_flow_enable_all_entries(struct npc *npc, bool enable);
