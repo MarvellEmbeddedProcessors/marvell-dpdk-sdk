@@ -73,14 +73,14 @@ function setup_ipsec_mb()
 	mkdir -p $BUILD_ROOT/ipsec_mb
 
 	pushd $BUILD_ROOT/ipsec_mb
-	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/main/ipsec-mb-main.tar.gz
-	tar -zxvf ipsec-mb-main.tar.gz --strip-components=1
+	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2022.05.25/ipsec-mb-SECLIB-IPSEC-2022.05.25.tar.gz
+	tar -zxvf ipsec-mb-SECLIB-IPSEC-2022.05.25.tar.gz --strip-components=1
 	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch1
 	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch2
-	SHARED=y CC=aarch64-marvell-linux-gnu-gcc STRIP=aarch64-marvell-linux-gnu-strip \
-		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT
-	SHARED=y CC=aarch64-marvell-linux-gnu-gcc STRIP=aarch64-marvell-linux-gnu-strip \
-		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT install
+	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
+		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y
+	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
+		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y install
 	popd
 }
 
