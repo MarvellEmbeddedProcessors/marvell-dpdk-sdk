@@ -2,6 +2,8 @@
 # Copyright(C) 2021 Marvell.
 #
 
+deps += ['common_cnxk']
+
 sources = files(
         'otx_ep_ethdev.c',
         'otx_ep_rxtx.c',
