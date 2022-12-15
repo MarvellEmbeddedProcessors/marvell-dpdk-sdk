@@ -1199,6 +1199,8 @@ struct nix_inline_ipsec_cfg {
 		uint8_t __io cpt_slot;
 	} inst_qsel;
 	uint8_t __io enable;
+	uint16_t __io bpid;
+	uint32_t __io credit_th;
 };
 
 /* Per NIX LF inline IPSec configuration */
@@ -1512,6 +1514,8 @@ struct cpt_rx_inline_lf_cfg_msg {
 	uint16_t __io param2;
 	uint16_t __io opcode;
 	uint32_t __io credit;
+	uint32_t __io credit_th;
+	uint16_t __io bpid;
 	uint32_t __io reserved;
 };
 
