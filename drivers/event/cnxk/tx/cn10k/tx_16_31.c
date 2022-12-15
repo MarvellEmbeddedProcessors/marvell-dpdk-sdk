@@ -4,6 +4,10 @@
 
 #include "cn10k_tx_worker.h"
 
+#ifdef _ROC_API_H_
+#error "roc_api.h is included"
+#endif
+
 #define T(name, sz, flags) SSO_TX(cn10k_sso_hws_tx_adptr_enq_##name, sz, flags)
 
 NIX_TX_FASTPATH_MODES_16_31

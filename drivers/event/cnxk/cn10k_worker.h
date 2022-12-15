@@ -5,10 +5,11 @@
 #ifndef __CN10K_WORKER_H__
 #define __CN10K_WORKER_H__
 
-#include "cn10k_cryptodev_ops.h"
-#include "cnxk_worker.h"
-#include "cn10k_ethdev.h"
+#include <rte_eventdev.h>
+#include "cn10k_cryptodev_event_dp.h"
 #include "cn10k_rx.h"
+#include "cnxk_worker.h"
+#include "cn10k_eventdev.h"
 
 /* CN10K Rx event fastpath */
 
