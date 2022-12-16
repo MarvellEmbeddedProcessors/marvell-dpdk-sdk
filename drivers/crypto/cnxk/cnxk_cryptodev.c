@@ -67,5 +67,5 @@ cnxk_cpt_int_misc_cb(struct roc_cpt_lf *lf, __rte_unused void *args)
 	if (roc_cpt == NULL)
 		return;
 
-	rte_cryptodev_pmd_callback_process(roc_cpt->opaque, lf->lf_id, RTE_CRYPTODEV_EVENT_ERROR);
+	rte_cryptodev_pmd_callback_process(roc_cpt->opaque, RTE_CRYPTODEV_EVENT_ERROR);
 }

@@ -1695,8 +1695,8 @@ rte_cryptodev_callback_unregister(uint8_t dev_id,
 }
 
 void
-rte_cryptodev_pmd_callback_process(struct rte_cryptodev *dev, uint16_t qp_id,
-				   enum rte_cryptodev_event_type event)
+rte_cryptodev_pmd_callback_process(struct rte_cryptodev *dev,
+	enum rte_cryptodev_event_type event)
 {
 	struct rte_cryptodev_callback *cb_lst;
 	struct rte_cryptodev_callback dev_cb;
@@ -1708,8 +1708,8 @@ rte_cryptodev_pmd_callback_process(struct rte_cryptodev *dev, uint16_t qp_id,
 		dev_cb = *cb_lst;
 		cb_lst->active = 1;
 		rte_spinlock_unlock(&rte_cryptodev_cb_lock);
-		dev_cb.cb_fn(dev->data->dev_id, qp_id, dev_cb.event,
-			     dev_cb.cb_arg);
+		dev_cb.cb_fn(dev->data->dev_id, dev_cb.event,
+						dev_cb.cb_arg);
 		rte_spinlock_lock(&rte_cryptodev_cb_lock);
 		cb_lst->active = 0;
 	}

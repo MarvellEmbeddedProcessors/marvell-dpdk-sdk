@@ -562,7 +562,6 @@ rte_cryptodev_pmd_destroy(struct rte_cryptodev *cryptodev);
  * device.
  *  *
  * @param	dev	Pointer to cryptodev struct
- * @param	qp_id	To pass qp_id, which got interrupt, to user application.
  * @param	event	Crypto device interrupt event type.
  *
  * @return
@@ -570,7 +569,7 @@ rte_cryptodev_pmd_destroy(struct rte_cryptodev *cryptodev);
  */
 __rte_internal
 void rte_cryptodev_pmd_callback_process(struct rte_cryptodev *dev,
-			uint16_t qp_id, enum rte_cryptodev_event_type event);
+				enum rte_cryptodev_event_type event);
 
 /**
  * @internal

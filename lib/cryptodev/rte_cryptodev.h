@@ -573,16 +573,12 @@ typedef uint16_t (*rte_cryptodev_callback_fn)(uint16_t dev_id, uint16_t qp_id,
  * software for notification of device events
  *
  * @param	dev_id	Crypto device identifier
- * @param	qp_id	Return parameter from driver to the application. Driver
- *			returns queue pair ID when it gets HW error interrupt.
- *			The application can release and setup the queue
- *			again, to bring the HW queue back to normal state.
  * @param	event	Crypto device event to register for notification of.
  * @param	cb_arg	User specified parameter to be passed as to passed to
  *			users callback function.
  */
-typedef void (*rte_cryptodev_cb_fn)(uint8_t dev_id, uint16_t qp_id,
-	enum rte_cryptodev_event_type event, void *cb_arg);
+typedef void (*rte_cryptodev_cb_fn)(uint8_t dev_id,
+		enum rte_cryptodev_event_type event, void *cb_arg);
 
 /** Crypto Device statistics */
 struct rte_cryptodev_stats {
