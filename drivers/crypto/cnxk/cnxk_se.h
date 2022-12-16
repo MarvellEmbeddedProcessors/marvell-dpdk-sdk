@@ -1698,7 +1698,8 @@ fill_sess_aead(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 					 aead_form->digest_length)))
 		return -1;
 
-	sess->roc_se_ctx.template_w4.s.opcode_minor |= BIT(5);
+	if (enc_type == ROC_SE_CHACHA20)
+		sess->roc_se_ctx.template_w4.s.opcode_minor |= BIT(5);
 	return 0;
 }
 
@@ -2069,7 +2070,6 @@ fill_sess_gmac(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 					 a_form->digest_length)))
 		return -1;
 
-	sess->roc_se_ctx.template_w4.s.opcode_minor |= BIT(5);
 	return 0;
 }
 
