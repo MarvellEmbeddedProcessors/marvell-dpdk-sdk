@@ -110,6 +110,10 @@ EXPERIMENTAL {
 
 	#added in 22.07
 	rte_cryptodev_session_event_mdata_set;
+
+	# added in 23.03
+	rte_cryptodev_queue_pair_event_error_query;
+
 };
 
 INTERNAL {

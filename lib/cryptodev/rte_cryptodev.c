@@ -1717,6 +1717,25 @@ rte_cryptodev_pmd_callback_process(struct rte_cryptodev *dev,
 }
 
 int
+rte_cryptodev_queue_pair_event_error_query(uint8_t dev_id, uint16_t qp_id)
+{
+	struct rte_cryptodev *dev;
+
+	if (!rte_cryptodev_is_valid_dev(dev_id)) {
+		CDEV_LOG_ERR("Invalid dev_id=%" PRIu8, dev_id);
+		return -EINVAL;
+	}
+	dev = &rte_crypto_devices[dev_id];
+
+	if (qp_id >= dev->data->nb_queue_pairs)
+		return -EINVAL;
+	if (*dev->dev_ops->queue_pair_event_error_query == NULL)
+		return -ENOTSUP;
+
+	return dev->dev_ops->queue_pair_event_error_query(dev, qp_id);
+}
+
+int
 rte_cryptodev_sym_session_init(uint8_t dev_id,
 		struct rte_cryptodev_sym_session *sess,
 		struct rte_crypto_sym_xform *xforms,
