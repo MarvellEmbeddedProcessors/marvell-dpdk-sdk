@@ -150,6 +150,9 @@ EXPERIMENTAL {
 	__rte_cryptodev_trace_sym_session_get_user_data;
 	__rte_cryptodev_trace_sym_session_set_user_data;
 	__rte_cryptodev_trace_count;
+
+	# added in 23.03
+	rte_cryptodev_queue_pair_event_error_query;
 };
 
 INTERNAL {
