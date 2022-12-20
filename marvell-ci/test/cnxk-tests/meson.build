@@ -71,6 +71,7 @@ test_subdirs = [
         'ipsec_reassembly_perf',
         'lso_test',
         'multi_pool_pkt_tx',
+        'multi_mempool',
 ]
 
 foreach dir:test_subdirs
