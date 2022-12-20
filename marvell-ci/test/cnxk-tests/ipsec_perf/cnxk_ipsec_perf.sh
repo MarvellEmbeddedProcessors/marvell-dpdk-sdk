@@ -7,6 +7,7 @@ set -e
 GENERATOR_BOARD=${GENERATOR_BOARD:-}
 REMOTE_DIR=${REMOTE_DIR:-$(pwd | cut -d/ -f 1-3)}
 CNXKTESTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-"$1/deps/lib"}
 PKT_LIST="64 380 1410"
 NUM_CAPTURE=3
 MAX_TRY_CNT=5
@@ -502,7 +503,7 @@ find_exec()
 exec_testpmd_cmd_gen()
 {
 	$TARGET_SSH_CMD $GENERATOR_BOARD "cd $REMOTE_DIR;" \
-		"sudo TESTPMD_OP=$1 $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT) $2 $3"
+		"sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH TESTPMD_OP=$1 $(find_exec $GENERATOR_BOARD $GENERATOR_SCRIPT) $2 $3"
 }
 
 function pmd_tx_launch()
