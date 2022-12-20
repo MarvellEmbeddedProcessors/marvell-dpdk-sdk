@@ -73,6 +73,7 @@ test_subdirs = [
         'cman_test',
         'multi_pool_pkt_tx',
         'flow_ctrl',
+        'multi_mempool',
 ]
 
 foreach dir:test_subdirs
