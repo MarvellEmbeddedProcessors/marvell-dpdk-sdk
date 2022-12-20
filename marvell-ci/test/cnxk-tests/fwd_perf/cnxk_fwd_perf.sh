@@ -9,6 +9,8 @@ PLAT=${PLAT:-}
 CNXKTESTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 VFIO_DEVBIND="$1/marvell-ci/test/board/oxk-devbind-basic.sh"
 
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-"$1/deps/lib"}
+
 source $CNXKTESTPATH/../common/testpmd/common.env
 
 # Find the dpdk-ipsec-secgw application
@@ -194,9 +196,9 @@ launch_gen() {
 	echo $START_STR ${test_name[$1]} >>$GEN_LOG_FULL
 	if [[ $WITH_GEN_BOARD -eq 1 ]] && [[ "${test_cmd[$idx]}" == "testpmd" ]]
 	then
-	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=launch_basic $G_ENV $gen $GEN_ARG"
+	$remote_ssh "$SUDO LD_LIBRARY_PATH=$LD_LIBRARY_PATH PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=launch_basic $G_ENV $gen $GEN_ARG"
 	else
-	$remote_ssh "$SUDO PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=launch $G_ENV $gen $GEN_ARG"
+	$remote_ssh "$SUDO LD_LIBRARY_PATH=$LD_LIBRARY_PATH PLAT=$PLAT PORT0=$GEN_PORT TEST_OP=launch $G_ENV $gen $GEN_ARG"
 	fi
 }
 
