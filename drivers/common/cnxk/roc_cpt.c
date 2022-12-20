@@ -1189,20 +1189,21 @@ roc_cpt_ctx_write(struct roc_cpt_lf *lf, void *sa_dptr, void *sa_cptr,
 	return 0;
 }
 
-int
+void
 roc_cpt_int_misc_cb_register(roc_cpt_int_misc_cb_t cb, void *args)
 {
 	if (int_cb.cb != NULL)
-		return -EBUSY;
+		return;
 
 	int_cb.cb = cb;
 	int_cb.cb_args = args;
-	return 0;
 }
 
 int
 roc_cpt_int_misc_cb_unregister(roc_cpt_int_misc_cb_t cb, void *args)
 {
+	if (int_cb.cb == NULL)
+		return 0;
 	if (int_cb.cb != cb || int_cb.cb_args != args)
 		return -EINVAL;
 
