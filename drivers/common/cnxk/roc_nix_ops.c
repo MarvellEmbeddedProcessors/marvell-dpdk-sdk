@@ -362,7 +362,7 @@ roc_nix_lso_fmt_setup(struct roc_nix *roc_nix)
 		rc =  -ENOSPC;
 		goto exit;
 	}
-		goto exit;
+
 	nix_lso_tun_tcp(req, false, false);
 	rc = mbox_process_msg(mbox, (void *)&rsp);
 	if (rc)
