@@ -13,6 +13,11 @@ PRFX="cman-config"
 TESTPMD_PORT="0002:02:00.0"
 TESTPMD_COREMASK="0x3"
 
+TXPRFX="cman-config_tx"
+RXPRFX="cman-config_rx"
+TESTPMD_TXPORT="0002:01:00.1"
+TESTPMD_RXPORT="0002:01:00.2"
+
 if [ -f $CNXKTESTPATH/../board/oxk-devbind-basic.sh ]
 then
 	VFIO_DEVBIND="$CNXKTESTPATH/../board/oxk-devbind-basic.sh"
@@ -272,5 +277,114 @@ testpmd_cmd $PRFX "port start all"
 testpmd_cmd $PRFX "start"
 
 testpmd_log $PRFX
+testpmd_quit $PRFX
+testpmd_cleanup $PRFX
 
 echo "SUCCESS: testpmd cman configuration test suit completed"
+
+function stop_testpmd()
+{
+	testpmd_quit $RXPRFX
+	sleep 1
+	testpmd_cleanup $RXPRFX
+	sleep 1
+	testpmd_quit $TXPRFX
+	sleep 1
+	testpmd_cleanup $TXPRFX
+}
+
+function run_testpmd()
+{
+	testpmd_launch $TXPRFX \
+        	"-l 0-10 -n 1 -a $TESTPMD_TXPORT" \
+        	"--no-flush-rx --nb-cores=8 --forward-mode=txonly --txq=8 --rxq=8"
+	sleep 1
+	testpmd_cmd $TXPRFX "start"
+
+	if [ $1 == "mempool" ] ;then
+		testpmd_launch $RXPRFX \
+			"-l 11-20 -n 1 -a $TESTPMD_RXPORT" \
+			"--no-flush-rx --nb-cores=8 --forward-mode=rxonly --txq=8 --rxq=8 --total-num-mbufs=4096"
+	fi
+
+	if [ $1 == "queue" ] ;then
+		testpmd_launch $RXPRFX \
+			"-l 11-20 -n 1 -a $TESTPMD_RXPORT" \
+			"--no-flush-rx --nb-cores=8 --forward-mode=rxonly --txq=8 --rxq=8"
+	fi
+
+}
+
+function configure_mode()
+{
+	for i in 0 1 2 3 4 5 6 7
+	do
+		if [ $3 == "queue" ] ;then
+			testpmd_cmd $RXPRFX "set port cman config 0 $i obj queue mode red $1 $2 1"
+		fi
+
+		if [ $3 == "mempool" ] ;then
+			testpmd_cmd $RXPRFX "set port cman config 0 $i obj queue_mempool mode red $1 $2 1"
+		fi
+	done
+	testpmd_cmd $RXPRFX "start"
+}
+
+update_val=0
+function check_stats()
+{
+        local prefix=$1
+        local out=testpmd.out.$prefix
+	local mpps=1000000
+
+	testpmd_cmd $RXPRFX "show port stats all"
+	sleep 2
+	testpmd_cmd $RXPRFX "show port stats all"
+	sleep 2
+
+        val=`cat $out | grep "Rx-pps:" | awk -e '{print $2}' | tail -1`
+
+	if [ "$val" -ge $update_val ]; then
+		echo "min_thres = $2 max_thres = $3 throughput $val"
+		update_val=$val
+	else
+		echo "cman test for min_thres = $2 max_thres = $3 failed"
+		exit 1
+	fi
+
+}
+
+echo "Starting testpmd cman throughput test for queue mode"
+run_testpmd queue
+configure_mode 1 1 queue
+check_stats $RXPRFX 1 1
+stop_testpmd
+sleep 2
+run_testpmd queue
+configure_mode 40 60 queue
+check_stats $RXPRFX 40 60
+stop_testpmd
+sleep 2
+run_testpmd queue
+configure_mode 60 90 queue
+check_stats $RXPRFX 60 90
+stop_testpmd
+sleep 2
+update_val=0
+echo "Starting testpmd cman throughput test for mempool mode"
+run_testpmd mempool
+configure_mode 10 20 mempool
+check_stats $RXPRFX 10 20
+stop_testpmd
+sleep 2
+run_testpmd mempool
+configure_mode 20 50 mempool
+check_stats $RXPRFX 20 50
+stop_testpmd
+sleep 2
+run_testpmd mempool
+configure_mode 70 90 mempool
+check_stats $RXPRFX 70 90
+stop_testpmd
+sleep 2
+echo "SUCCESS: testpmd cman throughput test suit completed"
