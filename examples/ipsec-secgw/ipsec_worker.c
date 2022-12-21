@@ -960,7 +960,7 @@ static void
 ipsec_event_vector_free(struct rte_event *ev)
 {
 	struct rte_event_vector *vec = ev->vec;
-	rte_pktmbuf_free_bulk(vec->mbufs + vec->elem_offset, vec->nb_elem - vec->elem_offset);
+	rte_pktmbuf_free_bulk(vec->mbufs + vec->elem_offset, vec->nb_elem);
 	rte_mempool_put(rte_mempool_from_obj(vec), vec);
 }
 
