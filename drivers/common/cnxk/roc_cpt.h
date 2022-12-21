@@ -133,7 +133,7 @@ struct roc_cpt {
 	union cpt_eng_caps hw_caps[CPT_MAX_ENG_TYPES];
 	uint8_t eng_grp[CPT_MAX_ENG_TYPES];
 	uint8_t cpt_revision;
-
+	void *opaque;
 #define ROC_CPT_MEM_SZ (6 * 1024)
 	uint8_t reserved[ROC_CPT_MEM_SZ] __plt_cache_aligned;
 } __plt_cache_aligned;
@@ -155,6 +155,9 @@ struct roc_cpt_inline_ipsec_inb_cfg {
 	uint32_t credit_th;
 	uint8_t egrp;
 };
+
+/* CPT MISC interrupt callback */
+typedef void (*roc_cpt_int_misc_cb_t)(struct roc_cpt_lf *lf, void *args);
 
 int __roc_api roc_cpt_rxc_time_cfg(struct roc_cpt *roc_cpt,
 				   struct roc_cpt_rxc_time_cfg *cfg);
@@ -186,4 +189,7 @@ int __roc_api roc_cpt_lmtline_init(struct roc_cpt *roc_cpt,
 void __roc_api roc_cpt_parse_hdr_dump(const struct cpt_parse_hdr_s *cpth);
 int __roc_api roc_cpt_ctx_write(struct roc_cpt_lf *lf, void *sa_dptr,
 				void *sa_cptr, uint16_t sa_len);
+
+void __roc_api roc_cpt_int_misc_cb_register(roc_cpt_int_misc_cb_t cb, void *args);
+int __roc_api roc_cpt_int_misc_cb_unregister(roc_cpt_int_misc_cb_t cb, void *args);
 #endif /* _ROC_CPT_H_ */
