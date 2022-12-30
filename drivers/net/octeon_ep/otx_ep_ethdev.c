@@ -3,6 +3,7 @@
  */
 
 #include <ethdev_pci.h>
+#include <rte_kvargs.h>
 
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
@@ -103,7 +104,7 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 		ret = otx_ep_vf_setup_device(otx_epvf);
 		otx_epvf->fn_list.disable_io_queues(otx_epvf);
 		break;
-	case PCI_DEVID_CN9K_EP_NET_VF:
+	case PCI_DEVID_OCTEONTX2_EP_NET_VF:
 	case PCI_DEVID_CN98XX_EP_NET_VF:
 		otx_epvf->chip_id = dev_id;
 		ret = otx2_ep_vf_setup_device(otx_epvf);
@@ -143,7 +144,7 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 	otx_epvf->eth_dev->rx_pkt_burst = &otx_ep_recv_pkts;
 	if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF)
 		otx_epvf->eth_dev->tx_pkt_burst = &otx_ep_xmit_pkts;
-	else if (otx_epvf->chip_id == PCI_DEVID_CN9K_EP_NET_VF ||
+	else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF)
 		otx_epvf->eth_dev->tx_pkt_burst = &otx2_ep_xmit_pkts;
 	else if (otx_epvf->chip_id == PCI_DEVID_CNXK_EP_NET_VF)
@@ -473,6 +474,48 @@ otx_ep_eth_dev_uninit(struct rte_eth_dev *eth_dev)
 	return 0;
 }
 
+static inline int
+otx_ep_parse_parameters(struct rte_eth_dev *dev)
+{
+	int ret = 0;
+	unsigned int i;
+	struct rte_kvargs *kvlist;
+	static const char *const params[] = {
+		SDP_PACKET_MODE_PARAM,
+		NULL};
+	struct otx_ep_device *otx_ep_dev = OTX_EP_DEV(dev);
+
+	/* Default to NIC mode */
+	otx_ep_dev->sdp_packet_mode = SDP_PACKET_MODE_NIC;
+
+	kvlist = rte_kvargs_parse(dev->device->devargs->args, params);
+	if (!kvlist)
+		return -EINVAL;
+
+	if (kvlist->count == 0)
+		goto exit;
+
+	for (i = 0; i != kvlist->count; ++i) {
+		const struct rte_kvargs_pair *pair = &kvlist->pairs[i];
+
+		if (!strcmp(pair->key, SDP_PACKET_MODE_PARAM)) {
+			if (!strcmp(pair->value, "nic"))
+				otx_ep_dev->sdp_packet_mode =
+							SDP_PACKET_MODE_NIC;
+			else if (!strcmp(pair->value, "loop"))
+				otx_ep_dev->sdp_packet_mode =
+							SDP_PACKET_MODE_LOOP;
+			else
+				otx_ep_err("Invalid packet_mode: %s, defaulting to nic mode.\n",
+					   pair->value);
+		}
+	}
+
+exit:
+	rte_kvargs_free(kvlist);
+	return ret;
+}
+
 static int
 otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 {
@@ -483,6 +526,8 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	/* Single process support */
 	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
 		return 0;
+
+	otx_ep_parse_parameters(eth_dev);
 
 	otx_epvf->eth_dev = eth_dev;
 	otx_epvf->port_id = eth_dev->data->port_id;
@@ -499,10 +544,15 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	otx_epvf->pdev = pdev;
 
 	otx_epdev_init(otx_epvf);
-	if (pdev->id.device_id == PCI_DEVID_CN9K_EP_NET_VF)
-		otx_epvf->pkind = SDP_OTX2_PKIND;
-	else
+	if (pdev->id.device_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
+	    pdev->id.device_id == PCI_DEVID_CN98XX_EP_NET_VF) {
+		if (otx_epvf->sdp_packet_mode == SDP_PACKET_MODE_NIC)
+			otx_epvf->pkind = SDP_OTX2_PKIND_FS24;
+		else
+			otx_epvf->pkind = SDP_OTX2_PKIND_FS0;
+	} else {
 		otx_epvf->pkind = SDP_PKIND;
+	}
 	otx_ep_info("using pkind %d\n", otx_epvf->pkind);
 
 	return 0;
@@ -527,7 +577,7 @@ otx_ep_eth_dev_pci_remove(struct rte_pci_device *pci_dev)
 /* Set of PCI devices this driver supports */
 static const struct rte_pci_id pci_id_otx_ep_map[] = {
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_OCTEONTX_EP_VF) },
-	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN9K_EP_NET_VF) },
+	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_OCTEONTX2_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN98XX_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNXK_EP_NET_VF) },
 	{ .vendor_id = 0, /* sentinel */ }
@@ -544,3 +594,4 @@ RTE_PMD_REGISTER_PCI(net_otx_ep, rte_otx_ep_pmd);
 RTE_PMD_REGISTER_PCI_TABLE(net_otx_ep, pci_id_otx_ep_map);
 RTE_PMD_REGISTER_KMOD_DEP(net_otx_ep, "* igb_uio | vfio-pci");
 RTE_LOG_REGISTER_DEFAULT(otx_net_ep_logtype, NOTICE);
+RTE_PMD_REGISTER_PARAM_STRING(net_otx_ep, SDP_PACKET_MODE_PARAM "=<string>");

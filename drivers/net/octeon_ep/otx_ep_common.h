@@ -31,7 +31,20 @@
 #define OTX_EP_NORESP_LAST          (4)
 #define OTX_EP_PCI_RING_ALIGN   65536
 #define SDP_PKIND 40
-#define SDP_OTX2_PKIND 57
+#define SDP_OTX2_PKIND_FS24 57	/* Front size 24, NIC mode */
+/* Use LBK PKIND */
+#define SDP_OTX2_PKIND_FS0  0	/* Front size 0, LOOP packet mode */
+
+/*
+ * Values for SDP packet mode
+ * NIC: Has 24 byte header Host-> Octeon, 8 byte header Octeon->Host,
+ *      application must handle these
+ * LOOP: No headers, standard DPDK apps work on both ends.
+ * The mode is selected by a parameter provided to the HOST DPDK driver
+ */
+#define SDP_PACKET_MODE_PARAM	"sdp_packet_mode"
+#define SDP_PACKET_MODE_NIC	0x0
+#define SDP_PACKET_MODE_LOOP	0x1
 
 #define      ORDERED_TAG 0
 #define      ATOMIC_TAG  1
@@ -228,11 +241,12 @@ struct otx_ep_droq_desc {
 };
 #define OTX_EP_DROQ_DESC_SIZE	(sizeof(struct otx_ep_droq_desc))
 
-/* Receive Header */
+/* Receive Header, only present in NIC mode. */
 union otx_ep_rh {
 	uint64_t rh64;
 };
-#define OTX_EP_RH_SIZE (sizeof(union otx_ep_rh))
+#define OTX_EP_RH_SIZE_NIC (sizeof(union otx_ep_rh))
+#define OTX_EP_RH_SIZE_LOOP 0  /* Nothing in LOOP mode */
 
 /** Information about packet DMA'ed by OCTEON 9.
  *  The format of the information available at Info Pointer after OCTEON 9
@@ -244,10 +258,13 @@ struct otx_ep_droq_info {
 	/* The Length of the packet. */
 	uint64_t length;
 
-	/* The Output Receive Header. */
+	/* The Output Receive Header, only present in NIC mode */
 	union otx_ep_rh rh;
 };
-#define OTX_EP_DROQ_INFO_SIZE	(sizeof(struct otx_ep_droq_info))
+#define OTX_EP_DROQ_INFO_SIZE_NIC	(sizeof(struct otx_ep_droq_info))
+#define OTX_EP_DROQ_INFO_SIZE_LOOP	(sizeof(struct otx_ep_droq_info) + \
+						OTX_EP_RH_SIZE_LOOP - \
+						OTX_EP_RH_SIZE_NIC)
 
 /* DROQ statistics. Each output queue has four stats fields. */
 struct otx_ep_droq_stats {
@@ -455,6 +472,9 @@ struct otx_ep_device {
 	uint64_t rx_offloads;
 
 	uint64_t tx_offloads;
+
+	/* Packet mode (LOOP vs NIC), set by parameter */
+	uint8_t sdp_packet_mode;
 };
 
 int otx_ep_setup_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no,
