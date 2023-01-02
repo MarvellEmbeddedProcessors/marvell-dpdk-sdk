@@ -117,6 +117,9 @@
 #define PCI_DEVID_CN98XX_EP_NET_VF		0xB103
 #define PCI_DEVID_CNF95N_EP_NET_VF		0xB403
 #define PCI_DEVID_CNF95O_EP_NET_VF		0xB603
+#define PCI_DEVID_LIO3_EP_NET_VF		0x3383 /* LIO3 EP mode */
+
+#define OTX2_EP_MAX_RX_PKT_LEN			(16384)
 
 int
 otx2_ep_vf_setup_device(struct otx_ep_device *sdpvf);
@@ -139,5 +142,12 @@ struct otx2_ep_instr_64B {
 	/* Additional headers available in a 64-byte instruction. */
 	uint64_t exhdr[4];
 };
-
+static inline int is_otx2_ep_vf(uint16_t chip_id)
+{
+	return (chip_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
+		chip_id == PCI_DEVID_LIO3_EP_NET_VF ||
+		chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
+		chip_id == PCI_DEVID_CNF95O_EP_NET_VF ||
+		chip_id == PCI_DEVID_CN98XX_EP_NET_VF);
+}
 #endif /*_OTX2_EP_VF_H_ */
