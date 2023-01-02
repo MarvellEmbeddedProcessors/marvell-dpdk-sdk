@@ -14,6 +14,8 @@
 #include "otx2_ep_vf.h"
 #include "cnxk_ep_vf.h"
 #include "otx_ep_rxtx.h"
+#include "otx_ep_mbox.h"
+#include "otx_ep_irq.h"
 
 #define OTX_EP_DEV(_eth_dev) \
 	((struct otx_ep_device *)(_eth_dev)->data->dev_private)
@@ -31,41 +33,6 @@ static const struct rte_eth_desc_lim otx_ep_tx_desc_lim = {
 };
 
 static int
-otx_ep_send_mbox_cmd(struct otx_ep_device *otx_epvf, union otx_vf_mbox_word cmd,
-		     union otx_vf_mbox_word *rsp)
-{
-	return otx_epvf->fn_list.send_mbox_cmd(otx_epvf, cmd, rsp);
-}
-
-static int
-otx_ep_send_mbox_cmd_nolock(struct otx_ep_device *otx_epvf,
-			    union otx_vf_mbox_word cmd,
-			    union otx_vf_mbox_word *rsp)
-{
-	return otx_epvf->fn_list.send_mbox_cmd_nolock(otx_epvf, cmd, rsp);
-}
-
-static int
-otx_ep_dev_get_max_pkt_len(struct rte_eth_dev *eth_dev)
-{
-	struct otx_ep_device *otx_epvf =
-		(struct otx_ep_device *)OTX_EP_DEV(eth_dev);
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
-	int ret;
-
-	cmd.u64 = 0;
-	cmd.s_get_mtu.opcode = OTX_VF_MBOX_CMD_GET_MTU;
-
-	ret = otx_ep_send_mbox_cmd(otx_epvf, cmd, &rsp);
-	if (ret)
-		return ret;
-	if (rsp.s_get_mtu.type != OTX_VF_MBOX_TYPE_RSP_ACK)
-		return -EINVAL;
-	return rsp.s_get_mtu.mtu;
-}
-
-static int
 otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 		    struct rte_eth_dev_info *devinfo)
 {
@@ -74,7 +41,7 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 
 	otx_epvf = OTX_EP_DEV(eth_dev);
 
-	max_rx_pktlen = otx_ep_dev_get_max_pkt_len(eth_dev);
+	max_rx_pktlen = otx_ep_mbox_get_max_pkt_len(eth_dev);
 	if (max_rx_pktlen > 0) {
 		max_rx_pktlen = max_rx_pktlen + RTE_ETHER_CRC_LEN;
 	} else {
@@ -109,74 +76,14 @@ static int
 otx_ep_dev_link_update(struct rte_eth_dev *eth_dev,
 		    int wait_to_complete __rte_unused)
 {
+	int32_t ret = 0;
 	struct rte_eth_link link;
-	struct otx_ep_device *otx_epvf =
-		(struct otx_ep_device *)OTX_EP_DEV(eth_dev);
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
-	int ret;
 
 	memset(&link, 0, sizeof(link));
-	link.link_status = RTE_ETH_LINK_DOWN;
-	link.link_duplex = RTE_ETH_LINK_HALF_DUPLEX;
-	link.link_autoneg = RTE_ETH_LINK_AUTONEG;
-	cmd.u64 = 0;
-	cmd.s_get_link.opcode = OTX_VF_MBOX_CMD_GET_LINK;
-
-	ret = otx_ep_send_mbox_cmd(otx_epvf, cmd, &rsp);
+	ret = otx_ep_mbox_get_link_info(eth_dev, &link);
 	if (ret)
-		return ret;
-	if (rsp.s_get_link.type != OTX_VF_MBOX_TYPE_RSP_ACK)
 		return -EINVAL;
-	if (rsp.s_get_link.link_status == OTX_VF_LINK_STATUS_DOWN)
-		return rte_eth_linkstatus_set(eth_dev, &link);
 
-
-	link.link_status = RTE_ETH_LINK_UP;
-	link.link_duplex = (rsp.s_get_link.duplex ==
-			    OTX_VF_LINK_HALF_DUPLEX) ?
-			    RTE_ETH_LINK_HALF_DUPLEX :
-			    RTE_ETH_LINK_FULL_DUPLEX;
-	link.link_autoneg = (rsp.s_get_link.autoneg ==
-			     OTX_VF_LINK_AUTONEG) ?
-			     RTE_ETH_LINK_AUTONEG :
-			     RTE_ETH_LINK_FIXED;
-
-	switch (rsp.s_get_link.link_speed) {
-	case OTX_VF_LINK_SPEED_100:
-		link.link_speed = RTE_ETH_SPEED_NUM_100M;
-		break;
-	case OTX_VF_LINK_SPEED_1000:
-		link.link_speed = RTE_ETH_SPEED_NUM_1G;
-		break;
-	case OTX_VF_LINK_SPEED_2500:
-		link.link_speed = RTE_ETH_SPEED_NUM_2_5G;
-		break;
-	case OTX_VF_LINK_SPEED_5000:
-		link.link_speed = RTE_ETH_SPEED_NUM_5G;
-		break;
-	case OTX_VF_LINK_SPEED_10000:
-		link.link_speed = RTE_ETH_SPEED_NUM_10G;
-		break;
-	case OTX_VF_LINK_SPEED_20000:
-		link.link_speed = RTE_ETH_SPEED_NUM_20G;
-		break;
-	case OTX_VF_LINK_SPEED_25000:
-		link.link_speed = RTE_ETH_SPEED_NUM_25G;
-		break;
-	case OTX_VF_LINK_SPEED_40000:
-		link.link_speed = RTE_ETH_SPEED_NUM_40G;
-		break;
-	case OTX_VF_LINK_SPEED_50000:
-		link.link_speed = RTE_ETH_SPEED_NUM_50G;
-		break;
-	case OTX_VF_LINK_SPEED_100000:
-		link.link_speed = RTE_ETH_SPEED_NUM_100G;
-		break;
-	default:
-		link.link_speed = RTE_ETH_SPEED_NUM_NONE;
-		otx_ep_err("Link speed none\n");
-	}
 	otx_ep_dbg("link status resp link %d duplex %d autoneg %d link_speed %d\n",
 		   link.link_status, link.link_duplex, link.link_autoneg, link.link_speed);
 	return rte_eth_linkstatus_set(eth_dev, &link);
@@ -185,11 +92,7 @@ otx_ep_dev_link_update(struct rte_eth_dev *eth_dev,
 static int
 otx_ep_dev_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 {
-	struct otx_ep_device *otx_epvf =
-			(struct otx_ep_device *)OTX_EP_DEV(eth_dev);
 	int32_t frame_size = mtu + OTX_EP_ETH_OVERHEAD;
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
 	int32_t ret = 0;
 
 	/* Check if MTU is within the allowed range */
@@ -198,19 +101,13 @@ otx_ep_dev_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 		return -EINVAL;
 	}
 
-	if ((frame_size - RTE_ETHER_CRC_LEN) > ((int32_t)otx_ep_dev_get_max_pkt_len(eth_dev))) {
+	if ((frame_size - RTE_ETHER_CRC_LEN) > ((int32_t)otx_ep_mbox_get_max_pkt_len(eth_dev))) {
 		otx_ep_err("MTU is greater than maximum");
 		return -EINVAL;
 	}
 
-	cmd.u64 = 0;
-	cmd.s_set_mtu.opcode = OTX_VF_MBOX_CMD_SET_MTU;
-	cmd.s_set_mtu.mtu = mtu;
-
-	ret = otx_ep_send_mbox_cmd(otx_epvf, cmd, &rsp);
+	ret = otx_ep_mbox_set_mtu(eth_dev, mtu);
 	if (ret)
-		return ret;
-	if (rsp.s_set_mtu.type != OTX_VF_MBOX_TYPE_RSP_ACK)
 		return -EINVAL;
 
 	if (frame_size > RTE_ETHER_MAX_LEN)
@@ -224,165 +121,17 @@ otx_ep_dev_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 	return 0;
 }
 
-int
-otx_ep_send_vf_pf_config_data(struct rte_eth_dev *eth_dev,
-				otx_vf_mbox_opcode_t opcode,
-				uint8_t *data, int32_t size)
-{
-	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
-	int32_t read_cnt, num_bytes_written = 0, ret;
-
-	cmd.u64 = 0;
-	cmd.s_data.opcode = opcode;
-	cmd.s_data.frag = 0;
-	rte_spinlock_lock(&otx_epvf->mbox_lock);
-	cmd.s_data.frag = MBOX_MORE_FRAG_FLAG;
-	*((int32_t *)cmd.s_data.data) = size;
-	ret = otx_ep_send_mbox_cmd_nolock(otx_epvf, cmd, &rsp);
-	if (ret) {
-		otx_ep_err("send mbox cmd fail for length\n");
-		rte_spinlock_unlock(&otx_epvf->mbox_lock);
-		return ret;
-	}
-	if (rsp.s_data.type != OTX_VF_MBOX_TYPE_RSP_ACK) {
-		otx_ep_err("send mbox cmd ACK receive fail for length\n");
-		rte_spinlock_unlock(&otx_epvf->mbox_lock);
-		return -EINVAL;
-	}
-	cmd.u64 = 0;
-	cmd.s_data.opcode = opcode;
-	cmd.s_data.frag = 0;
-
-	for (read_cnt = 0; read_cnt < size; read_cnt++) {
-		cmd.s_data.data[num_bytes_written] = data[read_cnt];
-		num_bytes_written++;
-		if (num_bytes_written == MBOX_MAX_DATA_SIZE ||
-				(read_cnt == (size - 1))) {
-			if (num_bytes_written == MBOX_MAX_DATA_SIZE &&
-					(read_cnt != (size - 1))) {
-				cmd.s_data.frag = MBOX_MORE_FRAG_FLAG;
-				num_bytes_written = 0;
-			}
-			ret = otx_ep_send_mbox_cmd_nolock(otx_epvf, cmd, &rsp);
-			if (ret) {
-				otx_ep_err("send mbox cmd nolock fail\n");
-				rte_spinlock_unlock(&otx_epvf->mbox_lock);
-				return ret;
-			}
-			if (rsp.s_set_mac.type != OTX_VF_MBOX_TYPE_RSP_ACK) {
-				otx_ep_err("send mbox cmd nolock ACK fail\n");
-				rte_spinlock_unlock(&otx_epvf->mbox_lock);
-				return -EINVAL;
-			}
-			cmd.u64 = 0;
-			cmd.s_data.opcode = OTX_VF_MBOX_CMD_BULK_SEND;
-			cmd.s_data.frag = 0;
-		}
-	}
-	rte_spinlock_unlock(&otx_epvf->mbox_lock);
-	return 0;
-}
-
-int
-otx_ep_get_pf_vf_data(struct rte_eth_dev *eth_dev,
-			otx_vf_mbox_opcode_t opcode,
-			uint8_t *data, int32_t *size)
-{
-	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
-	int32_t read_cnt, i = 0, ret;
-	int32_t data_len = 0, tmp_len = 0;
-
-	cmd.u64 = 0;
-	cmd.s_data.opcode = opcode;
-	cmd.s_data.frag = 0;
-	rte_spinlock_lock(&otx_epvf->mbox_lock);
-
-	/* Send cmd to read data from PF */
-	ret = otx_ep_send_mbox_cmd_nolock(otx_epvf, cmd, &rsp);
-	if (ret) {
-		otx_ep_err("send mbox cmd fail for data request\n");
-		rte_spinlock_unlock(&otx_epvf->mbox_lock);
-		return ret;
-	}
-	if (rsp.s_data.type != OTX_VF_MBOX_TYPE_RSP_ACK) {
-		otx_ep_err("send mbox cmd ACK receive fail for data request\n");
-		rte_spinlock_unlock(&otx_epvf->mbox_lock);
-		return -EINVAL;
-	}
-	/*  PF sends the data length of requested CMD
-	 *  in  ACK
-	 */
-	data_len = *((int32_t *)rsp.s_data.data);
-	tmp_len = data_len;
-	otx_ep_err("data length %d:\n", data_len);
-	cmd.u64 = 0;
-	rsp.u64 = 0;
-	cmd.s_data.opcode = opcode;
-	cmd.s_data.frag = 1;
-	while (data_len) {
-		ret = otx_ep_send_mbox_cmd_nolock(otx_epvf, cmd, &rsp);
-		if (ret) {
-			otx_ep_err("send mbox cmd fail for data request\n");
-			rte_spinlock_unlock(&otx_epvf->mbox_lock);
-			return ret;
-		}
-		if (rsp.s_set_mac.type != OTX_VF_MBOX_TYPE_RSP_ACK) {
-			otx_ep_err("send mbox cmd ACK receive fail for data request\n");
-			rte_spinlock_unlock(&otx_epvf->mbox_lock);
-			return -EINVAL;
-		}
-		if (data_len > MBOX_MAX_DATA_SIZE) {
-			data_len -= MBOX_MAX_DATA_SIZE;
-			read_cnt = MBOX_MAX_DATA_SIZE;
-		} else {
-			read_cnt = data_len;
-			data_len = 0;
-		}
-		for (i = 0; i < read_cnt; i++) {
-			otx_epvf->mbox_data_buf[otx_epvf->mbox_data_index] = rsp.s_data.data[i];
-			otx_epvf->mbox_data_index++;
-		}
-		cmd.u64 = 0;
-		rsp.u64 = 0;
-		cmd.s_data.opcode = opcode;
-		cmd.s_data.frag = 1;
-	}
-	memcpy(data, otx_epvf->mbox_data_buf, tmp_len);
-	*size = tmp_len;
-	otx_epvf->mbox_data_index = 0;
-	memset(otx_epvf->mbox_data_buf, 0, MBOX_MAX_DATA_BUF_SIZE);
-	rte_spinlock_unlock(&otx_epvf->mbox_lock);
-	return 0;
-}
-
 static int
 otx_ep_dev_set_default_mac_addr(struct rte_eth_dev *eth_dev,
 				struct rte_ether_addr *mac_addr)
 {
-	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
-	int i, ret;
+	int ret;
 
-	cmd.u64 = 0;
-	cmd.s_set_mac.opcode = OTX_VF_MBOX_CMD_SET_MAC_ADDR;
-	for (i = 0; i < RTE_ETHER_ADDR_LEN; i++)
-		cmd.s_set_mac.mac_addr[i] = mac_addr->addr_bytes[i];
-	ret = otx_ep_send_mbox_cmd(otx_epvf, cmd, &rsp);
-	if (ret) {
-		otx_ep_err("%s Sending Mbox message fails ret val:%d\n", __func__, ret);
-		return ret;
-	}
-	if (rsp.s_set_mac.type != OTX_VF_MBOX_TYPE_RSP_ACK) {
-		otx_ep_err("%s Received NACK Mbox message\n", __func__);
+	ret = otx_ep_mbox_set_mac_addr(eth_dev, mac_addr);
+	if (ret)
 		return -EINVAL;
-	}
-	otx_ep_dbg("%s VF MAC " RTE_ETHER_ADDR_PRT_FMT "\n",
-		    __func__, RTE_ETHER_ADDR_BYTES(mac_addr));
+	otx_ep_dbg("Default MAC address " RTE_ETHER_ADDR_PRT_FMT "\n",
+		    RTE_ETHER_ADDR_BYTES(mac_addr));
 	rte_ether_addr_copy(mac_addr, eth_dev->data->mac_addrs);
 	return 0;
 }
@@ -391,26 +140,13 @@ static int
 otx_ep_dev_get_mac_addr(struct rte_eth_dev *eth_dev,
 			struct rte_ether_addr *mac_addr)
 {
-	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
-	union otx_vf_mbox_word cmd;
-	union otx_vf_mbox_word rsp;
-	int i, ret;
+	int ret;
 
-	cmd.u64 = 0;
-	cmd.s_set_mac.opcode = OTX_VF_MBOX_CMD_GET_MAC_ADDR;
-	ret = otx_ep_send_mbox_cmd(otx_epvf, cmd, &rsp);
-	if (ret) {
-		otx_ep_err("%s Sending Mbox message fails ret val:%d\n", __func__, ret);
-		return ret;
-	}
-	if (rsp.s_set_mac.type != OTX_VF_MBOX_TYPE_RSP_ACK) {
-		otx_ep_err("%s Received NACK Mbox message\n", __func__);
+	ret = otx_ep_mbox_get_mac_addr(eth_dev, mac_addr);
+	if (ret)
 		return -EINVAL;
-	}
-	for (i = 0; i < RTE_ETHER_ADDR_LEN; i++)
-		mac_addr->addr_bytes[i] = rsp.s_set_mac.mac_addr[i];
-	otx_ep_dbg("%s VF MAC " RTE_ETHER_ADDR_PRT_FMT "\n",
-		    __func__, RTE_ETHER_ADDR_BYTES(mac_addr));
+	otx_ep_dbg("Get MAC address " RTE_ETHER_ADDR_PRT_FMT "\n",
+		    RTE_ETHER_ADDR_BYTES(mac_addr));
 	return 0;
 }
 
@@ -577,9 +313,9 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 	ethdev_queues = (uint32_t)(otx_epvf->sriov_info.rings_per_vf);
 	otx_epvf->max_rx_queues = ethdev_queues;
 	otx_epvf->max_tx_queues = ethdev_queues;
-	otx_epvf->fn_list.register_interrupt(otx_epvf, otx_ep_interrupt_handler,
+	otx_ep_register_irq(otx_epvf, otx_ep_interrupt_handler,
 						(void *)otx_epvf, vec);
-	otx_epvf->fn_list.enable_mbox_interrupt(otx_epvf);
+	otx_ep_mbox_enable_interrupt(otx_epvf);
 	otx_ep_info("OTX_EP Device is Ready\n");
 setup_fail:
 	return ret;
@@ -853,8 +589,8 @@ otx_epdev_exit(struct rte_eth_dev *eth_dev)
 	otx_ep_info("%s:\n", __func__);
 
 	otx_epvf = OTX_EP_DEV(eth_dev);
-	otx_epvf->fn_list.disable_mbox_interrupt(otx_epvf);
-	otx_epvf->fn_list.unregister_interrupt(otx_epvf, otx_ep_interrupt_handler,
+	otx_ep_mbox_disable_interrupt(otx_epvf);
+	otx_ep_unregister_irq(otx_epvf, otx_ep_interrupt_handler,
 						(void *)otx_epvf);
 	otx_epvf->fn_list.disable_io_queues(otx_epvf);
 	num_queues = otx_epvf->nb_rx_queues;
@@ -950,20 +686,20 @@ static int otx_ep_eth_dev_query_set_vf_mac(struct rte_eth_dev *eth_dev,
 			otx_ep_dbg("PF doesn't have valid VF MAC addr" RTE_ETHER_ADDR_PRT_FMT "\n",
 				    RTE_ETHER_ADDR_BYTES(mac_addr));
 			rte_eth_random_addr(mac_addr->addr_bytes);
-			otx_ep_dbg("%s VF setting Random MAC address" RTE_ETHER_ADDR_PRT_FMT "\n",
-				    __func__, RTE_ETHER_ADDR_BYTES(mac_addr));
+			otx_ep_dbg("Setting Random MAC address" RTE_ETHER_ADDR_PRT_FMT "\n",
+				    RTE_ETHER_ADDR_BYTES(mac_addr));
 			ret_val = otx_ep_dev_set_default_mac_addr(eth_dev, mac_addr);
 			if (ret_val) {
-				otx_ep_err("%s Setting VF MAC " RTE_ETHER_ADDR_PRT_FMT "fails\n",
-					     __func__, RTE_ETHER_ADDR_BYTES(mac_addr));
+				otx_ep_err("Setting MAC address " RTE_ETHER_ADDR_PRT_FMT "fails\n",
+					    RTE_ETHER_ADDR_BYTES(mac_addr));
 				return ret_val;
 			}
 		}
-		otx_ep_dbg("VF received valid MAC addr from PF" RTE_ETHER_ADDR_PRT_FMT "\n",
+		otx_ep_dbg("Received valid MAC addr from PF" RTE_ETHER_ADDR_PRT_FMT "\n",
 			    RTE_ETHER_ADDR_BYTES(mac_addr));
 	} else {
-		otx_ep_err("%s Getting VF MAC from PF via Mbox fails with ret_val: %d\n",
-			    __func__, ret_val);
+		otx_ep_err("Getting MAC address from PF via Mbox fails with ret_val: %d\n",
+			    ret_val);
 		return ret_val;
 	}
 	return 0;

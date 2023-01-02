@@ -10,6 +10,7 @@
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include "otx_ep_common.h"
+#include "otx_ep_irq.h"
 
 
 #define MAX_INTR_VEC_ID RTE_MAX_RXTX_INTR_VEC_ID
