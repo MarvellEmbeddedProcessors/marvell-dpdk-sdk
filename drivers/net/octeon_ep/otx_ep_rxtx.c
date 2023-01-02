@@ -3,12 +3,13 @@
  */
 
 #include <unistd.h>
-
+#include <assert.h>
 #include <rte_eal.h>
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 #include <rte_io.h>
 #include <rte_net.h>
+#include <rte_cycles.h>
 #include <ethdev_pci.h>
 #include "common/cnxk/roc_api.h"
 
@@ -884,19 +885,14 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		 * droq->pkts_pending);
 		 */
 		droq->stats.pkts_delayed_data++;
-		while (retry && !info->length)
+		while (retry && !info->length) {
 			retry--;
+			rte_delay_us_block(50);
+		}
 		if (!retry && !info->length) {
 			otx_ep_err("OCTEON DROQ[%d]: read_idx: %d; Retry failed !!\n",
 				   droq->q_no, droq->read_idx);
-			/* May be zero length packet; drop it */
-			rte_pktmbuf_free(droq_pkt);
-			droq->recv_buf_list[droq->read_idx] = NULL;
-			droq->read_idx = otx_ep_incr_index(droq->read_idx, 1,
-							   droq->nb_desc);
-			droq->stats.dropped_zlp++;
-			droq->refill_count++;
-			goto oq_read_fail;
+			assert(0);
 		}
 	}
 	if (next_fetch) {
@@ -930,6 +926,9 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		struct rte_mbuf *first_buf = NULL;
 		struct rte_mbuf *last_buf = NULL;
 
+		/* initiating a csr read helps to flush pending dma */
+		droq->sent_reg_val = rte_read32(droq->pkts_sent_reg);
+		rte_rmb();
 		while (pkt_len < total_pkt_len) {
 			int cpy_len = 0;
 
@@ -970,7 +969,8 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 
 				last_buf = droq_pkt;
 			} else {
-				otx_ep_err("no buf\n");
+				otx_ep_err("no recvbuf in jumbo processing\n");
+				assert(0);
 			}
 
 			pkt_len += cpy_len;
@@ -1082,7 +1082,6 @@ otx_ep_recv_pkts(void *rx_queue,
 				    "last_pkt_count %" PRIu64 "new_pkts %d.\n",
 				   droq->pkts_pending, droq->last_pkt_count,
 				   new_pkts);
-			droq->pkts_pending -= pkts;
 			droq->stats.rx_err++;
 			continue;
 		} else {
