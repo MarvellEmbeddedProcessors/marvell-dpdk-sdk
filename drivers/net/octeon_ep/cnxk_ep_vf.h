@@ -160,5 +160,9 @@ struct cnxk_ep_instr_64B {
 	/* Additional headers available in a 64-byte instruction. */
 	uint64_t exhdr[4];
 };
-
+#define CNXK_EP_IQ_ISM_OFFSET(queue)    (RTE_CACHE_LINE_SIZE * (queue) + 4)
+#define CNXK_EP_OQ_ISM_OFFSET(queue)    (RTE_CACHE_LINE_SIZE * (queue))
+#define CNXK_EP_ISM_EN                  (0x1)
+#define CNXK_EP_ISM_MSIX_DIS            (0x2)
+#define CNXK_EP_MAX_RX_PKT_LEN          (16384)
 #endif /*_CNXK_EP_VF_H_ */
