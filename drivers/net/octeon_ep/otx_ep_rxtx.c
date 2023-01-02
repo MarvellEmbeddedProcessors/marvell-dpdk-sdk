@@ -993,8 +993,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		goto oq_read_fail;
 	}
 
-	if ((droq_pkt->pkt_len > (RTE_ETHER_MAX_LEN + OTX_CUST_DATA_LEN)) &&
-	    !(otx_ep->rx_offloads & DEV_RX_OFFLOAD_JUMBO_FRAME)) {
+	if (droq_pkt->pkt_len > otx_ep->eth_dev->data->mtu) {
 		rte_pktmbuf_free(droq_pkt);
 		goto oq_read_fail;
 	}
