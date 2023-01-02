@@ -5,6 +5,7 @@
 #include <ethdev_pci.h>
 #include <rte_kvargs.h>
 
+#include "common/cnxk/roc_api.h"
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
 #include "otx2_ep_vf.h"
@@ -40,8 +41,9 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 
 	devinfo->min_rx_bufsize = OTX_EP_MIN_RX_BUF_SIZE;
 	devinfo->max_rx_pktlen = OTX_EP_MAX_PKT_SZ;
-	devinfo->rx_offload_capa = RTE_ETH_RX_OFFLOAD_SCATTER;
-	devinfo->tx_offload_capa = RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
+	devinfo->rx_offload_capa = DEV_RX_OFFLOAD_JUMBO_FRAME;
+	devinfo->rx_offload_capa |= DEV_RX_OFFLOAD_SCATTER;
+	devinfo->tx_offload_capa = DEV_TX_OFFLOAD_MULTI_SEGS;
 
 	devinfo->max_mac_addrs = OTX_EP_MAX_MAC_ADDRS;
 
@@ -91,6 +93,28 @@ otx_ep_dev_stop(struct rte_eth_dev *eth_dev)
 	return 0;
 }
 
+/*
+ * We only need 2 uint32_t locations per IOQ, but separate these so
+ * each IOQ has the variables on its own cache line.
+ */
+#define OTX2_EP_ISM_BUFFER_SIZE	(OTX_EP_MAX_IOQS_PER_VF * RTE_CACHE_LINE_SIZE)
+static int
+otx2_ep_ism_setup(struct otx_ep_device *otx_epvf)
+{
+	otx_epvf->ism_buffer_mz =
+		rte_eth_dma_zone_reserve(otx_epvf->eth_dev, "ism",
+					 0, OTX2_EP_ISM_BUFFER_SIZE,
+					 OTX_EP_PCI_RING_ALIGN, 0);
+
+	/* Same DMA buffer is shared by OQ and IQ, clear it at start */
+	memset(otx_epvf->ism_buffer_mz->addr, 0, OTX2_EP_ISM_BUFFER_SIZE);
+	if (otx_epvf->ism_buffer_mz == NULL) {
+		otx_ep_err("Failed to allocate ISM buffer\n");
+		return(-1);
+	}
+
+	return 0;
+}
 static int
 otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 {
@@ -105,12 +129,15 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 		otx_epvf->fn_list.disable_io_queues(otx_epvf);
 		break;
 	case PCI_DEVID_OCTEONTX2_EP_NET_VF:
+	case PCI_DEVID_CNF95XXN_EP_NET_VF:
+	case PCI_DEVID_CNF95XXO_EP_NET_VF:
+	case PCI_DEVID_LIO3_EP_NET_VF:
 	case PCI_DEVID_CN98XX_EP_NET_VF:
-	case PCI_DEVID_CNF95N_EP_NET_VF:
-	case PCI_DEVID_CNF95O_EP_NET_VF:
 		otx_epvf->chip_id = dev_id;
 		ret = otx2_ep_vf_setup_device(otx_epvf);
 		otx_epvf->fn_list.disable_io_queues(otx_epvf);
+		if (otx2_ep_ism_setup(otx_epvf))
+			ret = -EINVAL;
 		break;
 	case PCI_DEVID_CN10KA_EP_NET_VF:
 	case PCI_DEVID_CN10KB_EP_NET_VF:
@@ -152,13 +179,17 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 	else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
-		 otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF)
-		otx_epvf->eth_dev->tx_pkt_burst = &otx2_ep_xmit_pkts;
-	else if (otx_epvf->chip_id == PCI_DEVID_CN10KA_EP_NET_VF ||
+		 otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF ||
+		 otx_epvf->chip_id == PCI_DEVID_CN10KA_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CN10KB_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CNF10KA_EP_NET_VF ||
-		 otx_epvf->chip_id == PCI_DEVID_CNF10KB_EP_NET_VF)
+		 otx_epvf->chip_id == PCI_DEVID_CNF10KB_EP_NET_VF) {
 		otx_epvf->eth_dev->tx_pkt_burst = &otx2_ep_xmit_pkts;
+	} else {
+		otx_ep_err("Invalid chip_id\n");
+		ret = -EINVAL;
+		goto setup_fail;
+	}
 	ethdev_queues = (uint32_t)(otx_epvf->sriov_info.rings_per_vf);
 	otx_epvf->max_rx_queues = ethdev_queues;
 	otx_epvf->max_tx_queues = ethdev_queues;
@@ -467,6 +498,11 @@ otx_epdev_exit(struct rte_eth_dev *eth_dev)
 	}
 	otx_ep_dbg("Num IQs:%d freed\n", otx_epvf->nb_tx_queues);
 
+	if (rte_eth_dma_zone_free(eth_dev, "ism", 0)) {
+		otx_ep_err("Failed to delete ISM buffer\n");
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -553,7 +589,8 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	otx_epvf->hw_addr = pdev->mem_resource[0].addr;
 	otx_epvf->pdev = pdev;
 
-	otx_epdev_init(otx_epvf);
+	if (otx_epdev_init(otx_epvf))
+		return -ENOMEM;
 	if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
@@ -566,8 +603,11 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 			otx_epvf->pkind = SDP_OTX2_PKIND_FS24;
 		else
 			otx_epvf->pkind = SDP_OTX2_PKIND_FS0;
-	} else {
+	} else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF) {
 		otx_epvf->pkind = SDP_PKIND;
+	} else {
+		otx_ep_err("Invalid chip id\n");
+		return -EINVAL;
 	}
 	otx_ep_info("using pkind %d\n", otx_epvf->pkind);
 
@@ -594,6 +634,9 @@ otx_ep_eth_dev_pci_remove(struct rte_pci_device *pci_dev)
 static const struct rte_pci_id pci_id_otx_ep_map[] = {
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_OCTEONTX_EP_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_OCTEONTX2_EP_NET_VF) },
+	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95XXN_EP_NET_VF) },
+	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95XXO_EP_NET_VF) },
+	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_LIO3_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN98XX_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95N_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95O_EP_NET_VF) },

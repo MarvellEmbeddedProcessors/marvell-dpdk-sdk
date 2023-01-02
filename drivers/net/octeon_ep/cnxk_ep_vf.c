@@ -47,32 +47,43 @@ cnxk_ep_vf_setup_global_oq_reg(struct otx_ep_device *otx_ep, int q_no)
 	oct_ep_write64(reg_val, otx_ep->hw_addr + CNXK_EP_R_OUT_CONTROL(q_no));
 }
 
-static void
+static int
 cnxk_ep_vf_setup_global_input_regs(struct otx_ep_device *otx_ep)
 {
 	uint64_t q_no = 0ull;
+	int ret = 0;
 
 	for (q_no = 0; q_no < (otx_ep->sriov_info.rings_per_vf); q_no++)
 		cnxk_ep_vf_setup_global_iq_reg(otx_ep, q_no);
+
+	return ret;
 }
 
-static void
+static int
 cnxk_ep_vf_setup_global_output_regs(struct otx_ep_device *otx_ep)
 {
 	uint32_t q_no;
+	int ret = 0;
 
 	for (q_no = 0; q_no < (otx_ep->sriov_info.rings_per_vf); q_no++)
 		cnxk_ep_vf_setup_global_oq_reg(otx_ep, q_no);
+
+	return ret;
 }
 
-static void
+static int
 cnxk_ep_vf_setup_device_regs(struct otx_ep_device *otx_ep)
 {
-	cnxk_ep_vf_setup_global_input_regs(otx_ep);
-	cnxk_ep_vf_setup_global_output_regs(otx_ep);
+	int ret;
+	ret = cnxk_ep_vf_setup_global_input_regs(otx_ep);
+	if (ret)
+		return ret;
+	ret = cnxk_ep_vf_setup_global_output_regs(otx_ep);
+
+	return ret;
 }
 
-static void
+static int
 cnxk_ep_vf_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 {
 	struct otx_ep_instr_queue *iq = otx_ep->instr_queue[iq_no];
@@ -93,7 +104,7 @@ cnxk_ep_vf_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 
 	if (!loop) {
 		otx_ep_err("IDLE bit is not set\n");
-		return;
+		return -EIO;
 	}
 
 	/* Write the start of the input queue's ring and its size  */
@@ -117,7 +128,7 @@ cnxk_ep_vf_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 
 	if (!loop) {
 		otx_ep_err("INST CNT REGISTER is not zero\n");
-		return;
+		return -EIO;
 	}
 
 	/* IN INTR_THRESHOLD is set to max(FFFFFFFF) which disable the IN INTR
@@ -125,9 +136,11 @@ cnxk_ep_vf_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 	 */
 	oct_ep_write64(OTX_EP_CLEAR_SDP_IN_INT_LVLS,
 		       otx_ep->hw_addr + CNXK_EP_R_IN_INT_LEVELS(iq_no));
+
+	return 0;
 }
 
-static void
+static int
 cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 {
 	volatile uint64_t reg_val = 0ull;
@@ -147,7 +160,7 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 
 	if (!loop) {
 		otx_ep_err("OUT CNT REGISTER value is zero\n");
-		return;
+		return -EIO;
 	}
 
 	oct_ep_write64(droq->desc_ring_dma, otx_ep->hw_addr + CNXK_EP_R_OUT_SLIST_BADDR(oq_no));
@@ -183,7 +196,7 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 
 	if (!loop) {
 		otx_ep_err("Packets credit register value is not cleared\n");
-		return;
+		return -EIO;
 	}
 
 	otx_ep_dbg("SDP_R[%d]_credit:%x", oq_no, rte_read32(droq->pkts_credit_reg));
@@ -203,10 +216,12 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 
 	if (!loop) {
 		otx_ep_err("Packets sent register value is not cleared\n");
-		return;
+		return -EIO;
 	}
 
 	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no, rte_read32(droq->pkts_sent_reg));
+
+	return 0;
 }
 
 static int

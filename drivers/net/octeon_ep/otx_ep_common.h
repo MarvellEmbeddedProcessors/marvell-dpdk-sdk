@@ -196,6 +196,8 @@ struct otx_ep_instr_queue {
 	 *  has read the commands.
 	 */
 	uint32_t flush_index;
+	/* Free-running/wrapping instruction counter for IQ. */
+	uint32_t inst_cnt;
 
 	/* This keeps track of the instructions pending in this queue. */
 	uint64_t instr_pending;
@@ -223,6 +225,11 @@ struct otx_ep_instr_queue {
 
 	/* Memory zone */
 	const struct rte_memzone *iq_mz;
+
+	/* Location in memory updated by SDP ISM */
+	uint32_t *inst_cnt_ism;
+	/* track inst count locally to consolidate HW counter updates */
+	uint32_t inst_cnt_ism_prev;
 };
 
 /** Descriptor format.
@@ -245,6 +252,8 @@ struct otx_ep_droq_desc {
 union otx_ep_rh {
 	uint64_t rh64;
 };
+
+#define OTX_EP_RH_SIZE (sizeof(union otx_ep_rh))
 #define OTX_EP_RH_SIZE_NIC (sizeof(union otx_ep_rh))
 #define OTX_EP_RH_SIZE_LOOP 0  /* Nothing in LOOP mode */
 
@@ -371,6 +380,10 @@ struct otx_ep_droq {
 	const struct rte_memzone *desc_ring_mz;
 
 	const struct rte_memzone *info_mz;
+
+	/* Pointer to host memory copy of output packet count, set by ISM */
+	uint32_t *pkts_sent_ism;
+	uint32_t pkts_sent_ism_prev;
 };
 #define OTX_EP_DROQ_SIZE		(sizeof(struct otx_ep_droq))
 
@@ -410,11 +423,11 @@ struct otx_ep_sriov_info {
 
 /* Required functions for each VF device */
 struct otx_ep_fn_list {
-	void (*setup_iq_regs)(struct otx_ep_device *otx_ep, uint32_t q_no);
+	int (*setup_iq_regs)(struct otx_ep_device *otx_ep, uint32_t q_no);
 
-	void (*setup_oq_regs)(struct otx_ep_device *otx_ep, uint32_t q_no);
+	int (*setup_oq_regs)(struct otx_ep_device *otx_ep, uint32_t q_no);
 
-	void (*setup_device_regs)(struct otx_ep_device *otx_ep);
+	int (*setup_device_regs)(struct otx_ep_device *otx_ep);
 
 	int (*enable_io_queues)(struct otx_ep_device *otx_ep);
 	void (*disable_io_queues)(struct otx_ep_device *otx_ep);
@@ -424,6 +437,8 @@ struct otx_ep_fn_list {
 
 	int (*enable_oq)(struct otx_ep_device *otx_ep, uint32_t q_no);
 	void (*disable_oq)(struct otx_ep_device *otx_ep, uint32_t q_no);
+	int (*enable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
+	int (*disable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
 };
 
 /* OTX_EP EP VF device data structure */
@@ -475,6 +490,9 @@ struct otx_ep_device {
 
 	/* Packet mode (LOOP vs NIC), set by parameter */
 	uint8_t sdp_packet_mode;
+
+	/* DMA buffer for SDP ISM messages */
+	const struct rte_memzone *ism_buffer_mz;
 };
 
 int otx_ep_setup_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no,
@@ -517,7 +535,7 @@ struct otx_ep_buf_free_info {
 	struct otx_ep_gather g;
 };
 
-#define OTX_EP_MAX_PKT_SZ 64000U
+#define OTX_EP_MAX_PKT_SZ 65498U
 #define OTX_EP_MAX_MAC_ADDRS 1
 #define OTX_EP_SG_ALIGN 8
 #define OTX_EP_CLEAR_ISIZE_BSIZE 0x7FFFFFULL

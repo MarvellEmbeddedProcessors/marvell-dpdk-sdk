@@ -1502,7 +1502,10 @@ struct rte_eth_conf {
 #define RTE_ETH_RX_OFFLOAD_MACSEC_STRIP     RTE_BIT64(7)
 #define RTE_ETH_RX_OFFLOAD_VLAN_FILTER      RTE_BIT64(9)
 #define RTE_ETH_RX_OFFLOAD_VLAN_EXTEND      RTE_BIT64(10)
+#define RTE_ETH_RX_OFFLOAD_JUMBO_FRAME      RTE_BIT64(11)
+#define DEV_RX_OFFLOAD_JUMBO_FRAME          RTE_ETH_RX_OFFLOAD_JUMBO_FRAME
 #define RTE_ETH_RX_OFFLOAD_SCATTER          RTE_BIT64(13)
+#define DEV_RX_OFFLOAD_SCATTER              RTE_ETH_RX_OFFLOAD_SCATTER
 /**
  * Timestamp is set by the driver in RTE_MBUF_DYNFIELD_TIMESTAMP_NAME
  * and RTE_MBUF_DYNFLAG_RX_TIMESTAMP_NAME is set in ol_flags.
@@ -1553,6 +1556,7 @@ struct rte_eth_conf {
 #define RTE_ETH_TX_OFFLOAD_MT_LOCKFREE      RTE_BIT64(14)
 /** Device supports multi segment send. */
 #define RTE_ETH_TX_OFFLOAD_MULTI_SEGS       RTE_BIT64(15)
+#define DEV_TX_OFFLOAD_MULTI_SEGS           RTE_ETH_TX_OFFLOAD_MULTI_SEGS
 /**
  * Device supports optimization for fast release of mbufs.
  * When set application must guarantee that per-queue all mbufs comes from
