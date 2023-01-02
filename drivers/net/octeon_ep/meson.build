@@ -10,4 +10,5 @@ sources = files(
         'otx_ep_vf.c',
         'otx2_ep_vf.c',
         'cnxk_ep_vf.c',
+        'otx_ep_irq.c',
 )

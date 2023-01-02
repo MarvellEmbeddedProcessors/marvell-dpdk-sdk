@@ -425,6 +425,123 @@ struct otx_ep_config {
 	uint32_t oqdef_buf_size;
 };
 
+#define MBOX_MAX_DATA_SIZE  6
+#define MBOX_MORE_FRAG_FLAG 1
+#define MBOX_MAX_DATA_BUF_SIZE 256
+typedef enum {
+	OTX_VF_MBOX_CMD_SET_MTU,
+	OTX_VF_MBOX_CMD_SET_MAC_ADDR,
+	OTX_VF_MBOX_CMD_START_QUEUE,
+	OTX_VF_MBOX_CMD_STOP_QUEUE,
+	OTX_VF_MBOX_CMD_GET_LINK,
+	OTX_VF_MBOX_CMD_BULK_SEND,
+	OTX_VF_MBOX_CMD_BULK_GET,
+	OTX_VF_MBOX_CMD_LAST,
+} otx_vf_mbox_opcode_t;
+
+typedef enum {
+	OTX_VF_MBOX_TYPE_CMD,
+	OTX_VF_MBOX_TYPE_RSP_ACK,
+	OTX_VF_MBOX_TYPE_RSP_NACK,
+} otx_vf_mbox_word_type_t;
+
+union otx_vf_mbox_word {
+	uint64_t u64;
+	struct {
+		uint64_t version:3;
+		uint64_t rsvd1:2;
+		uint64_t opcode:5;
+		uint64_t rsvd2:3;
+		uint64_t id:1;
+		uint64_t type:2;
+		uint64_t data:48;
+	} s;
+	struct {
+		uint64_t version:3;
+		uint64_t rsvd1:2;
+		uint64_t opcode:5;
+		uint64_t rsvd2:2;
+		uint64_t frag:1;
+		uint64_t id:1;
+		uint64_t type:2;
+		uint8_t data[6];
+	} s_data;
+	struct {
+		uint64_t version:3;
+		uint64_t rsvd1:2;
+		uint64_t opcode:5;
+		uint64_t rsvd2:3;
+		uint64_t id:1;
+		uint64_t type:2;
+		uint8_t mac_addr[6];
+	} s_set_mac;
+	struct {
+		uint64_t version:3;
+		uint64_t rsvd1:2;
+		uint64_t opcode:5;
+		uint64_t rsvd2:3;
+		uint64_t id:1;
+		uint64_t type:2;
+		uint64_t mtu:48;
+	} s_set_mtu;
+	struct {
+		uint64_t version:3;
+		uint64_t rsvd1:2;
+		uint64_t opcode:5;
+		uint64_t rsvd2:3;
+		uint64_t id:1;
+		uint64_t type:2;
+		uint64_t link_status:1;
+		uint64_t link_speed:8;
+		uint64_t duplex:1;
+		uint64_t autoneg:1;
+		uint64_t rsvd:37;
+	} s_get_link;
+} __rte_packed;
+
+typedef enum {
+	OTX_VF_LINK_STATUS_DOWN,
+	OTX_VF_LINK_STATUS_UP,
+} otx_vf_link_status_t;
+
+typedef enum {
+	OTX_VF_LINK_SPEED_NONE,
+	OTX_VF_LINK_SPEED_10,
+	OTX_VF_LINK_SPEED_100,
+	OTX_VF_LINK_SPEED_1000,
+	OTX_VF_LINK_SPEED_2500,
+	OTX_VF_LINK_SPEED_5000,
+	OTX_VF_LINK_SPEED_10000,
+	OTX_VF_LINK_SPEED_20000,
+	OTX_VF_LINK_SPEED_25000,
+	OTX_VF_LINK_SPEED_40000,
+	OTX_VF_LINK_SPEED_50000,
+	OTX_VF_LINK_SPEED_100000,
+	OTX_VF_LINK_SPEED_LAST,
+} otx_vf_link_speed_t;
+
+typedef enum {
+	OTX_VF_LINK_HALF_DUPLEX,
+	OTX_VF_LINK_FULL_DUPLEX,
+} otx_vf_link_duplex_t;
+
+typedef enum {
+	OTX_VF_LINK_AUTONEG,
+	OTX_VF_LINK_FIXED,
+} otx_vf_link_autoneg_t;
+
+struct otx_vf_mbox_link {
+	uint64_t link_status:1;
+	uint64_t link_speed:8;
+	uint64_t duplex:1;
+	uint64_t autoneg:1;
+	uint64_t rsvd:37;
+} __rte_packed;
+
+#define OTX_VF_MBOX_TIMEOUT_MS 10
+#define OTX_VF_MBOX_MAX_RETRIES 2
+#define OTX_VF_MBOX_VERSION 0
+
 /* SRIOV information */
 struct otx_ep_sriov_info {
 	/* Number of rings assigned to VF */
@@ -452,6 +569,19 @@ struct otx_ep_fn_list {
 	void (*disable_oq)(struct otx_ep_device *otx_ep, uint32_t q_no);
 	int (*enable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
 	int (*disable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
+	int (*send_mbox_cmd)(struct otx_ep_device *otx_epvf, union
+		otx_vf_mbox_word cmd, union otx_vf_mbox_word *rsp);
+	int (*send_mbox_cmd_nolock)(struct otx_ep_device *otx_epvf, union
+		otx_vf_mbox_word cmd, union otx_vf_mbox_word *rsp);
+	void (*enable_mbox_interrupt)(struct otx_ep_device *otx_epvf);
+	void (*disable_mbox_interrupt)(struct otx_ep_device *otx_epvf);
+	int (*register_pf_vf_mbox_interrupt)(struct otx_ep_device *otx_epvf);
+	int (*unregister_pf_vf_mbox_interrupt)(struct otx_ep_device *otx_epvf);
+	int (*register_interrupt)(struct otx_ep_device *otx_ep,
+		rte_intr_callback_fn cb, void *data, unsigned int vec);
+	int (*unregister_interrupt)(struct otx_ep_device *otx_ep,
+		rte_intr_callback_fn cb, void *data);
+
 };
 
 /* OTX_EP EP VF device data structure */
@@ -460,6 +590,8 @@ struct otx_ep_device {
 	struct rte_pci_device *pdev;
 
 	uint16_t chip_id;
+	uint16_t pf_num;
+	uint16_t vf_num;
 
 	uint32_t pkind;
 
@@ -497,6 +629,16 @@ struct otx_ep_device {
 	/* Device configuration */
 	const struct otx_ep_config *conf;
 
+	rte_spinlock_t mbox_lock;
+
+	int mbox_cmd_id;
+
+	uint8_t mbox_data_buf[MBOX_MAX_DATA_BUF_SIZE];
+
+	int32_t mbox_data_index;
+
+	int32_t mbox_rcv_message_len;
+
 	uint64_t rx_offloads;
 
 	uint64_t tx_offloads;
@@ -516,6 +658,17 @@ int otx_ep_setup_oqs(struct otx_ep_device *otx_ep, int oq_no, int num_descs,
 		     int desc_size, struct rte_mempool *mpool,
 		     unsigned int socket_id);
 int otx_ep_delete_oqs(struct otx_ep_device *otx_ep, uint32_t oq_no);
+int otx_ep_register_irq(struct otx_ep_device *otx_ep,
+			rte_intr_callback_fn cb, void *data, unsigned int vec);
+int otx_ep_unregister_irq(struct otx_ep_device *otx_ep,
+			rte_intr_callback_fn cb, void *data);
+int otx_ep_send_vf_pf_config_data(struct rte_eth_dev *eth_dev,
+					otx_vf_mbox_opcode_t opcode,
+					uint8_t *data, int32_t size);
+int otx_ep_get_pf_vf_data(struct rte_eth_dev *eth_dev,
+					otx_vf_mbox_opcode_t opcode,
+					uint8_t *data, int32_t *size);
+
 
 struct otx_ep_sg_entry {
 	/** The first 64 bit gives the size of data in each dptr. */
@@ -558,6 +711,10 @@ struct otx_ep_buf_free_info {
 #define OTX_EP_DROQ_BUFSZ_MASK 0xFFFF
 #define OTX_EP_CLEAR_SLIST_DBELL 0xFFFFFFFF
 #define OTX_EP_CLEAR_SDP_OUT_PKT_CNT 0xFFFFFFFFF
+
+#define OTX_EP_ETH_OVERHEAD \
+	(RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN + 8)
+#define OTX_EP_FRAME_SIZE_MAX       9000
 
 /* PCI IDs */
 #define PCI_VENDOR_ID_CAVIUM			0x177D

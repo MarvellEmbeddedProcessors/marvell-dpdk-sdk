@@ -90,4 +90,9 @@ union out_cnts_t {
 
 #define CN93XX_INTR_R_OUT_INT        (1ULL << 62)
 #define CN93XX_INTR_R_IN_INT         (1ULL << 61)
+#define OTX_EP_R_MBOX_PF_VF_INT_START        (0x10220)
+#define OTX_EP_RING_OFFSET                   (0x1ull << 17)
+#define OTX_EP_R_MBOX_PF_VF_INT(ring) \
+	(OTX_EP_R_MBOX_PF_VF_INT_START + ((ring) * OTX_EP_RING_OFFSET))
+
 #endif /*_OTX2_EP_VF_H_ */

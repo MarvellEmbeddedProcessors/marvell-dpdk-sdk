@@ -7,6 +7,10 @@
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_memzone.h>
+#include <rte_spinlock.h>
+#include <rte_interrupts.h>
+
+#include "otx_ep_common.h"
 #include "cnxk_ep_vf.h"
 #include "common/cnxk/hw/sdp.h"
 
@@ -170,8 +174,8 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 	reg_val = oct_ep_read64(otx_ep->hw_addr + CNXK_EP_R_OUT_CONTROL(oq_no));
 
 	while ((!(reg_val & CNXK_EP_R_OUT_CTL_IDLE)) && loop--) {
-		reg_val = oct_ep_read64(otx_ep->hw_addr + CNXK_EP_R_OUT_CONTROL(oq_no));
-		rte_delay_ms(1);
+		reg_val = oct_ep_read64(otx_ep->hw_addr +
+				CNXK_EP_R_OUT_CONTROL(oq_no));
 	}
 
 	if (!loop) {
@@ -179,10 +183,13 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 		return -EIO;
 	}
 
-	oct_ep_write64(droq->desc_ring_dma, otx_ep->hw_addr + CNXK_EP_R_OUT_SLIST_BADDR(oq_no));
-	oct_ep_write64(droq->nb_desc, otx_ep->hw_addr + CNXK_EP_R_OUT_SLIST_RSIZE(oq_no));
+	oct_ep_write64(droq->desc_ring_dma, otx_ep->hw_addr +
+			CNXK_EP_R_OUT_SLIST_BADDR(oq_no));
+	oct_ep_write64(droq->nb_desc, otx_ep->hw_addr +
+			CNXK_EP_R_OUT_SLIST_RSIZE(oq_no));
 
-	oq_ctl = oct_ep_read64(otx_ep->hw_addr + CNXK_EP_R_OUT_CONTROL(oq_no));
+	oq_ctl = oct_ep_read64(otx_ep->hw_addr +
+			CNXK_EP_R_OUT_CONTROL(oq_no));
 
 	/* Clear the ISIZE and BSIZE (22-0) */
 	oq_ctl &= ~(OTX_EP_CLEAR_ISIZE_BSIZE);
@@ -190,17 +197,20 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 	/* Populate the BSIZE (15-0) */
 	oq_ctl |= (droq->buffer_size & OTX_EP_DROQ_BUFSZ_MASK);
 
-	oct_ep_write64(oq_ctl, otx_ep->hw_addr + CNXK_EP_R_OUT_CONTROL(oq_no));
+	oct_ep_write64(oq_ctl, otx_ep->hw_addr +
+			CNXK_EP_R_OUT_CONTROL(oq_no));
 
 	/* Mapped address of the pkt_sent and pkts_credit regs */
-	droq->pkts_sent_reg = (uint8_t *)otx_ep->hw_addr + CNXK_EP_R_OUT_CNTS(oq_no);
+	droq->pkts_sent_reg = (uint8_t *)otx_ep->hw_addr +
+				CNXK_EP_R_OUT_CNTS(oq_no);
 	droq->pkts_credit_reg = (uint8_t *)otx_ep->hw_addr + CNXK_EP_R_OUT_SLIST_DBELL(oq_no);
 
-	rte_write64(OTX_EP_CLEAR_OUT_INT_LVLS, otx_ep->hw_addr + CNXK_EP_R_OUT_INT_LEVELS(oq_no));
+	rte_write64(OTX_EP_CLEAR_OUT_INT_LVLS,
+			otx_ep->hw_addr + CNXK_EP_R_OUT_INT_LEVELS(oq_no));
 
 	/* Clear PKT_CNT register */
 	rte_write64(OTX_EP_CLEAR_SDP_OUT_PKT_CNT, (uint8_t *)otx_ep->hw_addr +
-		    CNXK_EP_R_OUT_PKT_CNT(oq_no));
+			CNXK_EP_R_OUT_PKT_CNT(oq_no));
 
 	/* Clear the OQ doorbell  */
 	rte_write32(OTX_EP_CLEAR_SLIST_DBELL, droq->pkts_credit_reg);
@@ -215,25 +225,26 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 		return -EIO;
 	}
 
-	otx_ep_dbg("SDP_R[%d]_credit:%x", oq_no, rte_read32(droq->pkts_credit_reg));
+	otx_ep_dbg("SDP_R[%d]_credit:%x", oq_no,
+		   rte_read32(droq->pkts_credit_reg));
 
 	/* Clear the OQ_OUT_CNTS doorbell  */
 	reg_val = rte_read32(droq->pkts_sent_reg);
 	rte_write32((uint32_t)reg_val, droq->pkts_sent_reg);
 
 	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no,
-		   rte_read32(droq->pkts_sent_reg));
+			rte_read32(droq->pkts_sent_reg));
 	/* Set up ISM registers and structures */
 	ism_addr = (otx_ep->ism_buffer_mz->iova | CNXK_EP_ISM_EN
-		    | CNXK_EP_ISM_MSIX_DIS)
-		    + CNXK_EP_OQ_ISM_OFFSET(oq_no);
+			| CNXK_EP_ISM_MSIX_DIS)
+			+ CNXK_EP_OQ_ISM_OFFSET(oq_no);
 	rte_write64(ism_addr, (uint8_t *)otx_ep->hw_addr +
-		    SDP_VF_R_OUT_CNTS_ISM(oq_no));
+			SDP_VF_R_OUT_CNTS_ISM(oq_no));
 	droq->pkts_sent_ism =
-		(uint32_t *)((uint8_t *)otx_ep->ism_buffer_mz->addr
-			     + CNXK_EP_OQ_ISM_OFFSET(oq_no));
+			(uint32_t *)((uint8_t *)otx_ep->ism_buffer_mz->addr
+			+ CNXK_EP_OQ_ISM_OFFSET(oq_no));
 	otx_ep_err("SDP_R[%d] OQ ISM virt: %p, dma: %p", oq_no,
-		   (void *)droq->pkts_sent_ism, (void *)ism_addr);
+		(void *)droq->pkts_sent_ism, (void *)ism_addr);
 	*droq->pkts_sent_ism = 0;
 	droq->pkts_sent_ism_prev = 0;
 
@@ -250,7 +261,8 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 		return -EIO;
 	}
 
-	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no, rte_read32(droq->pkts_sent_reg));
+	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no,
+			rte_read32(droq->pkts_sent_reg));
 
 	return 0;
 }
@@ -383,6 +395,114 @@ cnxk_ep_get_defconf(struct otx_ep_device *otx_ep_dev __rte_unused)
 	return default_conf;
 }
 
+static int
+cnxk_vf_send_mbox_cmd_nolock(struct otx_ep_device *otx_ep,
+			 union otx_vf_mbox_word cmd,
+			 union otx_vf_mbox_word *rsp)
+{
+	volatile uint64_t reg_val = 0ull;
+	int retry_count = 0;
+	int count = 0;
+
+	cmd.s.type = OTX_VF_MBOX_TYPE_CMD;
+	cmd.s.version = OTX_VF_MBOX_VERSION;
+	otx_ep->mbox_cmd_id = ~otx_ep->mbox_cmd_id;
+	cmd.s.id = otx_ep->mbox_cmd_id;
+retry:
+	oct_ep_write64(cmd.u64, otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+	for (count = 0; count < OTX_VF_MBOX_TIMEOUT_MS; count++) {
+		rte_delay_ms(1);
+		reg_val = oct_ep_read64(otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+		if (reg_val != cmd.u64) {
+			rsp->u64 = reg_val;
+			if (rsp->s.id == cmd.s.id)
+				break;
+			/* resp for previous cmd. retry */
+			retry_count++;
+			if (retry_count == OTX_VF_MBOX_MAX_RETRIES)
+				break;
+			goto retry;
+		}
+	}
+	if (count == OTX_VF_MBOX_TIMEOUT_MS ||
+	    retry_count == OTX_VF_MBOX_MAX_RETRIES)
+		return -ETIMEDOUT;
+	rsp->u64 = reg_val;
+	return 0;
+}
+
+static int
+cnxk_vf_send_mbox_cmd(struct otx_ep_device *otx_ep,
+		      union otx_vf_mbox_word cmd,
+		      union otx_vf_mbox_word *rsp)
+{
+	volatile uint64_t reg_val = 0ull;
+	int retry_count = 0;
+	int count = 0;
+
+	cmd.s.type = OTX_VF_MBOX_TYPE_CMD;
+	cmd.s.version = OTX_VF_MBOX_VERSION;
+	rte_spinlock_lock(&otx_ep->mbox_lock);
+	otx_ep->mbox_cmd_id = ~otx_ep->mbox_cmd_id;
+	cmd.s.id = otx_ep->mbox_cmd_id;
+retry:
+	oct_ep_write64(cmd.u64, otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+	for (count = 0; count < OTX_VF_MBOX_TIMEOUT_MS; count++) {
+		rte_delay_ms(1);
+		reg_val = oct_ep_read64(otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+		if (reg_val != cmd.u64) {
+			rsp->u64 = reg_val;
+			if (rsp->s.id == cmd.s.id)
+				break;
+			/* resp for previous cmd. retry */
+			retry_count++;
+			if (retry_count == OTX_VF_MBOX_MAX_RETRIES)
+				break;
+			goto retry;
+		}
+	}
+	rte_spinlock_unlock(&otx_ep->mbox_lock);
+	if (count == OTX_VF_MBOX_TIMEOUT_MS ||
+	    retry_count == OTX_VF_MBOX_MAX_RETRIES)
+		return -ETIMEDOUT;
+	rsp->u64 = reg_val;
+	return 0;
+}
+
+static void
+cnxk_ep_vf_enable_mbox_interrupt(struct otx_ep_device *otx_ep)
+{
+	rte_write64(0x2, (uint8_t *)otx_ep->hw_addr +
+		   OTX_EP_R_MBOX_PF_VF_INT(0));
+}
+
+static void
+cnxk_ep_vf_disable_mbox_interrupt(struct otx_ep_device *otx_ep)
+{
+	rte_write64(0x00, (uint8_t *)otx_ep->hw_addr +
+		   OTX_EP_R_MBOX_PF_VF_INT(0));
+}
+
+static int
+cnxk_ep_register_interrupt(struct otx_ep_device *otx_ep,
+		rte_intr_callback_fn cb, void *data, unsigned int vec)
+{
+	int rc = -1;
+
+	rc = otx_ep_register_irq(otx_ep, cb, data, vec);
+	return rc;
+}
+
+static int
+cnxk_ep_unregister_interrupt(struct otx_ep_device *otx_ep,
+		rte_intr_callback_fn cb, void *data)
+{
+	int rc = -1;
+
+	rc = otx_ep_unregister_irq(otx_ep, cb, data);
+	return rc;
+}
+
 int
 cnxk_ep_vf_setup_device(struct otx_ep_device *otx_ep)
 {
@@ -419,6 +539,13 @@ cnxk_ep_vf_setup_device(struct otx_ep_device *otx_ep)
 
 	otx_ep->fn_list.enable_oq           = cnxk_ep_vf_enable_oq;
 	otx_ep->fn_list.disable_oq          = cnxk_ep_vf_disable_oq;
+	otx_ep->fn_list.send_mbox_cmd       =  cnxk_vf_send_mbox_cmd;
+	otx_ep->fn_list.send_mbox_cmd_nolock    =  cnxk_vf_send_mbox_cmd_nolock;
+
+	otx_ep->fn_list.enable_mbox_interrupt   = cnxk_ep_vf_enable_mbox_interrupt;
+	otx_ep->fn_list.disable_mbox_interrupt  = cnxk_ep_vf_disable_mbox_interrupt;
+	otx_ep->fn_list.register_interrupt        = cnxk_ep_register_interrupt;
+	otx_ep->fn_list.unregister_interrupt      = cnxk_ep_unregister_interrupt;
 
 	return 0;
 }

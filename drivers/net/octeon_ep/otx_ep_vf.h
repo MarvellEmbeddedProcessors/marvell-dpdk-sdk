@@ -53,6 +53,10 @@
 #define OTX_EP_R_OUT_CONTROL_START           (0x10150)
 #define OTX_EP_R_OUT_ENABLE_START            (0x10160)
 
+#define OTX_EP_R_MBOX_PF_VF_DATA_START	     (0x10210)
+#define OTX_EP_R_MBOX_VF_PF_DATA_START	     (0x10230)
+#define OTX_EP_R_MBOX_PF_VF_INT_START	     (0x10220)
+
 #define OTX_EP_R_OUT_CONTROL(ring)    \
 	(OTX_EP_R_OUT_CONTROL_START + ((ring) * OTX_EP_RING_OFFSET))
 
@@ -73,6 +77,21 @@
 
 #define OTX_EP_R_OUT_INT_LEVELS(ring)   \
 	(OTX_EP_R_OUT_INT_LEVELS_START + ((ring) * OTX_EP_RING_OFFSET))
+
+#define OTX_EP_R_OUT_PKT_CNT(ring)   \
+	(OTX_EP_R_OUT_PKT_CNT_START + ((ring) * OTX_EP_RING_OFFSET))
+
+#define OTX_EP_R_OUT_BYTE_CNT(ring)   \
+	(OTX_EP_R_OUT_BYTE_CNT_START + ((ring) * OTX_EP_RING_OFFSET))
+
+#define OTX_EP_R_MBOX_PF_VF_DATA(ring) \
+	(OTX_EP_R_MBOX_PF_VF_DATA_START + ((ring) * OTX_EP_RING_OFFSET))
+
+#define OTX_EP_R_MBOX_VF_PF_DATA(ring) \
+	(OTX_EP_R_MBOX_VF_PF_DATA_START + ((ring) * OTX_EP_RING_OFFSET))
+#define OTX_EP_R_MBOX_PF_VF_INT(ring) \
+	(OTX_EP_R_MBOX_PF_VF_INT_START + ((ring) * OTX_EP_RING_OFFSET))
+
 
 /* OTX_EP VF OQ Masks */
 
