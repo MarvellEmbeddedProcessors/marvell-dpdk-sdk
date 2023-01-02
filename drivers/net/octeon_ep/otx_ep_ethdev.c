@@ -31,19 +31,65 @@ static const struct rte_eth_desc_lim otx_ep_tx_desc_lim = {
 };
 
 static int
+otx_ep_send_mbox_cmd(struct otx_ep_device *otx_epvf, union otx_vf_mbox_word cmd,
+		     union otx_vf_mbox_word *rsp)
+{
+	return otx_epvf->fn_list.send_mbox_cmd(otx_epvf, cmd, rsp);
+}
+
+static int
+otx_ep_send_mbox_cmd_nolock(struct otx_ep_device *otx_epvf,
+			    union otx_vf_mbox_word cmd,
+			    union otx_vf_mbox_word *rsp)
+{
+	return otx_epvf->fn_list.send_mbox_cmd_nolock(otx_epvf, cmd, rsp);
+}
+
+static int
+otx_ep_dev_get_max_pkt_len(struct rte_eth_dev *eth_dev)
+{
+	struct otx_ep_device *otx_epvf =
+		(struct otx_ep_device *)OTX_EP_DEV(eth_dev);
+	union otx_vf_mbox_word cmd;
+	union otx_vf_mbox_word rsp;
+	int ret;
+
+	cmd.u64 = 0;
+	cmd.s_get_mtu.opcode = OTX_VF_MBOX_CMD_GET_MTU;
+
+	ret = otx_ep_send_mbox_cmd(otx_epvf, cmd, &rsp);
+	if (ret)
+		return ret;
+	if (rsp.s_get_mtu.type != OTX_VF_MBOX_TYPE_RSP_ACK)
+		return -EINVAL;
+	return rsp.s_get_mtu.mtu;
+}
+
+static int
 otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 		    struct rte_eth_dev_info *devinfo)
 {
 	struct otx_ep_device *otx_epvf;
+	int max_rx_pktlen;
 
 	otx_epvf = OTX_EP_DEV(eth_dev);
+
+	max_rx_pktlen = otx_ep_dev_get_max_pkt_len(eth_dev);
+	if (max_rx_pktlen > 0) {
+		max_rx_pktlen = max_rx_pktlen + RTE_ETHER_CRC_LEN;
+	} else {
+		otx_ep_err("Get MTU info failed\n");
+		return -EINVAL;
+	}
 
 	devinfo->speed_capa = RTE_ETH_LINK_SPEED_10G;
 	devinfo->max_rx_queues = otx_epvf->max_rx_queues;
 	devinfo->max_tx_queues = otx_epvf->max_tx_queues;
 
 	devinfo->min_rx_bufsize = OTX_EP_MIN_RX_BUF_SIZE;
-	devinfo->max_rx_pktlen = OTX_EP_MAX_PKT_SZ;
+	devinfo->max_rx_pktlen = max_rx_pktlen;
+	devinfo->max_mtu = devinfo->max_rx_pktlen - (RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN);
+	devinfo->min_mtu = RTE_ETHER_MIN_LEN;
 	devinfo->rx_offload_capa = DEV_RX_OFFLOAD_JUMBO_FRAME;
 	devinfo->rx_offload_capa |= DEV_RX_OFFLOAD_SCATTER;
 	devinfo->tx_offload_capa = DEV_TX_OFFLOAD_MULTI_SEGS;
@@ -57,21 +103,6 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 	devinfo->default_txportconf.ring_size = OTX_EP_MIN_IQ_DESCRIPTORS;
 
 	return 0;
-}
-
-static int
-otx_ep_send_mbox_cmd(struct otx_ep_device *otx_epvf, union otx_vf_mbox_word cmd,
-		     union otx_vf_mbox_word *rsp)
-{
-	return otx_epvf->fn_list.send_mbox_cmd(otx_epvf, cmd, rsp);
-}
-
-static int
-otx_ep_send_mbox_cmd_nolock(struct otx_ep_device *otx_epvf,
-			    union otx_vf_mbox_word cmd,
-			    union otx_vf_mbox_word *rsp)
-{
-	return otx_epvf->fn_list.send_mbox_cmd_nolock(otx_epvf, cmd, rsp);
 }
 
 static int
@@ -156,13 +187,21 @@ otx_ep_dev_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 {
 	struct otx_ep_device *otx_epvf =
 			(struct otx_ep_device *)OTX_EP_DEV(eth_dev);
-	uint32_t frame_size = mtu + OTX_EP_ETH_OVERHEAD;
+	int32_t frame_size = mtu + OTX_EP_ETH_OVERHEAD;
 	union otx_vf_mbox_word cmd;
 	union otx_vf_mbox_word rsp;
-	int ret = 0;
+	int32_t ret = 0;
 
-	if (mtu < RTE_ETHER_MIN_MTU || frame_size > OTX_EP_FRAME_SIZE_MAX)
+	/* Check if MTU is within the allowed range */
+	if (frame_size  < RTE_ETHER_MIN_LEN) {
+		otx_ep_err("MTU is lesser than minimum");
 		return -EINVAL;
+	}
+
+	if ((frame_size - RTE_ETHER_CRC_LEN) > ((int32_t)otx_ep_dev_get_max_pkt_len(eth_dev))) {
+		otx_ep_err("MTU is greater than maximum");
+		return -EINVAL;
+	}
 
 	cmd.u64 = 0;
 	cmd.s_set_mtu.opcode = OTX_VF_MBOX_CMD_SET_MTU;

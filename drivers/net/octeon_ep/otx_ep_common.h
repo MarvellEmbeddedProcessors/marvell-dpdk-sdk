@@ -437,6 +437,7 @@ typedef enum {
 	OTX_VF_MBOX_CMD_GET_LINK,
 	OTX_VF_MBOX_CMD_BULK_SEND,
 	OTX_VF_MBOX_CMD_BULK_GET,
+	OTX_VF_MBOX_CMD_GET_MTU,
 	OTX_VF_MBOX_CMD_LAST,
 } otx_vf_mbox_opcode_t;
 
@@ -485,6 +486,15 @@ union otx_vf_mbox_word {
 		uint64_t type:2;
 		uint64_t mtu:48;
 	} s_set_mtu;
+	struct {
+		uint64_t version:3;
+		uint64_t rsvd1:2;
+		uint64_t opcode:5;
+		uint64_t rsvd2:3;
+		uint64_t id:1;
+		uint64_t type:2;
+		uint64_t mtu:48;
+	} s_get_mtu;
 	struct {
 		uint64_t version:3;
 		uint64_t rsvd1:2;
