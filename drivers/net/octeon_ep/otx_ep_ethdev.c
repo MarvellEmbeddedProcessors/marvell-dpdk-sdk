@@ -599,17 +599,22 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	    otx_epvf->chip_id == PCI_DEVID_CN10KB_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CNF10KA_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CNF10KB_EP_NET_VF) {
-		if (otx_epvf->sdp_packet_mode == SDP_PACKET_MODE_NIC)
+		if (otx_epvf->sdp_packet_mode == SDP_PACKET_MODE_NIC) {
 			otx_epvf->pkind = SDP_OTX2_PKIND_FS24;
-		else
+			otx_ep_info("Using pkind %d for NIC packet mode.\n",
+				  otx_epvf->pkind);
+		} else {
 			otx_epvf->pkind = SDP_OTX2_PKIND_FS0;
+			otx_ep_info("Using pkind %d for LOOP packet mode.\n",
+				  otx_epvf->pkind);
+		}
 	} else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF) {
 		otx_epvf->pkind = SDP_PKIND;
+		otx_ep_info("Using pkind %d.\n", otx_epvf->pkind);
 	} else {
 		otx_ep_err("Invalid chip id\n");
 		return -EINVAL;
 	}
-	otx_ep_info("using pkind %d\n", otx_epvf->pkind);
 
 	return 0;
 }
