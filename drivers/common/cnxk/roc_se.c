@@ -499,7 +499,6 @@ roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type,
 int
 roc_se_ciph_key_set(struct roc_se_ctx *se_ctx, roc_se_cipher_type type, const uint8_t *key,
 		    uint16_t key_len)
-
 {
 	bool chained_op = se_ctx->ciph_then_auth || se_ctx->auth_then_ciph;
 	struct roc_se_zuc_snow3g_ctx *zs_ctx = &se_ctx->se_ctx.zs_ctx;
