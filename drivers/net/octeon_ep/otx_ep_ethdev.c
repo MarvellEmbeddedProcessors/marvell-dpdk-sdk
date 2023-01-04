@@ -8,7 +8,6 @@
 #include <rte_spinlock.h>
 #include <eal_interrupts.h>
 
-#include "common/cnxk/roc_api.h"
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
 #include "otx2_ep_vf.h"

@@ -11,7 +11,6 @@
 #include <rte_net.h>
 #include <rte_cycles.h>
 #include <ethdev_pci.h>
-#include "common/cnxk/roc_api.h"
 
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"

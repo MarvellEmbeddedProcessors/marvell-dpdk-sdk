@@ -12,7 +12,6 @@
 
 #include "otx_ep_common.h"
 #include "cnxk_ep_vf.h"
-#include "common/cnxk/hw/sdp.h"
 
 static void
 cnxk_ep_vf_setup_global_iq_reg(struct otx_ep_device *otx_ep, int q_no)
@@ -147,7 +146,7 @@ cnxk_ep_vf_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 		    | CNXK_EP_ISM_MSIX_DIS)
 		    + CNXK_EP_IQ_ISM_OFFSET(iq_no);
 	rte_write64(ism_addr, (uint8_t *)otx_ep->hw_addr +
-		    SDP_VF_R_IN_CNTS_ISM(iq_no));
+		    CNXK_EP_R_IN_CNTS_ISM(iq_no));
 	iq->inst_cnt_ism =
 		(uint32_t *)((uint8_t *)otx_ep->ism_buffer_mz->addr
 			     + CNXK_EP_IQ_ISM_OFFSET(iq_no));
@@ -239,7 +238,7 @@ cnxk_ep_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 			| CNXK_EP_ISM_MSIX_DIS)
 			+ CNXK_EP_OQ_ISM_OFFSET(oq_no);
 	rte_write64(ism_addr, (uint8_t *)otx_ep->hw_addr +
-			SDP_VF_R_OUT_CNTS_ISM(oq_no));
+			CNXK_EP_R_OUT_CNTS_ISM(oq_no));
 	droq->pkts_sent_ism =
 			(uint32_t *)((uint8_t *)otx_ep->ism_buffer_mz->addr
 			+ CNXK_EP_OQ_ISM_OFFSET(oq_no));

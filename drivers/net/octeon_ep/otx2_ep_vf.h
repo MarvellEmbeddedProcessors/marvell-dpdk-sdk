@@ -14,9 +14,21 @@
 #define PCI_DEVID_CN98XX_EP_NET_VF		0xB103
 #define PCI_DEVID_CNF95N_EP_NET_VF		0xB403
 #define PCI_DEVID_CNF95O_EP_NET_VF		0xB603
+#define PCI_DEVID_LIO3_EP_NET_VF		0x3383
+#define PCI_DEVID_CNF95XXN_EP_NET_VF		0xB403
+#define PCI_DEVID_CNF95XXO_EP_NET_VF		0xB603
 
 #define OTX2_EP_MAX_RX_PKT_LEN			(16384)
 
+#define OTX2_EP_BUSY_LOOP_COUNT                 (10000)
+#define OTX2_EP_RING_OFFSET                     (1ULL << 17)
+#define OTX2_EP_R_OUT_CNTS_IN_INT               (1ULL << 61)
+#define OTX2_EP_R_OUT_CNTS_OUT_INT               (1ULL << 62)
+
+#define OTX2_EP_R_OUT_ENABLE_START               (0x10160)
+
+#define OTX2_EP_R_OUT_ENABLE(ring) \
+	(OTX2_EP_R_OUT_ENABLE_START + (OTX2_EP_RING_OFFSET * (ring)))
 int
 otx2_ep_vf_setup_device(struct otx_ep_device *sdpvf);
 

@@ -7,7 +7,6 @@
 #include <rte_kvargs.h>
 #include <rte_spinlock.h>
 
-#include "common/cnxk/roc_api.h"
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
 #include "otx2_ep_vf.h"
@@ -23,10 +22,10 @@ __otx_ep_send_mbox_cmd(struct otx_ep_device *otx_ep,
 	int count = 0;
 
 	cmd.s.type = OTX_EP_MBOX_TYPE_CMD;
-	otx2_write64(cmd.u64, otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+	otx2_write64(cmd.u64, otx_ep->hw_addr + CNXK_EP_R_MBOX_VF_PF_DATA(0));
 	for (count = 0; count < OTX_EP_MBOX_TIMEOUT_MS; count++) {
 		rte_delay_ms(1);
-		reg_val = otx2_read64(otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+		reg_val = otx2_read64(otx_ep->hw_addr + CNXK_EP_R_MBOX_VF_PF_DATA(0));
 		if (reg_val != cmd.u64) {
 			rsp->u64 = reg_val;
 			break;
