@@ -110,6 +110,8 @@
 #define SDP_VF_R_OUT_PKT_CNT_START     (0x10180)
 #define SDP_VF_R_OUT_BYTE_CNT_START    (0x10190)
 #define SDP_VF_R_OUT_CNTS_ISM_START    (0x10510)
+#define SDP_VF_R_MBOX_PF_VF_DATA_START (0x10210)
+#define SDP_VF_R_MBOX_VF_PF_DATA_START (0x10230)
 
 #define SDP_VF_R_OUT_CONTROL(ring) (SDP_VF_R_OUT_CONTROL_START + (SDP_VF_RING_OFFSET * (ring)))
 
@@ -134,6 +136,12 @@
 #define SDP_VF_R_OUT_BYTE_CNT(ring) (SDP_VF_R_OUT_BYTE_CNT_START + (SDP_VF_RING_OFFSET * (ring)))
 
 #define SDP_VF_R_OUT_CNTS_ISM(ring) (SDP_VF_R_OUT_CNTS_ISM_START + (SDP_VF_RING_OFFSET * (ring)))
+
+#define SDP_VF_R_MBOX_PF_VF_DATA(ring)                                                             \
+	(SDP_VF_R_MBOX_PF_VF_DATA_START + ((ring)*SDP_VF_RING_OFFSET))
+
+#define SDP_VF_R_MBOX_VF_PF_DATA(ring)                                                             \
+	(SDP_VF_R_MBOX_VF_PF_DATA_START + ((ring)*SDP_VF_RING_OFFSET))
 
 /* SDP VF OQ Masks */
 #define SDP_VF_R_OUT_CTL_IDLE  (1ull << 40)
