@@ -75,7 +75,7 @@ then
 	IF1=0002:01:00.2
 	remote_ssh="sh -c "
 	GEN_PORT=$IF1
-	G_ENV="GEN_CORES=4"
+	G_ENV="GEN_CORES=6"
 	SUDO=""
 	echo "Running locally without generator board"
 else
