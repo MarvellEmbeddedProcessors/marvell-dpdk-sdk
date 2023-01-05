@@ -787,8 +787,7 @@ cnxk_ae_session_size_get(struct rte_cryptodev *dev __rte_unused)
 }
 
 void
-cnxk_ae_session_clear(struct rte_cryptodev *dev,
-		      struct rte_cryptodev_asym_session *sess)
+cnxk_ae_session_clear(struct rte_cryptodev *dev, struct rte_cryptodev_asym_session *sess)
 {
 	struct rte_mempool *sess_mp;
 	struct cnxk_ae_sess *priv;
@@ -796,6 +795,11 @@ cnxk_ae_session_clear(struct rte_cryptodev *dev,
 	priv = get_asym_session_private_data(sess, dev->driver_id);
 	if (priv == NULL)
 		return;
+
+	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
+	roc_cpt_lf_ctx_flush(priv->lf, &priv->hw_ctx, true);
+
+	plt_delay_ms(1);
 
 	/* Free resources allocated in session_cfg */
 	cnxk_ae_free_session_parameters(priv);
@@ -817,6 +821,7 @@ cnxk_ae_session_cfg(struct rte_cryptodev *dev,
 	struct roc_cpt *roc_cpt = &vf->cpt;
 	struct cnxk_ae_sess *priv;
 	union cpt_inst_w7 w7;
+	struct hw_ctx_s *hwc;
 	int ret;
 
 	if (rte_mempool_get(pool, (void **)&priv))
@@ -830,8 +835,22 @@ cnxk_ae_session_cfg(struct rte_cryptodev *dev,
 		return ret;
 	}
 
+	priv->lf = roc_cpt->lf[0];
+
 	w7.u64 = 0;
 	w7.s.egrp = roc_cpt->eng_grp[CPT_ENG_TYPE_AE];
+
+	if (vf->cpt.cpt_revision == ROC_CPT_REVISION_ID_106XX) {
+		hwc = &priv->hw_ctx;
+		hwc->w0.s.aop_valid = 1;
+		hwc->w0.s.ctx_hdr_size = 0;
+		hwc->w0.s.ctx_size = 1;
+		hwc->w0.s.ctx_push_size = 1;
+
+		w7.s.cptr = (uint64_t)hwc;
+		w7.s.ctx_val = 1;
+	}
+
 	priv->cpt_inst_w7 = w7.u64;
 	priv->cnxk_fpm_iova = vf->cnxk_fpm_iova;
 	priv->ec_grp = vf->ec_grp;
