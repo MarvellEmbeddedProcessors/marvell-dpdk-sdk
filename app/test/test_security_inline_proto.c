@@ -1945,6 +1945,9 @@ test_ipsec_inline_proto_known_vec_inb(const void *test_data)
 	else
 		memcpy(&td_inb, td, sizeof(td_inb));
 
+	if(td_inb.ipsec_xform.tunnel.type == RTE_SECURITY_IPSEC_TUNNEL_IPV6)
+		SKIP_ON_CN9K();
+
 	return test_ipsec_inline_proto_process(&td_inb, NULL, 1, false, &flags);
 }
 
@@ -2072,6 +2075,8 @@ test_ipsec_inline_proto_tunnel_v6_in_v6(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
 
+	SKIP_ON_CN9K();
+
 	memset(&flags, 0, sizeof(flags));
 
 	flags.ipv6 = true;
@@ -2085,6 +2090,8 @@ static int
 test_ipsec_inline_proto_tunnel_v4_in_v6(const void *data __rte_unused)
 {
 	struct ipsec_test_flags flags;
+
+	SKIP_ON_CN9K();
 
 	memset(&flags, 0, sizeof(flags));
 
