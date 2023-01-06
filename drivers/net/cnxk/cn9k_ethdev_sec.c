@@ -577,13 +577,12 @@ cn9k_eth_sec_session_create(void *device,
 		/* Get Inbound SA from NIX_RX_IPSEC_SA_BASE. Assume no inline
 		 * device always for CN9K.
 		 */
-		inb_sa = (struct roc_ie_on_inb_sa *)roc_nix_inl_inb_sa_get(
-			nix, false, ipsec->spi);
+		inb_sa = (struct roc_ie_on_inb_sa *)roc_nix_inl_inb_sa_get(nix, false, ipsec->spi);
 		if (!inb_sa) {
 			snprintf(tbuf, sizeof(tbuf),
 				 "Failed to create ingress sa");
 			rc = -EFAULT;
-			goto mempool_put;
+			goto err;
 		}
 
 		/* Check if SA is already in use */
@@ -592,7 +591,7 @@ cn9k_eth_sec_session_create(void *device,
 				 "Inbound SA with SPI %u already in use",
 				 ipsec->spi);
 			rc = -EBUSY;
-			goto mempool_put;
+			goto err;
 		}
 
 		memset(inb_sa, 0, sizeof(struct roc_ie_on_inb_sa));
@@ -602,7 +601,7 @@ cn9k_eth_sec_session_create(void *device,
 		if (rc < 0) {
 			snprintf(tbuf, sizeof(tbuf),
 				 "Failed to init inbound sa, rc=%d", rc);
-			goto mempool_put;
+			goto err;
 		}
 
 		ctx_len = rc;
@@ -617,7 +616,7 @@ cn9k_eth_sec_session_create(void *device,
 		if (inb_priv->replay_win_sz) {
 			rc = ar_window_init(inb_priv);
 			if (rc)
-				goto mempool_put;
+				goto err;
 		}
 
 		/* Prepare session priv */
@@ -647,7 +646,7 @@ cn9k_eth_sec_session_create(void *device,
 		/* Alloc an sa index */
 		rc = cnxk_eth_outb_sa_idx_get(dev, &sa_idx, 0);
 		if (rc)
-			goto mempool_put;
+			goto err;
 
 		outb_sa = roc_nix_inl_on_ipsec_outb_sa(sa_base, sa_idx);
 		outb_priv = roc_nix_inl_on_ipsec_outb_sa_sw_rsvd(outb_sa);
@@ -661,7 +660,7 @@ cn9k_eth_sec_session_create(void *device,
 			snprintf(tbuf, sizeof(tbuf),
 				 "Failed to init outbound sa, rc=%d", rc);
 			rc |= cnxk_eth_outb_sa_idx_put(dev, sa_idx);
-			goto mempool_put;
+			goto err;
 		}
 
 		ctx_len = rc;
@@ -671,7 +670,7 @@ cn9k_eth_sec_session_create(void *device,
 			snprintf(tbuf, sizeof(tbuf),
 				 "Failed to init outbound sa, rc=%d", rc);
 			rc |= cnxk_eth_outb_sa_idx_put(dev, sa_idx);
-			goto mempool_put;
+			goto err;
 		}
 
 		/* When IV is provided by the application,
@@ -727,7 +726,7 @@ cn9k_eth_sec_session_create(void *device,
 	set_sec_session_private_data(sess, (void *)sess_priv.u64);
 
 	return 0;
-mempool_put:
+err:
 	rte_spinlock_unlock(lock);
 	rte_mempool_put(mempool, eth_sec);
 	if (rc)

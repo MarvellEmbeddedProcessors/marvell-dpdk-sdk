@@ -19,6 +19,10 @@
 	((RTE_ALIGN_MUL_CEIL(CNXK_NIX_TX_NB_SEG_MAX, 3) / 3) +                 \
 	 CNXK_NIX_TX_NB_SEG_MAX)
 
+/* Default mark value used when none is provided. */
+#define CNXK_FLOW_ACTION_FLAG_DEFAULT 0xffff
+#define CNXK_NIX_TIMESYNC_RX_OFFSET 8
+
 #define PTYPE_NON_TUNNEL_WIDTH	  16
 #define PTYPE_TUNNEL_WIDTH	  12
 #define PTYPE_NON_TUNNEL_ARRAY_SZ BIT(PTYPE_NON_TUNNEL_WIDTH)
@@ -51,10 +55,6 @@
 
 #define CNXK_TX_MARK_FMT_MASK (0xFFFFFFFFFFFFull)
 
-/* Default mark value used when none is provided. */
-#define CNXK_FLOW_ACTION_FLAG_DEFAULT 0xffff
-#define CNXK_NIX_TIMESYNC_RX_OFFSET 8
-
 struct cnxk_eth_txq_comp {
 	uintptr_t desc_base;
 	uintptr_t cq_door;
@@ -69,6 +69,15 @@ struct cnxk_eth_txq_comp {
 	struct rte_mbuf **ptr;
 	rte_spinlock_t ext_buf_lock;
 };
+
+struct cnxk_timesync_info {
+	uint8_t rx_ready;
+	uint64_t rx_tstamp;
+	uint64_t rx_tstamp_dynflag;
+	int tstamp_dynfield_offset;
+	rte_iova_t tx_tstamp_iova;
+	uint64_t *tx_tstamp;
+} __plt_cache_aligned;
 
 /* Inlines */
 static __rte_always_inline uint64_t
@@ -136,15 +145,6 @@ cnxk_nix_prefree_seg(struct rte_mbuf *m)
 	/* Mbuf is having refcount more than 1 so need not to be freed */
 	return 1;
 }
-
-struct cnxk_timesync_info {
-	uint8_t rx_ready;
-	uint64_t rx_tstamp;
-	uint64_t rx_tstamp_dynflag;
-	int tstamp_dynfield_offset;
-	rte_iova_t tx_tstamp_iova;
-	uint64_t *tx_tstamp;
-} __plt_cache_aligned;
 
 static inline rte_mbuf_timestamp_t *
 cnxk_nix_timestamp_dynfield(struct rte_mbuf *mbuf,
