@@ -261,6 +261,7 @@ otx_ep_mbox_get_max_pkt_len(struct rte_eth_dev *eth_dev)
 	union otx_ep_mbox_word rsp;
 	int ret;
 
+	rsp.u64 = 0;
 	cmd.u64 = 0;
 	cmd.s_get_mtu.opcode = OTX_EP_MBOX_CMD_GET_MTU;
 
