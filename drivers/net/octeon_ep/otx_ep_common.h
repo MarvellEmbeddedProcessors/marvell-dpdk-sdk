@@ -572,9 +572,15 @@ struct otx_ep_buf_free_info {
 #define OTX_EP_CLEAR_SLIST_DBELL 0xFFFFFFFF
 #define OTX_EP_CLEAR_SDP_OUT_PKT_CNT 0xFFFFFFFFF
 
+/* Max overhead includes
+ * - Ethernet hdr
+ * - CRC
+ * - nested VLANs
+ * - octeon rx info for NIC mode
+ */
 #define OTX_EP_ETH_OVERHEAD \
-	(RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN + 8)
-#define OTX_EP_FRAME_SIZE_MAX       9000
+	(RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN + \
+	 (2 * RTE_VLAN_HLEN) + OTX_EP_DROQ_INFO_SIZE_NIC)
 
 /* PCI IDs */
 #define PCI_VENDOR_ID_CAVIUM			0x177D

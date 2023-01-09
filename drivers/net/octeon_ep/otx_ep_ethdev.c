@@ -41,10 +41,8 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 	otx_epvf = OTX_EP_DEV(eth_dev);
 
 	max_rx_pktlen = otx_ep_mbox_get_max_pkt_len(eth_dev);
-	if (max_rx_pktlen > 0) {
-		max_rx_pktlen = max_rx_pktlen + RTE_ETHER_CRC_LEN;
-	} else {
-		otx_ep_err("Get MTU info failed\n");
+	if (!max_rx_pktlen) {
+		otx_ep_err("Failed to get Max Rx packet length");
 		return -EINVAL;
 	}
 
@@ -54,10 +52,9 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 
 	devinfo->min_rx_bufsize = OTX_EP_MIN_RX_BUF_SIZE;
 	devinfo->max_rx_pktlen = max_rx_pktlen;
-	devinfo->max_mtu = devinfo->max_rx_pktlen - (RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN);
+	devinfo->max_mtu = devinfo->max_rx_pktlen - OTX_EP_ETH_OVERHEAD;
 	devinfo->min_mtu = RTE_ETHER_MIN_LEN;
-	devinfo->rx_offload_capa = DEV_RX_OFFLOAD_JUMBO_FRAME;
-	devinfo->rx_offload_capa |= DEV_RX_OFFLOAD_SCATTER;
+	devinfo->rx_offload_capa = DEV_RX_OFFLOAD_SCATTER;
 	devinfo->tx_offload_capa = DEV_TX_OFFLOAD_MULTI_SEGS;
 
 	devinfo->max_mac_addrs = OTX_EP_MAX_MAC_ADDRS;
@@ -91,17 +88,22 @@ otx_ep_dev_link_update(struct rte_eth_dev *eth_dev,
 static int
 otx_ep_dev_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 {
-	int32_t frame_size = mtu + OTX_EP_ETH_OVERHEAD;
+	struct rte_eth_dev_info devinfo;
 	int32_t ret = 0;
 
+	if (otx_ep_dev_info_get(eth_dev, &devinfo)) {
+		otx_ep_err("Cannot set MTU to %u: failed to get device info", mtu);
+		return -EPERM;
+	}
+
 	/* Check if MTU is within the allowed range */
-	if (frame_size  < RTE_ETHER_MIN_LEN) {
-		otx_ep_err("MTU is lesser than minimum");
+	if (mtu < devinfo.min_mtu) {
+		otx_ep_err("Invalid MTU %u: lower than minimum MTU %u", mtu, devinfo.min_mtu);
 		return -EINVAL;
 	}
 
-	if ((frame_size - RTE_ETHER_CRC_LEN) > ((int32_t)otx_ep_mbox_get_max_pkt_len(eth_dev))) {
-		otx_ep_err("MTU is greater than maximum");
+	if (mtu > devinfo.max_mtu) {
+		otx_ep_err("Invalid MTU %u; higher than maximum MTU %u", mtu, devinfo.max_mtu);
 		return -EINVAL;
 	}
 
@@ -109,13 +111,7 @@ otx_ep_dev_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 	if (ret)
 		return -EINVAL;
 
-	if (frame_size > RTE_ETHER_MAX_LEN)
-		eth_dev->data->dev_conf.rxmode.offloads |=
-				DEV_RX_OFFLOAD_JUMBO_FRAME;
-	else
-		eth_dev->data->dev_conf.rxmode.offloads &=
-				~DEV_RX_OFFLOAD_JUMBO_FRAME;
-	otx_ep_dbg("mtu set  success mtu %u\n", mtu);
+	otx_ep_dbg("MTU is set to %u", mtu);
 
 	return 0;
 }
