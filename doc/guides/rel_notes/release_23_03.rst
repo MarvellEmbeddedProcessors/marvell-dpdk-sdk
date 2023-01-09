@@ -55,6 +55,10 @@ New Features
      Also, make sure to start the actual text at the margin.
      =======================================================
 
+* **Added pcap trace support in graph library.**
+
+  Added support to capture packets at each graph node with packet metadata and
+  node name.
 
 Removed Items
 -------------
@@ -84,8 +88,9 @@ API Changes
    Also, make sure to start the actual text at the margin.
    =======================================================
 
-* Experimental function ``rte_pcapng_copy`` was updated to support comment
-  section in enhanced packet block in pcapng library.
+* Experimental structures ``struct rte_graph_param``, ``struct rte_graph`` and
+  ``struct graph`` were updated to support pcap trace in graph library.
+
 
 ABI Changes
 -----------
