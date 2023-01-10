@@ -193,7 +193,9 @@ process_outb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
 }
 
 static __rte_always_inline int
-process_inb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop, struct cn9k_sec_session *sess, struct cpt_inst_s *inst, struct cpt_inflight_req *infl_req)
+process_inb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
+	       struct cn9k_sec_session *sess, struct cpt_inst_s *inst,
+	       struct cpt_inflight_req *infl_req)
 {
 	const unsigned int hdr_len = ROC_IE_ON_INB_RPTR_HDR;
 	struct rte_crypto_sym_op *sym_op = cop->sym;
