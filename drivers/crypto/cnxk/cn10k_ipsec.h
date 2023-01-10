@@ -15,6 +15,17 @@
 typedef void *CN10K_SA_CONTEXT_MARKER[0];
 
 struct cn10k_ipsec_sa {
+	union {
+		/** Inbound SA */
+		struct roc_ot_ipsec_inb_sa in_sa;
+		/** Outbound SA */
+		struct roc_ot_ipsec_outb_sa out_sa;
+	};
+} __rte_aligned(ROC_ALIGN);
+
+struct cn10k_sec_session {
+	/** PMD private space */
+
 	/** Pre-populated CPT inst words */
 	struct cnxk_cpt_inst_tmpl inst;
 	uint16_t max_extended_len;
@@ -28,17 +39,6 @@ struct cn10k_ipsec_sa {
 	/**
 	 * End of SW mutable area
 	 */
-	CN10K_SA_CONTEXT_MARKER sw_area_end __rte_aligned(ROC_ALIGN);
-
-	union {
-		/** Inbound SA */
-		struct roc_ot_ipsec_inb_sa in_sa;
-		/** Outbound SA */
-		struct roc_ot_ipsec_outb_sa out_sa;
-	};
-} __rte_aligned(ROC_ALIGN);
-
-struct cn10k_sec_session {
 	struct cn10k_ipsec_sa sa;
 } __rte_aligned(ROC_ALIGN);
 

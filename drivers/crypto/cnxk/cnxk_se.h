@@ -6,6 +6,8 @@
 #define _CNXK_SE_H_
 #include <stdbool.h>
 
+#include <rte_cryptodev.h>
+
 #include "cnxk_cryptodev.h"
 #include "cnxk_cryptodev_ops.h"
 #include "cnxk_sg.h"
@@ -53,7 +55,7 @@ struct cnxk_se_sess {
 	struct cnxk_cpt_qp *qp;
 	struct roc_se_ctx roc_se_ctx;
 	struct roc_cpt_lf *lf;
-} __rte_cache_aligned;
+} __rte_aligned(ROC_ALIGN);
 
 static __rte_always_inline int fill_sess_gmac(struct rte_crypto_sym_xform *xform,
 					      struct cnxk_se_sess *sess);
@@ -925,7 +927,8 @@ cpt_enc_hmac_prep(uint32_t flags, uint64_t d_offs, uint64_t d_lens,
 	 * and need to be part of Data Buffer, we check if
 	 * head room is there and then only do the Direct mode processing
 	 */
-	if (likely((flags & ROC_SE_SINGLE_BUF_INPLACE) && (flags & ROC_SE_SINGLE_BUF_HEADROOM))) {
+	if (likely((flags & ROC_SE_SINGLE_BUF_INPLACE) &&
+		   (flags & ROC_SE_SINGLE_BUF_HEADROOM))) {
 		void *dm_vaddr = fc_params->bufs[0].vaddr;
 
 		/* Use Direct mode */

@@ -36,19 +36,19 @@ static int
 cn10k_ipsec_outb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 			   struct rte_security_ipsec_xform *ipsec_xfrm,
 			   struct rte_crypto_sym_xform *crypto_xfrm,
-			   struct rte_security_session *sec_sess)
+			   struct rte_security_session *sess)
 {
 	union roc_ot_ipsec_outb_param1 param1;
 	struct roc_ot_ipsec_outb_sa *sa_dptr;
 	struct cnxk_ipsec_outb_rlens rlens;
-	struct cn10k_sec_session *sess;
+	struct cn10k_sec_session *sec_sess;
 	struct cn10k_ipsec_sa *sa;
 	union cpt_inst_w4 inst_w4;
 	void *out_sa;
 	int ret = 0;
 
-	sess = get_sec_session_private_data(sec_sess);
-	sa = &sess->sa;
+	sec_sess = get_sec_session_private_data(sess);
+	sa = &sec_sess->sa;
 	out_sa = &sa->out_sa;
 
 	/* Allocate memory to be used as dptr for CPT ucode WRITE_SA op */
@@ -65,21 +65,21 @@ cn10k_ipsec_outb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 		goto sa_dptr_free;
 	}
 
-	sa->inst.w7 = ipsec_cpt_inst_w7_get(roc_cpt, out_sa);
+	sec_sess->inst.w7 = ipsec_cpt_inst_w7_get(roc_cpt, out_sa);
 
 #ifdef LA_IPSEC_DEBUG
 	/* Use IV from application in debug mode */
 	if (ipsec_xfrm->options.iv_gen_disable == 1) {
 		sa_dptr->w2.s.iv_src = ROC_IE_OT_SA_IV_SRC_FROM_SA;
 		if (crypto_xfrm->type == RTE_CRYPTO_SYM_XFORM_AEAD) {
-			sa->iv_offset = crypto_xfrm->aead.iv.offset;
-			sa->iv_length = crypto_xfrm->aead.iv.length;
+			sec_sess->iv_offset = crypto_xfrm->aead.iv.offset;
+			sec_sess->iv_length = crypto_xfrm->aead.iv.length;
 		} else if (crypto_xfrm->type == RTE_CRYPTO_SYM_XFORM_CIPHER) {
-			sa->iv_offset = crypto_xfrm->cipher.iv.offset;
-			sa->iv_length = crypto_xfrm->cipher.iv.length;
+			sec_sess->iv_offset = crypto_xfrm->cipher.iv.offset;
+			sec_sess->iv_length = crypto_xfrm->cipher.iv.length;
 		} else {
-			sa->iv_offset = crypto_xfrm->auth.iv.offset;
-			sa->iv_length = crypto_xfrm->auth.iv.length;
+			sec_sess->iv_offset = crypto_xfrm->auth.iv.offset;
+			sec_sess->iv_length = crypto_xfrm->auth.iv.length;
 		}
 	}
 #else
@@ -90,14 +90,14 @@ cn10k_ipsec_outb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 	}
 #endif
 
-	sa->is_outbound = true;
+	sec_sess->is_outbound = true;
 
 	/* Get Rlen calculation data */
 	ret = cnxk_ipsec_outb_rlens_get(&rlens, ipsec_xfrm, crypto_xfrm);
 	if (ret)
 		goto sa_dptr_free;
 
-	sa->max_extended_len = rlens.max_extended_len;
+	sec_sess->max_extended_len = rlens.max_extended_len;
 
 	/* pre-populate CPT INST word 4 */
 	inst_w4.u64 = 0;
@@ -125,7 +125,7 @@ cn10k_ipsec_outb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 
 	inst_w4.s.param1 = param1.u16;
 
-	sa->inst.w4 = inst_w4.u64;
+	sec_sess->inst.w4 = inst_w4.u64;
 
 	if (ipsec_xfrm->options.stats == 1) {
 		/* Enable mib counters */
@@ -163,18 +163,18 @@ static int
 cn10k_ipsec_inb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 			  struct rte_security_ipsec_xform *ipsec_xfrm,
 			  struct rte_crypto_sym_xform *crypto_xfrm,
-			  struct rte_security_session *sec_sess)
+			  struct rte_security_session *sess)
 {
 	union roc_ot_ipsec_inb_param1 param1;
 	struct roc_ot_ipsec_inb_sa *sa_dptr;
-	struct cn10k_sec_session *sess;
+	struct cn10k_sec_session *sec_sess;
 	struct cn10k_ipsec_sa *sa;
 	union cpt_inst_w4 inst_w4;
 	void *in_sa;
 	int ret = 0;
 
-	sess = get_sec_session_private_data(sec_sess);
-	sa = &sess->sa;
+	sec_sess = get_sec_session_private_data(sess);
+	sa = &sec_sess->sa;
 	in_sa = &sa->in_sa;
 
 	/* Allocate memory to be used as dptr for CPT ucode WRITE_SA op */
@@ -192,8 +192,8 @@ cn10k_ipsec_inb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 		goto sa_dptr_free;
 	}
 
-	sa->is_outbound = false;
-	sa->inst.w7 = ipsec_cpt_inst_w7_get(roc_cpt, in_sa);
+	sec_sess->is_outbound = false;
+	sec_sess->inst.w7 = ipsec_cpt_inst_w7_get(roc_cpt, in_sa);
 
 	/* pre-populate CPT INST word 4 */
 	inst_w4.u64 = 0;
@@ -209,7 +209,7 @@ cn10k_ipsec_inb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 	 */
 	if (ipsec_xfrm->options.ip_csum_enable) {
 		param1.s.ip_csum_disable = ROC_IE_OT_SA_INNER_PKT_IP_CSUM_ENABLE;
-		sa->ip_csum = RTE_MBUF_F_RX_IP_CKSUM_GOOD;
+		sec_sess->ip_csum = RTE_MBUF_F_RX_IP_CKSUM_GOOD;
 	}
 
 	/* Disable L4 checksum verification by default */
@@ -224,7 +224,7 @@ cn10k_ipsec_inb_sa_create(struct roc_cpt *roc_cpt, struct roc_cpt_lf *lf,
 
 	inst_w4.s.param1 = param1.u16;
 
-	sa->inst.w4 = inst_w4.u64;
+	sec_sess->inst.w4 = inst_w4.u64;
 
 	if (ipsec_xfrm->options.stats == 1) {
 		/* Enable mib counters */
@@ -284,11 +284,9 @@ cn10k_ipsec_session_create(void *dev,
 	roc_cpt = &vf->cpt;
 
 	if (ipsec_xfrm->direction == RTE_SECURITY_IPSEC_SA_DIR_INGRESS)
-		return cn10k_ipsec_inb_sa_create(roc_cpt, &qp->lf, ipsec_xfrm,
-						 crypto_xfrm, sess);
+		return cn10k_ipsec_inb_sa_create(roc_cpt, &qp->lf, ipsec_xfrm, crypto_xfrm, sess);
 	else
-		return cn10k_ipsec_outb_sa_create(roc_cpt, &qp->lf, ipsec_xfrm,
-						  crypto_xfrm, sess);
+		return cn10k_ipsec_outb_sa_create(roc_cpt, &qp->lf, ipsec_xfrm, crypto_xfrm, sess);
 }
 
 static int
@@ -344,8 +342,8 @@ cn10k_sec_session_destroy(void *dev, struct rte_security_session *sec_sess)
 		return 0;
 
 	qp = crypto_dev->data->queue_pairs[0];
-	if (qp == NULL)
-		return 0;
+	if (unlikely(qp == NULL))
+		return -ENOTSUP;
 
 	lf = &qp->lf;
 
@@ -356,7 +354,7 @@ cn10k_sec_session_destroy(void *dev, struct rte_security_session *sec_sess)
 
 	ret = -1;
 
-	if (sa->is_outbound) {
+	if (sess->is_outbound) {
 		sa_dptr = plt_zmalloc(sizeof(struct roc_ot_ipsec_outb_sa), 8);
 		if (sa_dptr != NULL) {
 			roc_ot_ipsec_outb_sa_init(sa_dptr);
@@ -414,7 +412,6 @@ cn10k_sec_session_stats_get(void *device, struct rte_security_session *sess,
 	struct rte_cryptodev *crypto_dev = device;
 	struct roc_ot_ipsec_outb_sa *out_sa;
 	struct roc_ot_ipsec_inb_sa *in_sa;
-	union roc_ot_ipsec_sa_word2 *w2;
 	struct cn10k_sec_session *priv;
 	struct cn10k_ipsec_sa *sa;
 	struct cnxk_cpt_qp *qp;
@@ -427,12 +424,10 @@ cn10k_sec_session_stats_get(void *device, struct rte_security_session *sess,
 	if (qp == NULL)
 		return -EINVAL;
 
-	sa = &priv->sa;
-	w2 = (union roc_ot_ipsec_sa_word2 *)&sa->in_sa.w2;
-
 	stats->protocol = RTE_SECURITY_PROTOCOL_IPSEC;
+	sa = &priv->sa;
 
-	if (w2->s.dir == ROC_IE_SA_DIR_OUTBOUND) {
+	if (priv->is_outbound) {
 		out_sa = &sa->out_sa;
 		roc_cpt_lf_ctx_flush(&qp->lf, out_sa, false);
 		rte_delay_ms(1);

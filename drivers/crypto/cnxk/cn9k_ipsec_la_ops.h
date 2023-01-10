@@ -17,12 +17,12 @@
 #include "cnxk_sg.h"
 
 static __rte_always_inline int32_t
-ipsec_po_out_rlen_get(struct cn9k_ipsec_sa *sa, uint32_t plen, struct rte_mbuf *m_src)
+ipsec_po_out_rlen_get(struct cn9k_sec_session *sess, uint32_t plen, struct rte_mbuf *m_src)
 {
 	uint32_t enc_payload_len;
 	int adj_len = 0;
 
-	if (sa->out_sa.common_sa.ctl.ipsec_mode == ROC_IE_SA_MODE_TRANSPORT) {
+	if (sess->sa.out_sa.common_sa.ctl.ipsec_mode == ROC_IE_SA_MODE_TRANSPORT) {
 		adj_len = ROC_CPT_TUNNEL_IPV4_HDR_LEN;
 
 		uintptr_t data = (uintptr_t)m_src->buf_addr + m_src->data_off;
@@ -56,17 +56,17 @@ ipsec_po_out_rlen_get(struct cn9k_ipsec_sa *sa, uint32_t plen, struct rte_mbuf *
 	}
 
 	enc_payload_len =
-		RTE_ALIGN_CEIL(plen + sa->rlens.roundup_len - adj_len, sa->rlens.roundup_byte);
+		RTE_ALIGN_CEIL(plen + sess->rlens.roundup_len - adj_len, sess->rlens.roundup_byte);
 
-	return sa->custom_hdr_len + sa->rlens.partial_len + enc_payload_len + adj_len;
+	return sess->custom_hdr_len + sess->rlens.partial_len + enc_payload_len + adj_len;
 }
 
 static __rte_always_inline int
 process_outb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
-		struct cn9k_ipsec_sa *sa, struct cpt_inst_s *inst,
+		struct cn9k_sec_session *sess, struct cpt_inst_s *inst,
 		struct cpt_inflight_req *infl_req)
 {
-	const unsigned int hdr_len = sa->custom_hdr_len;
+	const unsigned int hdr_len = sess->custom_hdr_len;
 	struct rte_crypto_sym_op *sym_op = cop->sym;
 	struct rte_mbuf *m_src = sym_op->m_src;
 	uint32_t dlen, rlen, pkt_len, seq_lo;
@@ -77,7 +77,7 @@ process_outb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
 
 	pkt_len = rte_pktmbuf_pkt_len(m_src);
 	dlen = pkt_len + hdr_len;
-	rlen = ipsec_po_out_rlen_get(sa, pkt_len, m_src);
+	rlen = ipsec_po_out_rlen_get(sess, pkt_len, m_src);
 
 	extend_tail = rlen - dlen;
 	pkt_len += extend_tail;
@@ -100,8 +100,7 @@ process_outb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
 		hdr = PLT_PTR_ADD(m_src->buf_addr, data_off - hdr_len);
 
 		inst->dptr = PLT_U64_CAST(hdr);
-
-		inst->w4.u64 = sa->inst.w4 | dlen;
+		inst->w4.u64 = sess->inst.w4 | dlen;
 	} else {
 		struct roc_sglist_comp *scatter_comp, *gather_comp;
 		uint32_t g_size_bytes, s_size_bytes;
@@ -162,21 +161,20 @@ process_outb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
 
 		inst->dptr = (uint64_t)in_buffer;
 
-		inst->w4.u64 = sa->inst.w4 | dlen;
+		inst->w4.u64 = sess->inst.w4 | dlen;
 		inst->w4.s.opcode_major |= (uint64_t)ROC_DMA_MODE_SG;
 	}
 
 #ifdef LA_IPSEC_DEBUG
-	if (sa->inst.w4 & ROC_IE_ON_PER_PKT_IV) {
+	if (sess->inst.w4 & ROC_IE_ON_PER_PKT_IV) {
 		memcpy(&hdr->iv[0],
-		       rte_crypto_op_ctod_offset(cop, uint8_t *,
-						 sa->cipher_iv_off),
-		       sa->cipher_iv_len);
+		       rte_crypto_op_ctod_offset(cop, uint8_t *, sess->cipher_iv_off),
+		       sess->cipher_iv_len);
 	}
 #endif
 
 	m_src->pkt_len = pkt_len;
-	esn = ++sa->esn;
+	esn = ++sess->esn;
 
 	/* Set ESN seq hi */
 	hdr->esn = rte_cpu_to_be_32(esn >> 32);
@@ -189,14 +187,15 @@ process_outb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
 	hdr->ip_id = seq_lo;
 
 	/* Prepare CPT instruction */
-	inst->w7.u64 = sa->inst.w7;
+	inst->w7.u64 = sess->inst.w7;
 
 	return 0;
 }
 
 static __rte_always_inline int
-process_inb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop, struct cn9k_ipsec_sa *sa,
-	       struct cpt_inst_s *inst, struct cpt_inflight_req *infl_req)
+process_inb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop,
+	       struct cn9k_sec_session *sess, struct cpt_inst_s *inst,
+	       struct cpt_inflight_req *infl_req)
 {
 	const unsigned int hdr_len = ROC_IE_ON_INB_RPTR_HDR;
 	struct rte_crypto_sym_op *sym_op = cop->sym;
@@ -208,7 +207,7 @@ process_inb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop, struc
 	if (likely(m_src->next == NULL)) {
 		dlen = rte_pktmbuf_pkt_len(m_src);
 		inst->dptr = rte_pktmbuf_mtod(m_src, uint64_t);
-		inst->w4.u64 = sa->inst.w4 | dlen;
+		inst->w4.u64 = sess->inst.w4 | dlen;
 	} else {
 		struct roc_sglist_comp *scatter_comp, *gather_comp;
 		uint32_t g_size_bytes, s_size_bytes;
@@ -254,15 +253,14 @@ process_inb_sa(struct cpt_qp_meta_info *m_info, struct rte_crypto_op *cop, struc
 		dlen = g_size_bytes + s_size_bytes + ROC_SG_LIST_HDR_SIZE;
 
 		inst->dptr = (uint64_t)in_buffer;
-
-		inst->w4.u64 = sa->inst.w4 | dlen;
+		inst->w4.u64 = sess->inst.w4 | dlen;
 		inst->w4.s.opcode_major |= (uint64_t)ROC_DMA_MODE_SG;
 	}
 
 	/* Prepare CPT instruction */
-	inst->w7.u64 = sa->inst.w7;
+	inst->w7.u64 = sess->inst.w7;
 
-	if (unlikely(sa->replay_win_sz))
+	if (unlikely(sess->replay_win_sz))
 		infl_req->op_flags |= CPT_OP_FLAGS_IPSEC_INB_REPLAY;
 
 	return 0;
