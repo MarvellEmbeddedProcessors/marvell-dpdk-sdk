@@ -250,7 +250,7 @@ struct roc_npc_flow_dump_data {
 	uint16_t ltype;
 };
 
-struct roc_npc_msns_action_info {
+struct roc_npc_spi_to_sa_action_info {
 	uint32_t spi;
 	uint32_t hash_index;
 	uint8_t way;
@@ -277,7 +277,7 @@ struct roc_npc_flow {
 #define ROC_NPC_MAX_FLOW_PATTERNS 32
 	struct roc_npc_flow_dump_data dump_data[ROC_NPC_MAX_FLOW_PATTERNS];
 	uint16_t num_patterns;
-	struct roc_npc_msns_action_info msns_info;
+	struct roc_npc_spi_to_sa_action_info spi_to_sa_info;
 	bool is_validate;
 	uint16_t match_id;
 	uint8_t is_inline_dev;

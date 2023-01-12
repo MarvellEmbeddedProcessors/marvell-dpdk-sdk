@@ -906,7 +906,7 @@ npc_parse_le(struct npc_parse_state *pst)
 		info.len = pst->pattern->size;
 		esp = (const struct roc_npc_item_esp_hdr *)pattern->spec;
 		if (esp)
-			pst->flow->msns_info.spi = esp->spi;
+			pst->flow->spi_to_sa_info.spi = esp->spi;
 		break;
 	default:
 		return 0;

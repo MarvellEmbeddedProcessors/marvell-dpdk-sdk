@@ -373,7 +373,7 @@ roc_npc_validate_portid_action(struct roc_npc *roc_npc_src,
 
 static int
 npc_parse_spi_to_sa_action(struct roc_npc *roc_npc, const struct roc_npc_action *act,
-			   struct roc_npc_flow *flow, uint8_t *has_msns_action)
+			   struct roc_npc_flow *flow, uint8_t *has_spi_to_sa_action)
 {
 	const struct roc_npc_sec_action *sec_action;
 	struct nix_spi_to_sa_add_req *req;
@@ -391,7 +391,7 @@ npc_parse_spi_to_sa_action(struct roc_npc *roc_npc, const struct roc_npc_action 
 	    act->conf == NULL || flow->is_validate)
 		return 0;
 
-	*has_msns_action = true;
+	*has_spi_to_sa_action = true;
 	sec_action = act->conf;
 
 	vtag_act.reg = 0;
@@ -424,16 +424,16 @@ npc_parse_spi_to_sa_action(struct roc_npc *roc_npc, const struct roc_npc_action 
 		if (req == NULL)
 			return -ENOSPC;
 		req->sa_index = sec_action->sa_index;
-		req->spi_index = plt_be_to_cpu_32(flow->msns_info.spi);
+		req->spi_index = plt_be_to_cpu_32(flow->spi_to_sa_info.spi);
 		req->match_id = flow->match_id;
 		req->valid = true;
 		rc = mbox_process_msg(mbox, (void *)&rsp);
 		if (rc)
 			return rc;
-		flow->msns_info.hash_index = rsp->hash_index;
-		flow->msns_info.way = rsp->way;
-		flow->msns_info.duplicate = rsp->is_duplicate;
-		flow->msns_info.has_action = true;
+		flow->spi_to_sa_info.hash_index = rsp->hash_index;
+		flow->spi_to_sa_info.way = rsp->way;
+		flow->spi_to_sa_info.duplicate = rsp->is_duplicate;
+		flow->spi_to_sa_info.has_action = true;
 		break;
 	default:
 		return -1;
@@ -457,7 +457,7 @@ npc_parse_actions(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 	const struct roc_npc_action_queue *act_q;
 	const struct roc_npc_action_vf *vf_act;
 	bool vlan_insert_action = false;
-	uint8_t has_msns_act = 0;
+	uint8_t has_spi_to_sa_act = 0;
 	int sel_act, req_act = 0;
 	uint16_t pf_func, vf_id;
 	struct roc_nix *roc_nix;
@@ -591,7 +591,7 @@ npc_parse_actions(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 	}
 
 	if (sec_action) {
-		rc = npc_parse_spi_to_sa_action(roc_npc, sec_action, flow, &has_msns_act);
+		rc = npc_parse_spi_to_sa_action(roc_npc, sec_action, flow, &has_spi_to_sa_act);
 		if (rc) {
 			errcode = NPC_ERR_ACTION_NOTSUP;
 			goto err_exit;
@@ -610,7 +610,7 @@ npc_parse_actions(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 		goto err_exit;
 	}
 
-	if (has_msns_act && (vlan_insert_action ||
+	if (has_spi_to_sa_act && (vlan_insert_action ||
 			     (req_act & ROC_NPC_ACTION_TYPE_VLAN_STRIP))) {
 		plt_err("Both MSNS and VLAN insert/strip action can't be supported"
 			" together");
@@ -1331,7 +1331,7 @@ npc_inline_dev_ipsec_action_free(struct npc *npc, struct roc_npc_flow *flow)
 	struct idev_cfg *idev;
 	int rc;
 
-	RTE_SET_USED(npc);
+	PLT_SET_USED(npc);
 
 	idev = idev_get_cfg();
 	if (!idev)
@@ -1467,14 +1467,14 @@ npc_rss_group_free(struct npc *npc, struct roc_npc_flow *flow)
 }
 
 static int
-roc_npc_delete_msns_action(struct roc_npc *roc_npc, struct roc_npc_flow *flow)
+roc_npc_delete_spi_to_sa_action(struct roc_npc *roc_npc, struct roc_npc_flow *flow)
 {
 	struct roc_nix *roc_nix = roc_npc->roc_nix;
 	struct nix_spi_to_sa_delete_req *req;
 	struct mbox *mbox;
 	struct nix *nix;
 
-	if (!flow->msns_info.has_action || flow->msns_info.duplicate)
+	if (!flow->spi_to_sa_info.has_action || flow->spi_to_sa_info.duplicate)
 		return 0;
 
 	nix = roc_nix_to_nix_priv(roc_nix);
@@ -1482,8 +1482,8 @@ roc_npc_delete_msns_action(struct roc_npc *roc_npc, struct roc_npc_flow *flow)
 	req = mbox_alloc_msg_nix_spi_to_sa_delete(mbox);
 	if (req == NULL)
 		return -ENOSPC;
-	req->hash_index = flow->msns_info.hash_index;
-	req->way = flow->msns_info.way;
+	req->hash_index = flow->spi_to_sa_info.hash_index;
+	req->way = flow->spi_to_sa_info.way;
 	return mbox_process_msg(mbox, NULL);
 }
 
@@ -1493,7 +1493,7 @@ roc_npc_flow_destroy(struct roc_npc *roc_npc, struct roc_npc_flow *flow)
 	struct npc *npc = roc_npc_to_npc_priv(roc_npc);
 	int rc;
 
-	rc = roc_npc_delete_msns_action(roc_npc, flow);
+	rc = roc_npc_delete_spi_to_sa_action(roc_npc, flow);
 	if (rc)
 		return rc;
 
