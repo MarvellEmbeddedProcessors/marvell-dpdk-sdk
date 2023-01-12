@@ -65,8 +65,7 @@ run_event_tests() {
 register_cn9k_event_test	event_timer_adapter_test	"-l $ISOLCPUS -a $EVENT_DEVICE,single_ws=1,tim_stats_ena=1"
 register_cn9k_event_test	eventdev_selftest_cn9k		"-l $ISOLCPUS"
 register_cn10k_event_test	eventdev_selftest_cn10k		"-l $ISOLCPUS"
-# TODO: re-enable after moving test to new stage
-#register_cn10k_event_test	event_timer_adapter_test	"-l $ISOLCPUS -a $EVENT_DEVICE,gw_mode=0,tim_stats_ena=1"
+register_cn10k_event_test	event_timer_adapter_test	"-l $ISOLCPUS -a $EVENT_DEVICE,gw_mode=0,tim_stats_ena=1"
 register_cnxk_event_test	event_eth_rx_adapter_autotest	"-l $ISOLCPUS"
 register_cnxk_event_test	event_crypto_adapter_autotest	"-l 0,1"
 
