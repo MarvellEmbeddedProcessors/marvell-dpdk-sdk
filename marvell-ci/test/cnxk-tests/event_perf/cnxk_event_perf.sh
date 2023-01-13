@@ -20,7 +20,7 @@ TARGET_SSH_CMD="$TARGET_SSH_CMD -n"
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-"/tmp/dpdk/deps/lib"}
 RES_SEPERATOR="------------------------------------------------------------------------"
 if [[ $PLAT == cn10k ]]; then
-	REF_FILE=${REF_FILE:-ref_numbers/cn106xx_rclk2000_sclk1000.csv}
+	REF_FILE=${REF_FILE:-ref_numbers/cn106xx_rclk2500_sclk1100.csv}
 	CPT_DEV=${CPT_DEV:-$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')}
 else
 	REF_FILE=${REF_FILE:-ref_numbers/cn96xx_rclk2200_sclk1100.csv}
