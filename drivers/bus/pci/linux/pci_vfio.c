@@ -980,19 +980,19 @@ pci_vfio_map_resource_secondary(struct rte_pci_device *dev)
 
 	/* map BARs */
 	maps = vfio_res->maps;
-	for (drv_reg = drv->regions; drv_reg->size != 0; drv_reg++)
-		drv_reg->mapped = false;
+	map_reg = drv->drv_flags & RTE_PCI_DRV_NEED_REGION_MAPPING ? true : false;
+	if (map_reg) {
+		for (drv_reg = drv->regions; drv_reg->size != 0; drv_reg++)
+			drv_reg->mapped = false;
+	}
 
 	for (i = 0; i < vfio_res->nb_maps; i++) {
 next_region:
-		if (drv->drv_flags & RTE_PCI_DRV_NEED_REGION_MAPPING &&
-		    drv->valid_bars[i] == true) {
-			map_reg = pci_device_get_region_info(drv, i, &offset, &size);
-			if (map_reg == false)
-				continue;
-			region = &vfio_res->regions[i][j];
-		}
+		if (map_reg && drv->valid_bars[i] == true &&
+		    (pci_device_get_region_info(drv, i, &offset, &size) == false))
+			continue;
 
+		region = &vfio_res->regions[i][j];
 		ret = pci_vfio_mmap_bar(vfio_dev_fd, vfio_res, i, j, map_reg,
 					MAP_FIXED);
 		if (ret < 0) {
@@ -1001,8 +1001,10 @@ next_region:
 			goto err_vfio_dev_fd;
 		}
 
-		if (map_reg) {
+		if (map_reg && (drv->valid_bars[i] == true)) {
 			dev->regions[i][j].addr = region->addr;
+			dev->regions[i][j].len = region->size;
+			dev->regions[i][j].phys_addr += offset;
 			j++;
 			map_reg = false;
 			goto next_region;
