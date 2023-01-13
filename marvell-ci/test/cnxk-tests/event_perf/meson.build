@@ -17,7 +17,7 @@ test_dir = meson.current_build_dir()
 run_command(copy_data, test_script)
 run_command(copy_data, 'cnxk_event_perf_gen.sh')
 run_command(copy_data, 'ref_numbers/cn96xx_rclk2200_sclk1100.csv')
-run_command(copy_data, 'ref_numbers/cn106xx_rclk2000_sclk1000.csv')
+run_command(copy_data, 'ref_numbers/cn106xx_rclk2500_sclk1100.csv')
 
 # Add the meson test
 test(test_name,
