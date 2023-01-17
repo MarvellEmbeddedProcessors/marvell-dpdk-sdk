@@ -799,8 +799,6 @@ cnxk_ae_session_clear(struct rte_cryptodev *dev, struct rte_cryptodev_asym_sessi
 	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
 	roc_cpt_lf_ctx_flush(priv->lf, &priv->hw_ctx, true);
 
-	plt_delay_ms(1);
-
 	/* Free resources allocated in session_cfg */
 	cnxk_ae_free_session_parameters(priv);
 
