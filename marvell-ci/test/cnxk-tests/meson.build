@@ -72,6 +72,7 @@ test_subdirs = [
         'lso_test',
         'multi_pool_pkt_tx',
         'multi_mempool',
+        'event_inline_ipsec_autotest',
 ]
 
 foreach dir:test_subdirs
