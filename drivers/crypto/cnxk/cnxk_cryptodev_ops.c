@@ -737,8 +737,6 @@ sym_session_clear(struct rte_cryptodev_sym_session *sess, bool is_session_less)
 	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
 	roc_cpt_lf_ctx_flush(sess_priv->lf, &sess_priv->roc_se_ctx.se_ctx, true);
 
-	plt_delay_ms(1);
-
 	if (sess_priv->roc_se_ctx.auth_key != NULL)
 		plt_free(sess_priv->roc_se_ctx.auth_key);
 
