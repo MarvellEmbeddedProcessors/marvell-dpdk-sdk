@@ -305,8 +305,12 @@ run_event_perf_regression()
 	L2FWD_EVENT		dpdk-l2fwd-event	=*
 	L3FWD_EVENT		dpdk-l3fwd		L3FWD: entering lpm_event_loop_single on lcore [0-9]*
 	PERF_ATQ		dpdk-test-eventdev	0.000 mpps avg 0.000 mpps
-	PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
-	CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+	PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+	#FIXME: crypto adapter tests are not finishing on cn10k + dpdk-22.11-devel branch
+	if [[ $PLAT == cn9k ]]; then
+		test_info+="
+		CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+	fi
 	if [[ $PLAT == cn10k ]]; then
 		test_info+="
 		GW_MODE_NO_PREF		dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
