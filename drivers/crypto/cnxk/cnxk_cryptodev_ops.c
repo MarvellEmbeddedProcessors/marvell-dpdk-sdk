@@ -8,6 +8,7 @@
 
 #include "roc_ae_fpm_tables.h"
 #include "roc_cpt.h"
+#include "roc_errata.h"
 #include "roc_ie_on.h"
 
 #include "cnxk_ae.h"
@@ -636,7 +637,7 @@ cnxk_cpt_inst_w7_get(struct cnxk_se_sess *sess, struct roc_cpt *roc_cpt)
 
 	inst_w7.s.cptr = (uint64_t)&sess->roc_se_ctx.se_ctx;
 
-	if (roc_cpt->cpt_revision == ROC_CPT_REVISION_ID_106XX)
+	if (roc_errata_cpt_hang_on_mixed_ctx_val())
 		inst_w7.s.ctx_val = 1;
 	else
 		inst_w7.s.cptr += 8;
@@ -720,7 +721,7 @@ sym_session_configure(struct roc_cpt *roc_cpt, int driver_id,
 
 	set_sym_session_private_data(sess, driver_id, sess_priv);
 
-	if (roc_cpt->cpt_revision == ROC_CPT_REVISION_ID_106XX)
+	if (roc_errata_cpt_hang_on_mixed_ctx_val())
 		roc_se_ctx_init(&sess_priv->roc_se_ctx);
 
 	return 0;
@@ -759,7 +760,8 @@ sym_session_clear(int driver_id, struct rte_cryptodev_sym_session *sess)
 	sess_priv = priv;
 
 	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
-	roc_cpt_lf_ctx_flush(sess_priv->lf, &sess_priv->roc_se_ctx.se_ctx, true);
+	if (roc_errata_cpt_hang_on_mixed_ctx_val())
+		roc_cpt_lf_ctx_flush(sess_priv->lf, &sess_priv->roc_se_ctx.se_ctx, true);
 
 	if (sess_priv->roc_se_ctx.auth_key != NULL)
 		plt_free(sess_priv->roc_se_ctx.auth_key);
@@ -797,7 +799,8 @@ cnxk_ae_session_clear(struct rte_cryptodev *dev, struct rte_cryptodev_asym_sessi
 		return;
 
 	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
-	roc_cpt_lf_ctx_flush(priv->lf, &priv->hw_ctx, true);
+	if (roc_errata_cpt_hang_on_mixed_ctx_val())
+		roc_cpt_lf_ctx_flush(priv->lf, &priv->hw_ctx, true);
 
 	/* Free resources allocated in session_cfg */
 	cnxk_ae_free_session_parameters(priv);
@@ -838,7 +841,7 @@ cnxk_ae_session_cfg(struct rte_cryptodev *dev,
 	w7.u64 = 0;
 	w7.s.egrp = roc_cpt->eng_grp[CPT_ENG_TYPE_AE];
 
-	if (vf->cpt.cpt_revision == ROC_CPT_REVISION_ID_106XX) {
+	if (roc_errata_cpt_hang_on_mixed_ctx_val()) {
 		hwc = &priv->hw_ctx;
 		hwc->w0.s.aop_valid = 1;
 		hwc->w0.s.ctx_hdr_size = 0;
