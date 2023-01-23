@@ -272,6 +272,8 @@ rte_event_timer_adapter_get_info(const struct rte_event_timer_adapter *adapter,
 	adapter_info->event_dev_port_id = adapter->data->event_port_id;
 	adapter_info->caps = adapter->data->caps;
 
+	rte_eventdev_trace_timer_adapter_get_info(adapter, adapter_info);
+
 	return 0;
 }
 
@@ -383,6 +385,8 @@ rte_event_timer_adapter_lookup(uint16_t adapter_id)
 
 	adapter->allocated = 1;
 
+	rte_eventdev_trace_timer_adapter_lookup(adapter_id, adapter);
+
 	return adapter;
 }
 
@@ -433,8 +437,13 @@ rte_event_timer_adapter_service_id_get(struct rte_event_timer_adapter *adapter,
 {
 	ADAPTER_VALID_OR_ERR_RET(adapter, -EINVAL);
 
+	if (service_id == NULL)
+		return -EINVAL;
+
 	if (adapter->data->service_inited && service_id != NULL)
 		*service_id = adapter->data->service_id;
+
+	rte_eventdev_trace_timer_adapter_service_id_get(adapter, *service_id);
 
 	return adapter->data->service_inited ? 0 : -ESRCH;
 }
@@ -443,6 +452,8 @@ int
 rte_event_timer_adapter_stats_get(struct rte_event_timer_adapter *adapter,
 				  struct rte_event_timer_adapter_stats *stats)
 {
+	rte_eventdev_trace_timer_adapter_stats_get(adapter, stats);
+
 	ADAPTER_VALID_OR_ERR_RET(adapter, -EINVAL);
 	FUNC_PTR_OR_ERR_RET(adapter->ops->stats_get, -EINVAL);
 	if (stats == NULL)
@@ -454,6 +465,8 @@ rte_event_timer_adapter_stats_get(struct rte_event_timer_adapter *adapter,
 int
 rte_event_timer_adapter_stats_reset(struct rte_event_timer_adapter *adapter)
 {
+	rte_eventdev_trace_timer_adapter_stats_reset(adapter);
+
 	ADAPTER_VALID_OR_ERR_RET(adapter, -EINVAL);
 	FUNC_PTR_OR_ERR_RET(adapter->ops->stats_reset, -EINVAL);
 	return adapter->ops->stats_reset(adapter);

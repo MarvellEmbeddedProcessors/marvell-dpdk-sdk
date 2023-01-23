@@ -395,8 +395,6 @@ rte_event_crypto_adapter_create_ext(uint8_t id, uint8_t dev_id,
 
 	event_crypto_adapter[id] = adapter;
 
-	rte_eventdev_trace_crypto_adapter_create(id, dev_id, adapter, conf_arg,
-		mode);
 	return 0;
 }
 
@@ -423,6 +421,8 @@ rte_event_crypto_adapter_create(uint8_t id, uint8_t dev_id,
 						  pc);
 	if (ret)
 		rte_free(pc);
+
+	rte_eventdev_trace_crypto_adapter_create(id, dev_id, port_config, mode,	ret);
 
 	return ret;
 }
@@ -1289,6 +1289,12 @@ rte_event_crypto_adapter_stats_get(uint8_t id,
 	stats->crypto_deq_count += dev_stats_sum.crypto_deq_count;
 	stats->event_enq_count += dev_stats_sum.event_enq_count;
 
+	rte_eventdev_trace_crypto_adapter_stats_get(id, stats,
+		stats->event_poll_count, stats->event_deq_count,
+		stats->crypto_enq_count, stats->crypto_enq_fail,
+		stats->crypto_deq_count, stats->event_enq_count,
+		stats->event_enq_retry_count, stats->event_enq_fail_count);
+
 	return 0;
 }
 
@@ -1299,6 +1305,8 @@ rte_event_crypto_adapter_stats_reset(uint8_t id)
 	struct crypto_device_info *dev_info;
 	struct rte_eventdev *dev;
 	uint32_t i;
+
+	rte_eventdev_trace_crypto_adapter_stats_reset(id);
 
 	if (eca_memzone_lookup())
 		return -ENOMEM;
@@ -1337,6 +1345,8 @@ rte_event_crypto_adapter_service_id_get(uint8_t id, uint32_t *service_id)
 	if (adapter->service_inited)
 		*service_id = adapter->service_id;
 
+	rte_eventdev_trace_crypto_adapter_service_id_get(id, *service_id);
+
 	return adapter->service_inited ? 0 : -ESRCH;
 }
 
@@ -1353,6 +1363,8 @@ rte_event_crypto_adapter_event_port_get(uint8_t id, uint8_t *event_port_id)
 
 	*event_port_id = adapter->event_port_id;
 
+	rte_eventdev_trace_crypto_adapter_event_port_get(id, *event_port_id);
+
 	return 0;
 }
 
@@ -1365,6 +1377,8 @@ rte_event_crypto_adapter_vector_limits_get(
 	struct rte_eventdev *dev;
 	uint32_t cap;
 	int ret;
+
+	rte_eventdev_trace_crypto_adapter_vector_limits_get(dev_id, cdev_id, limits);
 
 	RTE_EVENTDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
 
