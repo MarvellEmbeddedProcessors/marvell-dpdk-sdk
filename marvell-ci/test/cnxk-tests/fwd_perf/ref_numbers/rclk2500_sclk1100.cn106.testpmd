@@ -2,3 +2,4 @@ PPS of tests on 106xx and multiple RCLK
 ---------------------------------------
 
 TESTPMD_NO_OFFLOAD 98000000
+TESTPMD_LBK_NO_OFFLOAD 100000000
