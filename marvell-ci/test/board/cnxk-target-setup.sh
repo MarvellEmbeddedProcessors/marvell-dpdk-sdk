@@ -100,6 +100,7 @@ function setup_devices() {
 	if [[ -e /sys/bus/pci/devices/$cpt_pf/sriov_numvfs ]]; then
 		sh -c "echo 0 > /sys/bus/pci/devices/$cpt_pf/sriov_numvfs"
 		sh -c "echo 2 > /sys/bus/pci/devices/$cpt_pf/sriov_numvfs"
+		devlink dev info pci/$cpt_pf
 		devs+=" $cpt_vf"
 	fi
 
