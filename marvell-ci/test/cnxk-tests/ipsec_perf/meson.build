@@ -3,7 +3,8 @@
 # Test script
 test_script = 'cnxk_ipsec_perf.sh'
 # Test name
-test_name = 'cnxk_ipsec_perf'
+test_name = 'cnxk_ipsec_la_perf'
+test_inline_name = 'cnxk_ipsec_inline_perf'
 # Test arguments
 test_args = '$REMOTE_DIR'
 # Test directory name relative to build directory.
@@ -73,6 +74,14 @@ run_command(copy_data, 'pcap/enc_aes-gcm_1410.pcap')
 test(test_name,
     cnxk_test_script_wrapper,
     env : [['DPDK_TEST=' + test_name],
+    ['TEST_DIR=' + test_dir]],
+    args : [[test_script], [test_args]],
+    is_parallel : false, suite : 'cnxk-tests')
+
+test_args+= ' inline'
+test(test_inline_name,
+    cnxk_test_script_wrapper,
+    env : [['DPDK_TEST=' + test_inline_name],
     ['TEST_DIR=' + test_dir]],
     args : [[test_script], [test_args]],
     is_parallel : false, suite : 'cnxk-tests')

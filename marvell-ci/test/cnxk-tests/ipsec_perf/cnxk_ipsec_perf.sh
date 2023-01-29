@@ -954,9 +954,24 @@ EVENT_VF=$SSO_DEV
 setup_interfaces
 exec_genboard_cleanup
 
+function is_skip_test()
+{
+	local inline=$1
+	if [[ $inline = "inline" ]]; then
+		! is_inline_proto_test
+	else
+		is_inline_proto_test
+	fi
+}
+
 Y=0
 
 while [[ $Y -lt $NB_TYPES ]]; do
+	if is_skip_test $2; then
+		((++Y))
+		continue
+	fi
+
 	if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k ${TYPE[$Y]}; then
 		((++Y))
 		continue
