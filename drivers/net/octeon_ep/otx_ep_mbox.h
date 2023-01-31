@@ -6,7 +6,7 @@
 #define _OTX_EP_MBOX_H_
 
 
-#define OTX_EP_MBOX_VERSION 0
+#define OTX_EP_MBOX_VERSION        1
 
 enum otx_ep_mbox_opcode {
 	OTX_EP_MBOX_CMD_VERSION,
@@ -57,7 +57,6 @@ enum otx_ep_link_autoneg {
 
 #define OTX_EP_MBOX_TIMEOUT_MS     1200
 #define OTX_EP_MBOX_MAX_RETRIES    2
-#define OTX_EP_MBOX_VERSION        0
 #define OTX_EP_MBOX_MAX_DATA_SIZE  6
 #define OTX_EP_MBOX_MAX_DATA_BUF_SIZE 256
 #define OTX_EP_MBOX_MORE_FRAG_FLAG 1
@@ -158,4 +157,5 @@ int otx_ep_mbox_get_link_info(struct rte_eth_dev *eth_dev, struct rte_eth_link *
 void otx_ep_mbox_enable_interrupt(struct otx_ep_device *otx_ep);
 void otx_ep_mbox_disable_interrupt(struct otx_ep_device *otx_ep);
 int otx_ep_mbox_get_max_pkt_len(struct rte_eth_dev *eth_dev);
+int otx_ep_mbox_version_check(struct rte_eth_dev *eth_dev);
 #endif

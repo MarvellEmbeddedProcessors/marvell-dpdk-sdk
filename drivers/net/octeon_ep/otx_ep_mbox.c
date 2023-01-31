@@ -269,3 +269,24 @@ otx_ep_mbox_get_max_pkt_len(struct rte_eth_dev *eth_dev)
 		return ret;
 	return rsp.s_get_mtu.mtu;
 }
+
+int otx_ep_mbox_version_check(struct rte_eth_dev *eth_dev)
+{
+	struct otx_ep_device *otx_ep =
+		(struct otx_ep_device *)(eth_dev)->data->dev_private;
+	union otx_ep_mbox_word cmd;
+	union otx_ep_mbox_word rsp;
+	int ret;
+
+	cmd.u64 = 0;
+	cmd.s_version.opcode = OTX_EP_MBOX_CMD_VERSION;
+	cmd.s_version.version = OTX_EP_MBOX_VERSION;
+	ret = otx_ep_send_mbox_cmd(otx_ep, cmd, &rsp);
+	if (!ret)
+		return 0;
+	if (ret == OTX_EP_MBOX_CMD_STATUS_NACK) {
+		otx_ep_err("VF Mbox version:%u is not compatible with PF\n",
+			(uint32_t)cmd.s_version.version);
+	}
+	return ret;
+}
