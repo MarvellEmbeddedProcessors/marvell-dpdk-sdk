@@ -710,6 +710,9 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 		otx_ep_err("Invalid chip id\n");
 		return -EINVAL;
 	}
+	if (otx_ep_mbox_version_check(eth_dev)) {
+		return -EINVAL;
+	}
 	if (otx_ep_eth_dev_query_set_vf_mac(eth_dev,
 				(struct rte_ether_addr *)&vf_mac_addr)) {
 		otx_ep_err("set mac addr failed\n");
