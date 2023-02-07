@@ -31,6 +31,22 @@ static const struct rte_eth_desc_lim otx_ep_tx_desc_lim = {
 	.nb_align	= OTX_EP_TXD_ALIGN,
 };
 
+static void
+otx_ep_interrupt_handler(void *param)
+{
+	struct otx_ep_device *otx_epvf = (struct otx_ep_device *)param;
+	uint64_t reg_val;
+	if (otx_epvf) {
+		/* Clear Mbox interrupts */
+		reg_val = rte_read64((uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
+		rte_write64(reg_val, (uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
+		otx_ep_info("otx_epdev_interrupt_handler is called pf_num: %d vf_num: %d port_id: %d\n",
+		otx_epvf->pf_num, otx_epvf->vf_num, otx_epvf->port_id);
+	} else {
+		otx_ep_err("otx_epdev_interrupt_handler is called with dev NULL\n");
+	}
+}
+
 static int
 otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 		    struct rte_eth_dev_info *devinfo)
@@ -186,6 +202,40 @@ otx_ep_dev_stop(struct rte_eth_dev *eth_dev)
 	return 0;
 }
 
+/* Close device */
+static int
+otx_ep_dev_close(struct rte_eth_dev *eth_dev)
+{
+	struct otx_ep_device *otx_epvf;
+	uint32_t num_queues, q;
+
+	otx_epvf = OTX_EP_DEV(eth_dev);
+	otx_ep_mbox_disable_interrupt(otx_epvf);
+	otx_epvf->fn_list.disable_io_queues(otx_epvf);
+	num_queues = otx_epvf->nb_rx_queues;
+	for (q = 0; q < num_queues; q++) {
+		if (otx_ep_delete_oqs(otx_epvf, q)) {
+			otx_ep_err("Failed to delete OQ:%d\n", q);
+			return -EINVAL;
+		}
+	}
+	otx_ep_info("Num OQs:%d freed\n", otx_epvf->nb_rx_queues);
+	num_queues = otx_epvf->nb_tx_queues;
+	for (q = 0; q < num_queues; q++) {
+		if (otx_ep_delete_iqs(otx_epvf, q)) {
+			otx_ep_err("Failed to delete IQ:%d\n", q);
+			return -EINVAL;
+		}
+	}
+	otx_ep_dbg("Num IQs:%d freed\n", otx_epvf->nb_tx_queues);
+
+	if (rte_eth_dma_zone_free(eth_dev, "ism", 0)) {
+		otx_ep_err("Failed to delete ISM buffer\n");
+		return -EINVAL;
+	}
+	return 0;
+}
+
 /*
  * We only need 2 uint32_t locations per IOQ, but separate these so
  * each IOQ has the variables on its own cache line.
@@ -254,22 +304,6 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 		otx_ep_info("OTX_EP dev_id[%d]\n", dev_id);
 
 	return ret;
-}
-
-static void
-otx_ep_interrupt_handler(void *param)
-{
-	struct otx_ep_device *otx_epvf = (struct otx_ep_device *)param;
-	uint64_t reg_val;
-	if (otx_epvf) {
-		/* Clear Mbox interrupts */
-		reg_val = rte_read64((uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
-		rte_write64(reg_val, (uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
-		otx_ep_info("otx_epdev_interrupt_handler is called pf_num: %d vf_num: %d port_id: %d\n",
-		otx_epvf->pf_num, otx_epvf->vf_num, otx_epvf->port_id);
-	} else {
-		otx_ep_err("otx_epdev_interrupt_handler is called with dev NULL\n");
-	}
 }
 
 /* OTX_EP VF device initialization */
@@ -563,6 +597,7 @@ static const struct eth_dev_ops otx_ep_eth_dev_ops = {
 	.dev_configure		= otx_ep_dev_configure,
 	.dev_start		= otx_ep_dev_start,
 	.dev_stop		= otx_ep_dev_stop,
+	.dev_close		= otx_ep_dev_close,
 	.rx_queue_setup	        = otx_ep_rx_queue_setup,
 	.rx_queue_release	= otx_ep_rx_queue_release,
 	.tx_queue_setup	        = otx_ep_tx_queue_setup,
@@ -576,49 +611,10 @@ static const struct eth_dev_ops otx_ep_eth_dev_ops = {
 };
 
 static int
-otx_epdev_exit(struct rte_eth_dev *eth_dev)
-{
-	struct otx_ep_device *otx_epvf;
-	uint32_t num_queues, q;
-
-	otx_ep_info("%s:\n", __func__);
-
-	otx_epvf = OTX_EP_DEV(eth_dev);
-	otx_ep_mbox_disable_interrupt(otx_epvf);
-	otx_ep_unregister_irq(otx_epvf, otx_ep_interrupt_handler,
-						(void *)otx_epvf);
-	otx_epvf->fn_list.disable_io_queues(otx_epvf);
-	num_queues = otx_epvf->nb_rx_queues;
-	for (q = 0; q < num_queues; q++) {
-		if (otx_ep_delete_oqs(otx_epvf, q)) {
-			otx_ep_err("Failed to delete OQ:%d\n", q);
-			return -EINVAL;
-		}
-	}
-	otx_ep_info("Num OQs:%d freed\n", otx_epvf->nb_rx_queues);
-	num_queues = otx_epvf->nb_tx_queues;
-	for (q = 0; q < num_queues; q++) {
-		if (otx_ep_delete_iqs(otx_epvf, q)) {
-			otx_ep_err("Failed to delete IQ:%d\n", q);
-			return -EINVAL;
-		}
-	}
-	otx_ep_dbg("Num IQs:%d freed\n", otx_epvf->nb_tx_queues);
-
-	if (rte_eth_dma_zone_free(eth_dev, "ism", 0)) {
-		otx_ep_err("Failed to delete ISM buffer\n");
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int
 otx_ep_eth_dev_uninit(struct rte_eth_dev *eth_dev)
 {
 	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
 		return 0;
-	otx_epdev_exit(eth_dev);
 
 	eth_dev->dev_ops = NULL;
 	eth_dev->rx_pkt_burst = NULL;
