@@ -98,6 +98,7 @@ INTERNAL {
 	roc_idev_npa_nix_get;
 	roc_idev_num_lmtlines_get;
 	roc_idev_nix_inl_meta_aura_get;
+	roc_idev_nix_list_get;
 	roc_model;
 	roc_se_auth_key_set;
 	roc_se_ciph_key_set;
@@ -324,6 +325,7 @@ INTERNAL {
 	roc_npa_aura_drop_set;
 	roc_npa_aura_limit_modify;
 	roc_npa_aura_op_range_set;
+	roc_npa_aura_bp_configure;
 	roc_npa_ctx_dump;
 	roc_npa_dev_fini;
 	roc_npa_dev_init;
