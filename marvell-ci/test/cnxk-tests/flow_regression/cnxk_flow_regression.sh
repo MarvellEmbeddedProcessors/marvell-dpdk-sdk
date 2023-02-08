@@ -61,6 +61,7 @@ function testpmd_check_hits()
 
 	testpmd_cmd $prefix "flow query 0 0 count"
 
+	sleep 3
 	testpmd_prompt $prefix
 	COUNT=`cat $out | tail -n4 | grep "hits:" | cut -d':' -f2`
 
@@ -107,6 +108,7 @@ function testpmd_test_flow()
 	echo "-------------------------TESTPMD LOG-----------------------------"
 	testpmd_cmd $PRFX "show port stats all"
 	testpmd_log $prefix
+	sleep 3
 
 	if testpmd_check_hits $1; then
 		echo "$name passed"
