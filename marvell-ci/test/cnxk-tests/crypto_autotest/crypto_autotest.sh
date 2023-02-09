@@ -6,10 +6,15 @@ set -euo pipefail
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
+CNXK_MEMPOOL_DEVICE=$(lspci -d :a0fb | tail -1 | awk -e '{ print $1 }')
+
 CN10K_CRYPTO_DEVICE="0002:20:00.1"
-CN10K_MEMPOOL_DEVICE="0002:1f:00.0"
-CN10K_EAL_ARGS="-a $CN10K_CRYPTO_DEVICE,max_qps_limit=4 -a $CN10K_MEMPOOL_DEVICE"
+CN10K_EAL_ARGS="-a $CN10K_CRYPTO_DEVICE,max_qps_limit=4 -a $CNXK_MEMPOOL_DEVICE"
 CN10K_EAL_ARGS+=" --log-level=7"
+
+CN9K_CRYPTO_DEVICE="0002:10:00.1"
+CN9K_EAL_ARGS="-a $CN9K_CRYPTO_DEVICE,max_qps_limit=4 -a $CNXK_MEMPOOL_DEVICE"
+CN9K_EAL_ARGS+=" --log-level=7"
 
 if [[ -f $SCRIPTPATH/../../../../app/test/dpdk-test ]]; then
 	# This is running from build directory
@@ -31,8 +36,8 @@ run_cn10k_crypto_autotest() {
 }
 
 run_cn9k_crypto_autotest() {
-	DPDK_TEST=cryptodev_cn9k_autotest $DPDK_TEST_BIN
-	DPDK_TEST=cryptodev_cn9k_asym_autotest $DPDK_TEST_BIN
+	DPDK_TEST=cryptodev_cn9k_autotest $DPDK_TEST_BIN $CN9K_EAL_ARGS
+	DPDK_TEST=cryptodev_cn9k_asym_autotest $DPDK_TEST_BIN $CN9K_EAL_ARGS
 }
 
 run_crypto_autotest() {
