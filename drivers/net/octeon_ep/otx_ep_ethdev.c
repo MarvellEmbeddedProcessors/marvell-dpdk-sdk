@@ -258,6 +258,7 @@ otx_ep_dev_close(struct rte_eth_dev *eth_dev)
 	uint32_t num_queues, q;
 
 	otx_epvf = OTX_EP_DEV(eth_dev);
+	otx_ep_mbox_send_dev_exit(eth_dev);
 	otx_ep_mbox_disable_interrupt(otx_epvf);
 	otx_epvf->fn_list.disable_io_queues(otx_epvf);
 

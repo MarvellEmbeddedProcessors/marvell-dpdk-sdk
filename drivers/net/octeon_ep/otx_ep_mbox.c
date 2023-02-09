@@ -24,6 +24,11 @@ __otx_ep_send_mbox_cmd(struct otx_ep_device *otx_ep,
 
 	cmd.s.type = OTX_EP_MBOX_TYPE_CMD;
 	otx2_write64(cmd.u64, otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+
+	/* No response for notification messages */
+	if (!rsp)
+		return 0;
+
 	for (count = 0; count < OTX_EP_MBOX_TIMEOUT_MS; count++) {
 		rte_delay_ms(1);
 		reg_val = otx2_read64(otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
@@ -289,5 +294,18 @@ int otx_ep_mbox_version_check(struct rte_eth_dev *eth_dev)
 		otx_ep_err("VF Mbox version:%u is not compatible with PF\n",
 			(uint32_t)cmd.s_version.version);
 	}
+	return ret;
+}
+
+int otx_ep_mbox_send_dev_exit(struct rte_eth_dev *eth_dev)
+{
+	struct otx_ep_device *otx_ep =
+		(struct otx_ep_device *)(eth_dev)->data->dev_private;
+	union otx_ep_mbox_word cmd;
+	int ret;
+
+	cmd.u64 = 0;
+	cmd.s_version.opcode = OTX_EP_MBOX_CMD_DEV_REMOVE;
+	ret = otx_ep_send_mbox_cmd(otx_ep, cmd, NULL);
 	return ret;
 }
