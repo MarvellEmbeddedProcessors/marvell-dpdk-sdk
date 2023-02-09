@@ -19,6 +19,7 @@ enum otx_ep_mbox_opcode {
 	OTX_EP_MBOX_CMD_SET_LINK_STATUS,
 	OTX_EP_MBOX_CMD_GET_LINK_STATUS,
 	OTX_EP_MBOX_CMD_GET_MTU,
+	OTX_EP_MBOX_CMD_DEV_REMOVE,
 	OTX_EP_MBOX_CMD_LAST,
 };
 
@@ -158,4 +159,5 @@ void otx_ep_mbox_enable_interrupt(struct otx_ep_device *otx_ep);
 void otx_ep_mbox_disable_interrupt(struct otx_ep_device *otx_ep);
 int otx_ep_mbox_get_max_pkt_len(struct rte_eth_dev *eth_dev);
 int otx_ep_mbox_version_check(struct rte_eth_dev *eth_dev);
+int otx_ep_mbox_send_dev_exit(struct rte_eth_dev *eth_dev);
 #endif
