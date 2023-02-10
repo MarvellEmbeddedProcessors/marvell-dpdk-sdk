@@ -17,6 +17,7 @@ test_dir = meson.current_build_dir()
 run_command(copy_data, test_script)
 run_command(copy_data, 'ref_numbers/cn96xx_rclk2200_sclk1100')
 run_command(copy_data, 'ref_numbers/cn106xx_rclk2000_sclk1000')
+run_command(copy_data, 'ref_numbers/cn106xx_rclk2500_sclk1100')
 
 # This executable is built exactly as dpdk-test but only the custom
 # mempool_perf command is available in this.
