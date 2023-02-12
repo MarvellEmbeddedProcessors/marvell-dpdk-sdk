@@ -65,7 +65,7 @@ static bool keep_running = true;
 struct app_arg {
 	bool tx_mode;
 	bool perf_mode;
-	bool use_static_buffer;
+	bool use_tx_compl;
 	bool event_tx_compl;
 	unsigned int n_queue;
 	unsigned int n_desc;
@@ -638,6 +638,10 @@ launch_lcore_tx_perf_compl(void *args)
 	NOTICE("Entering TX Perf Completion main loop on lcore %u portid=%u qid=%u\n",
 	       lcore, portid, qid);
 	fflush(stdout);
+	NOTICE("\nWARNING: Please use tx_compl_ena=1 as devargs to support");
+	NOTICE("\n         transmit completion else completion is invoked");
+	NOTICE("\n         before packet is actually transmitted");
+	fflush(stdout);
 
 	while (keep_running) {
 		if (rte_pktmbuf_alloc_bulk(pinfo->pool, m, MAX_PKT_BURST)) {
@@ -786,7 +790,7 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 {
 	arg->tx_mode = true;
 	arg->perf_mode = false;
-	arg->use_static_buffer = false;
+	arg->use_tx_compl = false;
 	arg->event_tx_compl = false;
 	arg->n_queue = 1;
 	arg->n_desc = 1024;
@@ -798,8 +802,8 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 			arg->tx_mode = false;
 		} else if (strncmp(argv[1], "--perf", 6) == 0) {
 			arg->perf_mode = true;
-			if (strncmp(argv[3], "--use-static-buffer", 19) == 0)
-				arg->use_static_buffer = true;
+			if (strncmp(argv[3], "--use-tx-completion", 19) == 0)
+				arg->use_tx_compl = true;
 			argv = argv + 2;
 			argc = argc - 2;
 		} else if (strncmp(argv[1], "--event-tx-compl", 16) == 0) {
@@ -897,9 +901,9 @@ main(int argc, char **argv)
 			lcore_function_t *f;
 			if (arg.tx_mode) {
 				if (arg.perf_mode)
-					f = arg.use_static_buffer ?
-						launch_lcore_tx_perf :
-						launch_lcore_tx_perf_compl;
+					f = arg.use_tx_compl ?
+						launch_lcore_tx_perf_compl :
+						launch_lcore_tx_perf;
 				else
 					f = launch_lcore_tx;
 			} else {
