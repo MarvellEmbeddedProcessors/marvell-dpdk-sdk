@@ -85,8 +85,15 @@ function queue_stats()
 	a=$(($((3*$idx))+1))
 #	testpmd_log_off $CAP_PRFX $OFF
 
+	# Wait until we have the output
+	val=$(testpmd_log_off $CAP_PRFX $OFF | grep "show fwd stats all") || true
+	while [[ "$val" == "" ]]
+	do
+		sleep 1
+		val=$(testpmd_log_off $CAP_PRFX $OFF | grep "show fwd stats all") || true
+	done
 	val=`testpmd_log_off $CAP_PRFX $OFF | head -$a | tail -1 | \
-		grep -ao "TX-packets: [0-9]*" | cut -f 2 -d ":"`
+		grep -ao "TX-packets: [0-9]*" | awk -e '{print $2}'`
 	echo $val
 }
 
@@ -126,6 +133,7 @@ function port_stats_check()
 function verify_case_1()
 {
 	i=0
+	OFF=`testpmd_log_sz $CAP_PRFX`
 	port_stats_check $BPSX
 	while [[ $i -lt $retry_cnt ]]
 	do
@@ -160,6 +168,7 @@ function verify_case_1()
 function verify_case_2()
 {
 	i=0
+	OFF=`testpmd_log_sz $CAP_PRFX`
 	port_stats_check $BPSX
 	while [[ $i -lt $retry_cnt ]]
 	do
@@ -194,6 +203,7 @@ function verify_case_2()
 function verify_case_3()
 {
 	i=0
+	OFF=`testpmd_log_sz $CAP_PRFX`
 	port_stats_check $BPSX
 	while [[ $i -lt $retry_cnt ]]
 	do
@@ -229,6 +239,7 @@ function verify_case_3()
 function verify_case_4()
 {
 	i=0
+	OFF=`testpmd_log_sz $CAP_PRFX`
 	port_stats_check $BPSX
 	while [[ $i -lt $retry_cnt ]]
 	do
@@ -269,6 +280,7 @@ function verify_case_4()
 function verify_case_5()
 {
 	i=0
+	OFF=`testpmd_log_sz $CAP_PRFX`
 	port_stats_check $BPSY
 	while [[ $i -lt $retry_cnt ]]
 	do
@@ -303,6 +315,7 @@ function verify_case_5()
 function verify_case_6()
 {
 	i=0
+	OFF=`testpmd_log_sz $CAP_PRFX`
 	port_stats_check $BPSX
 	while [[ $i -lt $retry_cnt ]]
 	do
@@ -385,6 +398,12 @@ testpmd_cmd $CAP_PRFX "add port tm leaf node 0 5 505 0 100 4 0 0 0 0 0"
 testpmd_cmd $CAP_PRFX "add port tm leaf node 0 6 506 0 100 4 0 0 0 0 0"
 testpmd_cmd $CAP_PRFX "add port tm leaf node 0 7 507 0 100 4 0 0 0 0 0"
 testpmd_cmd $CAP_PRFX "port tm hierarchy commit 0 yes"
+
+testpmd_cmd $CAP_PRFX "port stop 1"
+testpmd_cmd $CAP_PRFX "set flow_ctrl rx off 1"
+testpmd_cmd $CAP_PRFX "set flow_ctrl tx off 1"
+testpmd_cmd $CAP_PRFX "port start 1"
+
 testpmd_cmd $CAP_PRFX "start"
 
 sleep 3

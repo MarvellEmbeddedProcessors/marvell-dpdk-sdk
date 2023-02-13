@@ -40,8 +40,10 @@ launch_testpmd_rx()
 		"--nb-cores=1 --forward-mode=rxonly" \
 		</dev/null 2>/dev/null &
 	sleep 1
+	testpmd_cmd $1 "port stop 0"
 	testpmd_cmd $1 "set flow_ctrl rx off 0"
 	testpmd_cmd $1 "set flow_ctrl tx off 0"
+	testpmd_cmd $1 "port start 0"
 }
 
 launch_testpmd_tx_outb()
@@ -51,8 +53,10 @@ launch_testpmd_tx_outb()
 		"--nb-cores=2 --forward-mode=txonly --tx-ip=192.168.$2.1,192.168.$2.2" \
 		</dev/null 2>/dev/null &
 	sleep 1
+	testpmd_cmd $1 "port stop 0"
 	testpmd_cmd $1 "set flow_ctrl rx off 0"
 	testpmd_cmd $1 "set flow_ctrl tx off 0"
+	testpmd_cmd $1 "port start 0"
 }
 
 launch_testpmd_tx_inb()
@@ -62,8 +66,10 @@ launch_testpmd_tx_inb()
 		"--nb-cores=5 --txq=5 --rxq=5 --no-flush-rx" \
 		</dev/null 2>/dev/null &
 	sleep 1
+	testpmd_cmd $1 "port stop 0"
 	testpmd_cmd $1 "set flow_ctrl rx off 0"
 	testpmd_cmd $1 "set flow_ctrl tx off 0"
+	testpmd_cmd $1 "port start 0"
 }
 
 case $TESTPMD_OP in

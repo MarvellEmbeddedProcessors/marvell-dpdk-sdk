@@ -348,10 +348,14 @@ run_one() {
 			continue;
 		done
 		# Disable flow control
+		echo "port stop 0" >>$FWD_PERF_IN
+		echo "port stop 1" >>$FWD_PERF_IN
 		echo "set flow_ctrl rx off 0" >>$FWD_PERF_IN
 		echo "set flow_ctrl tx off 0" >>$FWD_PERF_IN
 		echo "set flow_ctrl rx off 1" >>$FWD_PERF_IN
 		echo "set flow_ctrl tx off 1" >>$FWD_PERF_IN
+		echo "port start 0" >>$FWD_PERF_IN
+		echo "port start 1" >>$FWD_PERF_IN
 
 		echo "start tx_first 256" >>$FWD_PERF_IN
 

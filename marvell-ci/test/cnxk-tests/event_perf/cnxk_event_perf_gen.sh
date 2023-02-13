@@ -35,8 +35,10 @@ launch_testpmd()
 		--forward-mode=flowgen --flowgen-flows=100" \
 		</dev/null 2>/dev/null &
 	sleep 1
+	testpmd_cmd $PRFX "port stop 0"
 	testpmd_cmd $PRFX "set flow_ctrl rx off 0"
 	testpmd_cmd $PRFX "set flow_ctrl tx off 0"
+	testpmd_cmd $PRFX "port start 0"
 
 }
 
