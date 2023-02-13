@@ -86,6 +86,11 @@ __rte_ring_enqueue_elems_64(struct rte_ring *r, uint32_t prod_head,
 	}
 }
 
+#if defined(RTE_TOOLCHAIN_GCC) && (GCC_VERSION >= 120000)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#endif
 static __rte_always_inline void
 __rte_ring_enqueue_elems_128(struct rte_ring *r, uint32_t prod_head,
 		const void *obj_table, uint32_t n)
@@ -114,6 +119,10 @@ __rte_ring_enqueue_elems_128(struct rte_ring *r, uint32_t prod_head,
 				(const void *)(obj + i), 16);
 	}
 }
+
+#if defined(RTE_TOOLCHAIN_GCC) && (GCC_VERSION >= 120000)
+#pragma GCC diagnostic pop
+#endif
 
 /* the actual enqueue of elements on the ring.
  * Placed here since identical code needed in both
@@ -220,6 +229,11 @@ __rte_ring_dequeue_elems_64(struct rte_ring *r, uint32_t prod_head,
 	}
 }
 
+#if defined(RTE_TOOLCHAIN_GCC) && (GCC_VERSION >= 120000)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#endif
 static __rte_always_inline void
 __rte_ring_dequeue_elems_128(struct rte_ring *r, uint32_t prod_head,
 		void *obj_table, uint32_t n)
@@ -244,6 +258,10 @@ __rte_ring_dequeue_elems_128(struct rte_ring *r, uint32_t prod_head,
 			memcpy((void *)(obj + i), (void *)(ring + idx), 16);
 	}
 }
+
+#if defined(RTE_TOOLCHAIN_GCC) && (GCC_VERSION >= 120000)
+#pragma GCC diagnostic pop
+#endif
 
 /* the actual dequeue of elements from the ring.
  * Placed here since identical code needed in both
