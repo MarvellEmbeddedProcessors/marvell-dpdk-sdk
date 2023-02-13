@@ -58,8 +58,10 @@ case $TEST_OP in
 			"--no-flush-rx --nb-cores=$fwd_cores --forward-mode=flowgen \
 			-i --txq=$fwd_cores --rxq=$fwd_cores \
 			--tx-ip 1.1.1.1,198.18.0.1" </dev/null 2>/dev/null
+		testpmd_cmd $PRFX "port stop 0"
 		testpmd_cmd $PRFX "set flow_ctrl rx off 0"
 		testpmd_cmd $PRFX "set flow_ctrl tx off 0"
+		testpmd_cmd $PRFX "port start 0"
 		;;
 	launch_basic)
 		$VFIO_DEVBIND -b vfio-pci $PORT0
@@ -78,8 +80,10 @@ case $TEST_OP in
 			"-l 1-$num_cores -a $PORT0" \
 			"--no-flush-rx --nb-cores=$fwd_cores \
 			-i" </dev/null 2>/dev/null
+		testpmd_cmd $PRFX "port stop 0"
 		testpmd_cmd $PRFX "set flow_ctrl rx off 0"
 		testpmd_cmd $PRFX "set flow_ctrl tx off 0"
+		testpmd_cmd $PRFX "port start 0"
 		;;
 	start)
 		testpmd_cmd $PRFX "start tx_first 256"

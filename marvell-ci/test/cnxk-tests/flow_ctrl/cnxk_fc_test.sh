@@ -133,6 +133,7 @@ testpmd_launch $PRFX \
 # Test case - 1: Validate flow control default configuration. Must be enable
 check_fc_state 1
 
+testpmd_cmd $PRFX "port stop all"
 # Test case - 2: Validate flow control configuration after disabling
 testpmd_cmd $PRFX "set flow_ctrl rx off tx off 0 0 0 0 mac_ctrl_frame_fwd off autoneg off 0"
 sleep 3
@@ -182,6 +183,7 @@ sleep 1
 testpmd_cmd $PRFX "set pfc_queue_ctrl 0 rx on 7 7 tx on 7 7 2047"
 sleep 1
 
+testpmd_cmd $PRFX "port start all"
 testpmd_cmd $PRFX "start"
 sleep 1
 

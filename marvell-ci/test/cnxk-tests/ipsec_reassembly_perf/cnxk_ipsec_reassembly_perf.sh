@@ -229,8 +229,10 @@ function pmd_tx_launch_for_inb()
 		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap1,infinite_rx=1 -a $LIF1" \
 		"--nb-cores=2 --no-flush-rx"
 	fi
+	testpmd_cmd $TPMD_TX_PREFIX "port start 0"
 	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
 	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
+	testpmd_cmd $TPMD_TX_PREFIX "port start 0"
         # Ratelimit Tx to 50Gbps on LBK
 	testpmd_cmd $TPMD_TX_PREFIX "set port 0 queue 0 rate 50000"
 }
@@ -240,8 +242,10 @@ function pmd_rx_launch()
 	testpmd_launch "$TPMD_RX_PREFIX" \
 		"-c 0x700 -a $LIF4" \
 		"--nb-cores=2 --forward-mode=rxonly"
+	testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
 	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
 	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl tx off 0"
+	testpmd_cmd $TPMD_TX_PREFIX "port start 0"
 
 }
 
