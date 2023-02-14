@@ -835,7 +835,7 @@ exit:
 }
 
 int
-roc_nix_inl_dev_stats_get(struct roc_nix *roc_nix, struct roc_nix_stats *stats)
+roc_nix_inl_dev_stats_get(struct roc_nix_stats *stats)
 {
 	struct idev_cfg *idev = idev_get_cfg();
 	struct nix_inl_dev *inl_dev = NULL;
