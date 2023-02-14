@@ -396,6 +396,20 @@ Runtime Config Options
    specified should match all the channels(or rings) configured on the SDP
    interface.
 
+- ``Meta buffer size per ethdev port for inline inbound IPsec second pass``
+
+   Size of meta buffer allocated for inline inbound IPsec second pass per
+   ethdev port can be specified by ``meta_buf_sz`` ``devargs`` parameter.
+   Default value is computed runtime based on pkt mbuf pools created and in use.
+   This option is for OCTEON CN106-B0/CN103XX SoC family.
+
+   For example::
+
+      -a 0002:02:00.0,meta_buf_sz=512
+
+   With the above configuration, PMD would allocate meta buffers of size 512 for
+   inline inbound IPsec processing second pass.
+
 .. note::
 
    Above devarg parameters are configurable per device, user needs to pass the
