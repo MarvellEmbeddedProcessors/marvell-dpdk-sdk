@@ -202,9 +202,14 @@ function macfltr_pkt_test()
 
 function macfltr_dmac_filt_pkts()
 {
-	testpmd_log $PRFX | tail -62 |\
-		grep -a "cgx_rx_dmac_filt_pkts: "|\
-		cut --complement -f 1 -d ":"
+	if [[ $IS_CN10K -ne 0 ]]; then
+		cat /sys/kernel/debug/cn10k/rpm/rpm0/lmac0/mac_filter |\
+			 grep -a "DMAC filter drop count" | cut --complement -f 1 -d ":"
+	else
+		testpmd_log $PRFX | tail -62 |\
+			grep -a "cgx_rx_dmac_filt_pkts: "|\
+			cut --complement -f 1 -d ":"
+	fi
 }
 
 function macfltr_mac_cnt()
