@@ -61,6 +61,11 @@ run_gpio_test() {
 	local gpiochip
 	local model
 
+	if [[ ! -d /sys/class/gpio ]]; then
+		echo "/sys/class/gpio not available, skipping test"
+		exit 0
+	fi
+
 	model=$(tr -d '\0' </proc/device-tree/octeontx_brd/BOARD-MODEL)
 	# all setups have single gpiochip now
 	gpiochip=$(ls /sys/class/gpio | grep gpiochip | grep -o '[[:digit:]]\+')
