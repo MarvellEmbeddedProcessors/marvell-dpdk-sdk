@@ -17,5 +17,6 @@ sources = files(
         'cn10k_hwpool_ops.c',
 )
 
+headers = files('rte_pmd_cnxk_mempool.h')
 deps += ['eal', 'mbuf', 'kvargs', 'bus_pci', 'common_cnxk', 'mempool']
 pmd_supports_disable_iova_as_pa = true
