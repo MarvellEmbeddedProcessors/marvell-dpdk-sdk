@@ -75,6 +75,7 @@ test_subdirs = [
         'flow_ctrl',
         'multi_mempool',
         'ipsec_msns',
+        'hwpool',
 ]
 
 foreach dir:test_subdirs
