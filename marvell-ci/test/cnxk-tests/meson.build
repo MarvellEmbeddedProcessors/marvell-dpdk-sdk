@@ -73,6 +73,7 @@ test_subdirs = [
         'multi_pool_pkt_tx',
         'multi_mempool',
         'event_inline_ipsec_autotest',
+        'hwpool',
 ]
 
 foreach dir:test_subdirs
