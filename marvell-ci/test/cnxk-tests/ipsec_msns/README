@@ -38,4 +38,16 @@ And expects the received packet to be decrypted.
 
 Usage:
 ======
-./cnxk_ipsec_msns -a 0002:02:00.0,custom_sa_act=1 -a 0002:1d:00.0 -a 0002:20:00.1
+./cnxk_ipsec_msns -a 0002:02:00.0,custom_sa_act=1 -a 0002:1d:00.0 -a 0002:20:00.1 -- [--perf] [--pfc]
+
+Perf mode:
+==========
+When "--perf" argument is given, the application runs in perf mode by creating one inbound SA per
+ALG for each port and then listening on the inbound inline traffic and forwarding successfully
+decrypted packets. To generate the pcap for matching SPI, ipsec_msns/gentraffic.py script can be
+used.
+
+PFC:
+====
+When "--pfc" argument is given, each port would be assigned a PFC channel sequentially and PFC
+would be enabled.
