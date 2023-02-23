@@ -3145,7 +3145,7 @@ main(int32_t argc, char **argv)
 	/* Replicate each context per socket */
 	for (i = 0; i < NB_SOCKETS && i < rte_socket_count(); i++) {
 		socket_id = rte_socket_id_by_idx(i);
-		if ((socket_ctx[socket_id].mbuf_pool != NULL) &&
+		if ((socket_ctx[socket_id].session_pool != NULL) &&
 			(socket_ctx[socket_id].sa_in == NULL) &&
 			(socket_ctx[socket_id].sa_out == NULL)) {
 			sa_init(&socket_ctx[socket_id], socket_id, lcore_conf,
