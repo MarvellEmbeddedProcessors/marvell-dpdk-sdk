@@ -13,8 +13,17 @@ PRFX="tx-chksum"
 CAP_PRFX="tx-chksum-cap"
 TMP_DIR=/tmp/dpdk-$PRFX
 
-TX_PCAP="$CNXKTESTPATH/tx_chksum/in.pcap"
-EXPECTED_PCAP="$CNXKTESTPATH/tx_chksum/out.pcap"
+if [[ "$1" == "--mseg" ]]
+then
+	need_mseg=1
+	TX_PCAP="$CNXKTESTPATH/tx_chksum/in_mseg.pcap"
+	EXPECTED_PCAP="$CNXKTESTPATH/tx_chksum/out_mseg.pcap"
+else
+	need_mseg=0
+	TX_PCAP="$CNXKTESTPATH/tx_chksum/in.pcap"
+	EXPECTED_PCAP="$CNXKTESTPATH/tx_chksum/out.pcap"
+fi
+
 EXPECTED_NON_UDP_TUN_PCAP="$TMP_DIR/out_non_udp_tun.pcap"
 RECV_PCAP="recv.pcap"
 PORT0="0002:01:00.1"
@@ -75,6 +84,7 @@ tx_offloads=(
 	"0x13009f"  #SEC_F | OL3OL4CSUM_F | L3L4CSUM_F | VLAN_F
 	"0x018000"  #MSEG_F
 	"0x01801e"  #MSEG_F | L3L4CSUM_F
+	"0x008000"  #MSEG_F | NO_FF
 	"0x118080"  #MSEG | OL3OL4CSUM_F
 	"0x11809e"  #MSEG | OL3OL4CSUM_F | L3L4CSUM_F
 	"0x018001"  #MSEG | VLAN_F
@@ -89,6 +99,7 @@ tx_offloads=(
 	"0x03801f"  #MSEG | SEC_F | L3L4CSUM_F | VLAN_F
 	"0x138081"  #MSEG | SEC_F | OL3OL4CSUM_F | VLAN_F
 	"0x13809f"  #MSEG | SEC_F | OL3OL4CSUM_F | L3L4CSUM_F | VLAN_F
+	"0x12809f"  #MSEG | SEC_F | OL3OL4CSUM_F | L3L4CSUM_F | VLAN_F | NO_FF
 	)
 
 max=${#tx_offloads[@]}
@@ -147,6 +158,8 @@ function setup_tx_offload()
 	testpmd_cmd $PRFX "port config 0 tx_offload security off"
 	testpmd_cmd $PRFX "csum set outer-udp sw 0"
 	testpmd_cmd $PRFX "port config 0 rx_offload scatter off"
+	testpmd_cmd $PRFX "port config mtu 0 1500"
+	testpmd_cmd $PRFX "port config 0 tx_offload mbuf_fast_free off"
 
 	# Skip UDP tunnel packets if outer udp checksum is not enabled
 	skip_udp_tunnel=1
@@ -179,6 +192,14 @@ function setup_tx_offload()
 	then
 		testpmd_cmd $PRFX "port config 0 tx_offload multi_segs on"
 		testpmd_cmd $PRFX "port config 0 rx_offload scatter on"
+		if [[ $need_mseg == 1 ]]
+		then
+			testpmd_cmd $PRFX "port config mtu 0 9000"
+		fi
+	fi
+	if ((tx_off & 0x10000))
+	then
+		testpmd_cmd $PRFX "port config 0 tx_offload mbuf_fast_free on"
 	fi
 	if ((tx_off & 0x20000))
 	then
@@ -229,6 +250,7 @@ testpmd_launch $CAP_PRFX \
 	"-c $CAP_COREMASK -a $CAP_PORT0 $CAP_PORT1" \
         "--no-flush-rx --nb-cores=1 --forward-mode=io"
 testpmd_cmd $CAP_PRFX "port stop all"
+testpmd_cmd $CAP_PRFX "port config mtu 0 9000"
 
 while [ $i -le $max ]
 do
@@ -243,6 +265,20 @@ do
 		((++i))
 		continue
 	fi
+
+	set -x
+	is_mseg=$((${tx_offloads[$i]} & 0x8000))
+	if [[ $need_mseg == 1 ]] && [[ $is_mseg == 0 ]]
+	then
+		echo "Skipped non mseg testcase"
+		echo -e "############################################# " \
+			"END of ITERATION $i #####################\n"
+		((++i))
+	set +x
+		continue
+	fi
+	set +x
+
 
 	# Setup tx offloads
 	setup_tx_offload ${tx_offloads[$i]} $i
