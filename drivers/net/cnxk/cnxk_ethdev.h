@@ -166,6 +166,7 @@ struct policy_actions {
 		uint16_t queue;
 		uint32_t mtr_id;
 		struct action_rss *rss_desc;
+		bool skip_red;
 	};
 };
 
