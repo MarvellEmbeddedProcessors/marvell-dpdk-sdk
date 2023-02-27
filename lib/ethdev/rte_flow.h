@@ -2863,6 +2863,17 @@ enum rte_flow_action_type {
 	 * @see struct rte_flow_action_ethdev
 	 */
 	RTE_FLOW_ACTION_TYPE_REPRESENTED_PORT,
+
+	/**
+	 * Skip congestion management configuration
+	 *
+	 * Using rte_eth_cman_config_set() API the application
+	 * can configure ethdev Rx queue's congestion mechanism.
+	 * Introducing RTE_FLOW_ACTION_TYPE_SKIP_CMAN flow action to skip the
+	 * congestion configuration applied to the given ethdev Rx queue.
+	 *
+	 */
+	RTE_FLOW_ACTION_TYPE_SKIP_CMAN,
 };
 
 /**

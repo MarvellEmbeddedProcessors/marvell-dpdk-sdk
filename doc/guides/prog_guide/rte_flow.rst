@@ -1930,6 +1930,28 @@ Drop packets.
    | no properties |
    +---------------+
 
+
+Action: ``SKIP_CMAN``
+^^^^^^^^^^^^^^^^^^^^^
+
+Skip congestion management on received packets
+
+- Using ``rte_eth_cman_config_set()``, application can configure ethdev Rx
+  queue's congestion mechanism.Once applied packets congestion configuration
+  is bypassed on that particular ethdev Rx queue for all packets directed
+  to that receive queue
+
+.. _table_rte_flow_action_skip_cman:
+
+.. table:: SKIP_CMAN
+
+   +---------------+
+   | Field         |
+   +===============+
+   | no properties |
+   +---------------+
+
+
 Action: ``COUNT``
 ^^^^^^^^^^^^^^^^^
 
