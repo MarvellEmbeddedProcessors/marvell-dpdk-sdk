@@ -3,9 +3,9 @@
  */
 
 #include <errno.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <pwd.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include <rte_mbuf.h>
 #include <rte_pcapng.h>
@@ -158,7 +158,6 @@ graph_pcap_init(struct graph *graph)
 		graph_data->nb_pkt_to_capture = GRAPH_PCAP_NUM_PACKETS;
 
 	/* All good. Now populate data for secondary process. */
-
 	rte_strscpy(graph_data->pcap_filename, graph->pcap_filename, RTE_GRAPH_PCAP_FILE_SZ);
 	graph_data->pcap_enable = 1;
 

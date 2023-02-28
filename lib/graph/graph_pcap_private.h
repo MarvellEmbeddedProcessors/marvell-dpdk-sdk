@@ -10,10 +10,6 @@
 
 #include "graph_private.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @internal
  *
@@ -116,9 +112,5 @@ void graph_pcap_exit(struct rte_graph *graph);
 uint16_t graph_pcap_dispatch(struct rte_graph *graph,
 				   struct rte_node *node, void **objs,
 				   uint16_t nb_objs);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* _RTE_GRAPH_PCAP_PRIVATE_H_ */
