@@ -2377,6 +2377,7 @@ fips_mct_shake_test(void)
 	uint32_t i, j, range, outlen, max_outlen;
 	struct fips_val val = {NULL, 0}, md;
 	uint8_t rightmost[2];
+	uint16_t *rightptr;
 	int ret;
 
 	max_outlen = vec.cipher_auth.digest.len;
@@ -2434,8 +2435,9 @@ fips_mct_shake_test(void)
 			md.len = outlen;
 			rightmost[0] = md.val[md.len-1];
 			rightmost[1] = md.val[md.len-2];
+			rightptr = (uint16_t *)rightmost;
 			outlen = info.interim_info.sha_data.min_outlen +
-				(*(uint16_t *)rightmost % range);
+				(*rightptr % range);
 		}
 
 		memcpy(vec.cipher_auth.digest.val, md.val, md.len);
