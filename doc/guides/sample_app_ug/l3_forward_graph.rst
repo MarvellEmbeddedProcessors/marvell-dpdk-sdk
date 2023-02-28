@@ -112,7 +112,7 @@ To enable pcap trace on each graph, use following command:
 
 .. code-block:: console
 
-    ./<build_dir>/examples/dpdk-l3fwd-graph -l 1,2 -n 4 -- -p 0x3 --config="(0,0,1),(1,0,2)" --pcap-enable --pcap-num-cap=<number of packets> --pcap-file-name "</filepath/filename>"
+    ./<build_dir>/examples/dpdk-l3fwd-graph -l 1,2 -n 4 -- -p 0x3 --config="(0,0,1),(1,0,2)" --pcap-enable --pcap-num-cap=<number of packets> --pcap-file-name "</path/to/file>"
 
 In this command:
 
