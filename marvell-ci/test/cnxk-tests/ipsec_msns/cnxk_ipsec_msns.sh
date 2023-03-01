@@ -55,4 +55,23 @@ if [[ $TEST2 != "PASS" ]]; then
 	exit 1
 fi
 
+PART_106B0=$(cat /proc/device-tree/soc\@0/chiprevision)
+
+if [[ $PART_106B0 == "B0" ]]; then
+	TEST3=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG3" $LOG | awk '{print $3}')
+	TEST4=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG4" $LOG | awk '{print $3}')
+
+	if [[ $TEST3 != "PASS" ]]; then
+		echo "Test RTE_PMD_CNXK_SEC_ACTION_ALG3 FAILED"
+		rm -rf $LOG
+		exit 1
+	fi
+
+	if [[ $TEST4 != "PASS" ]]; then
+		echo "Test RTE_PMD_CNXK_SEC_ACTION_ALG4 FAILED"
+		rm -rf $LOG
+		exit 1
+	fi
+fi
+
 echo "TEST SUCCESSFUL"
