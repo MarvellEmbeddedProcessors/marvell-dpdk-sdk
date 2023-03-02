@@ -1198,8 +1198,7 @@ sq_cn9k_fini(struct nix *nix, struct roc_nix_sq *sq)
 }
 
 static int
-sq_init(struct nix *nix, struct roc_nix_sq *sq, uint32_t rr_quantum,
-	uint16_t smq)
+sq_init(struct nix *nix, struct roc_nix_sq *sq, uint32_t rr_quantum, uint16_t smq)
 {
 	struct roc_nix *roc_nix = nix_priv_to_roc_nix(nix);
 	struct mbox *mbox = (&nix->dev)->mbox;
@@ -1218,8 +1217,7 @@ sq_init(struct nix *nix, struct roc_nix_sq *sq, uint32_t rr_quantum,
 	aq->sq.smq = smq;
 	aq->sq.smq_rr_weight = rr_quantum;
 	if (roc_nix_is_sdp(roc_nix))
-		aq->sq.default_chan =
-			nix->tx_chan_base + (sq->qid % nix->tx_chan_cnt);
+		aq->sq.default_chan = nix->tx_chan_base + (sq->qid % nix->tx_chan_cnt);
 	else
 		aq->sq.default_chan = nix->tx_chan_base;
 	aq->sq.sqe_stype = NIX_STYPE_STF;
