@@ -257,6 +257,11 @@ otx_ep_dev_close(struct rte_eth_dev *eth_dev)
 	struct otx_ep_device *otx_epvf;
 	uint32_t num_queues, q;
 
+	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
+		eth_dev->dev_ops = NULL;
+		return 0;
+	}
+
 	otx_epvf = OTX_EP_DEV(eth_dev);
 	otx_ep_mbox_send_dev_exit(eth_dev);
 	otx_ep_mbox_disable_interrupt(otx_epvf);
@@ -613,8 +618,10 @@ static const struct eth_dev_ops otx_ep_eth_dev_ops = {
 static int
 otx_ep_eth_dev_uninit(struct rte_eth_dev *eth_dev)
 {
-	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
+	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
+		eth_dev->dev_ops = NULL;
 		return 0;
+	}
 
 	eth_dev->dev_ops = NULL;
 	eth_dev->rx_pkt_burst = NULL;
@@ -663,8 +670,10 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	struct rte_ether_addr vf_mac_addr;
 
 	/* Single process support */
-	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
+	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
+		eth_dev->dev_ops = &otx_ep_eth_dev_ops;
 		return 0;
+	}
 
 	otx_epvf->sdp_packet_mode = SDP_PACKET_MODE_LOOP;
 	rte_eth_copy_pci_info(eth_dev, pdev);
