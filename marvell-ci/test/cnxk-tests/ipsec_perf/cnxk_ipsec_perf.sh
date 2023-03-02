@@ -562,10 +562,10 @@ function pmd_rx_launch()
 		testpmd_launch "$TPMD_RX_PREFIX" \
 			"-c 0x700 -a $LIF4" \
 			"--nb-cores=2 --forward-mode=rxonly"
-		testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
+		testpmd_cmd $TPMD_RX_PREFIX "port stop 0"
 		testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
 		testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl tx off 0"
-		testpmd_cmd $TPMD_TX_PREFIX "port start 0"
+		testpmd_cmd $TPMD_RX_PREFIX "port start 0"
 	fi
 }
 
