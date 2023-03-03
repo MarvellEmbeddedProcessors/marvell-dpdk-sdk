@@ -81,16 +81,6 @@ cn9k_nix_tx_skeleton(struct cn9k_eth_txq *txq, uint64_t *cmd,
 	}
 }
 
-static __rte_always_inline void
-cn9k_nix_sec_fc_wait_one(const struct cn9k_eth_txq *txq)
-{
-	uint64_t nb_desc = txq->cpt_desc;
-	uint64_t *fc = txq->cpt_fc;
-
-	while (nb_desc <= __atomic_load_n(fc, __ATOMIC_RELAXED))
-		;
-}
-
 static __rte_always_inline uint64_t
 cn9k_nix_prefree_seg(struct rte_mbuf *m, struct cn9k_eth_txq *txq,
 		struct nix_send_hdr_s *send_hdr)
@@ -423,6 +413,16 @@ static __rte_always_inline void
 cn9k_nix_xmit_prep_lmt(uint64_t *cmd, void *lmt_addr, const uint32_t flags)
 {
 	roc_lmt_mov(lmt_addr, cmd, cn9k_nix_tx_ext_subs(flags));
+}
+
+static __rte_always_inline void
+cn9k_nix_sec_fc_wait_one(const struct cn9k_eth_txq *txq)
+{
+	uint64_t nb_desc = txq->cpt_desc;
+	uint64_t *fc = txq->cpt_fc;
+
+	while (nb_desc <= __atomic_load_n(fc, __ATOMIC_RELAXED))
+		;
 }
 
 static __rte_always_inline uint64_t

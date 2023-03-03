@@ -1068,7 +1068,6 @@ nix_tm_release_resources(struct nix *nix, uint8_t hw_lvl, bool contig,
 			return rc;
 		}
 		mbox_put(mbox);
-
 		plt_tm_dbg("Released hwres %s(%u)", nix_tm_hwlvl2str(hw_lvl),
 			   schq);
 		plt_bitmap_clear(bmp, schq);

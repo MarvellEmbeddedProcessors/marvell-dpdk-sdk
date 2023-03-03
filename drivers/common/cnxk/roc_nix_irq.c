@@ -328,9 +328,8 @@ nix_lf_q_irq(void *param)
 	roc_nix_queues_ctx_dump(nix_priv_to_roc_nix(nix), NULL);
 
 	/* Call reset callback */
-	if (intr_cb)
-		if (dev->ops->q_err_cb)
-			dev->ops->q_err_cb(nix_priv_to_roc_nix(nix), NULL);
+	if (intr_cb && dev->ops->q_err_cb)
+		dev->ops->q_err_cb(nix_priv_to_roc_nix(nix), NULL);
 }
 
 int

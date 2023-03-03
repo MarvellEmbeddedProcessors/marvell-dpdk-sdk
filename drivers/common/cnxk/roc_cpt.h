@@ -147,6 +147,9 @@ struct roc_cpt_rxc_time_cfg {
 	uint16_t zombie_thres;
 };
 
+/* CPT MISC interrupt callback */
+typedef void (*roc_cpt_int_misc_cb_t)(struct roc_cpt_lf *lf, void *args);
+
 struct roc_cpt_inline_ipsec_inb_cfg {
 	uint32_t cpt_credit;
 	uint16_t opcode;
@@ -157,8 +160,6 @@ struct roc_cpt_inline_ipsec_inb_cfg {
 	uint8_t egrp;
 };
 
-/* CPT MISC interrupt callback */
-typedef void (*roc_cpt_int_misc_cb_t)(struct roc_cpt_lf *lf, void *args);
 
 int __roc_api roc_cpt_rxc_time_cfg(struct roc_cpt *roc_cpt,
 				   struct roc_cpt_rxc_time_cfg *cfg);
