@@ -571,8 +571,6 @@ extern struct rte_ether_addr peer_eth_addrs[RTE_MAX_ETHPORTS];
 extern uint32_t burst_tx_delay_time; /**< Burst tx delay time(us) for mac-retry. */
 extern uint32_t burst_tx_retry_num;  /**< Burst tx retry number for mac-retry. */
 
-extern uint8_t rx_metadata_negotiate;
-
 #ifdef RTE_LIB_GRO
 #define GRO_DEFAULT_ITEM_NUM_PER_FLOW 32
 #define GRO_DEFAULT_FLOW_NUM (RTE_GRO_MAX_BURST_ITEM_NUM / \

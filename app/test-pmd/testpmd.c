@@ -400,9 +400,6 @@ uint8_t clear_ptypes = true;
 /* Hairpin ports configuration mode. */
 uint16_t hairpin_mode;
 
-/* send rx metadata */
-uint8_t rx_metadata_negotiate;
-
 /* Pretty printing of ethdev events */
 static const char * const eth_event_desc[] = {
 	[RTE_ETH_EVENT_UNKNOWN] = "unknown",
@@ -1558,8 +1555,7 @@ init_config_port_offloads(portid_t pid, uint32_t socket_id)
 	int ret;
 	int i;
 
-	if (rx_metadata_negotiate)
-		eth_rx_metadata_negotiate_mp(pid);
+	eth_rx_metadata_negotiate_mp(pid);
 
 	port->dev_conf.txmode = tx_mode;
 	port->dev_conf.rxmode = rx_mode;

@@ -212,7 +212,6 @@ usage(char* progname)
 	printf("  --hairpin-mode=0xXX: bitmask set the hairpin port mode.\n"
 	       "    0x10 - explicit Tx rule, 0x02 - hairpin ports paired\n"
 	       "    0x01 - hairpin ports loop, 0x00 - hairpin port self\n");
-	printf(" --rx-metadata: send rx  metadata to driver \n");
 }
 
 #ifdef RTE_LIB_CMDLINE
@@ -711,7 +710,6 @@ launch_args_parse(int argc, char** argv)
 		{ "record-burst-stats",         0, 0, 0 },
 		{ PARAM_NUM_PROCS,              1, 0, 0 },
 		{ PARAM_PROC_ID,                1, 0, 0 },
-		{ "rx-metadata",                0, 0, 0 },
 		{ 0, 0, 0, 0 },
 	};
 
@@ -1513,8 +1511,6 @@ launch_args_parse(int argc, char** argv)
 				num_procs = atoi(optarg);
 			if (!strcmp(lgopts[opt_idx].name, PARAM_PROC_ID))
 				proc_id = atoi(optarg);
-			if (!strcmp(lgopts[opt_idx].name, "rx-metadata"))
-				rx_metadata_negotiate = 1;
 			break;
 		case 'h':
 			usage(argv[0]);
