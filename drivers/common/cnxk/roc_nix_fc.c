@@ -300,7 +300,7 @@ nix_fc_rq_config_set(struct roc_nix *roc_nix, struct roc_nix_fc_cfg *fc_cfg)
 				      fc_cfg->rq_cfg.enable, true,
 				      fc_cfg->rq_cfg.tc);
 
-		if (roc_nix->local_meta_aura_ena)
+		if (roc_nix->local_meta_aura_ena && roc_nix->meta_aura_handle)
 			roc_nix_fc_npa_bp_cfg(roc_nix, roc_nix->meta_aura_handle,
 					      fc_cfg->rq_cfg.enable, true, fc_cfg->rq_cfg.tc);
 	}
@@ -383,7 +383,7 @@ roc_nix_fc_mode_set(struct roc_nix *roc_nix, enum roc_nix_fc_mode mode)
 	struct nix *nix = roc_nix_to_nix_priv(roc_nix);
 	struct dev *dev = &nix->dev;
 	struct mbox *mbox = mbox_get(dev->mbox);
-	struct cgx_pause_frm_cfg *req;
+	struct cgx_pause_frm_cfg *req, *rsp;
 	uint8_t tx_pause, rx_pause;
 	int rc = -ENOSPC;
 
@@ -398,6 +398,19 @@ roc_nix_fc_mode_set(struct roc_nix *roc_nix, enum roc_nix_fc_mode mode)
 		goto exit;
 	}
 
+	/* Skip set if already in same state to avoid errors */
+	req = mbox_alloc_msg_cgx_cfg_pause_frm(mbox);
+	if (req == NULL)
+		goto exit;
+
+	rc = mbox_process_msg(mbox, (void *)&rsp);
+	if (rc)
+		goto exit;
+
+	if (rsp->rx_pause == rx_pause && rsp->tx_pause == tx_pause)
+		goto skip_set;
+
+	/* Set new config */
 	req = mbox_alloc_msg_cgx_cfg_pause_frm(mbox);
 	if (req == NULL)
 		goto exit;
@@ -409,6 +422,7 @@ roc_nix_fc_mode_set(struct roc_nix *roc_nix, enum roc_nix_fc_mode mode)
 	if (rc)
 		goto exit;
 
+skip_set:
 	nix->rx_pause = rx_pause;
 	nix->tx_pause = tx_pause;
 
