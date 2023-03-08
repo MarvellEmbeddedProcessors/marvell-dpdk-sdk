@@ -57,7 +57,7 @@ parse_u16_arg(const char *key, const char *value, void *extra_args)
 	errno = 0;
 	result = strtoul(value, NULL, 0);
 	if ((result >= (1 << 16)) || (errno != 0)) {
-		rte_bbdev_log(ERR, "Invalid value " PRId64 " for %s", result, key);
+		rte_bbdev_log(ERR, "Invalid value %" PRId64 " for %s", result, key);
 		return -ERANGE;
 	}
 	*u16 = (uint16_t)result;
@@ -475,7 +475,7 @@ enqueue_ops(struct rte_bbdev_queue_data *q_data, void **ops, uint16_t nb_ops)
 	q_data->queue_stats.enqueue_err_count += nb_ops - nb_enq;
 	q_data->queue_stats.enqueued_count += nb_enq;
 	if (nb_enq)
-		rte_bbdev_log_debug("Enqueued %d/%d ops type %d q %d lcore %d total " PRId64,
+		rte_bbdev_log_debug("TX: %d/%d ops type %d q %d lcore %d total %" PRId64,
 				nb_enq, nb_ops, q_data->conf.op_type, Q_TO_Q_NUM(q_data),
 				rte_lcore_id(), q_data->queue_stats.enqueued_count);
 	return nb_enq;
@@ -751,7 +751,7 @@ dequeue_ops(struct rte_bbdev_queue_data *q_data, void **ops, uint16_t nb_ops)
 	/* stats is already updated in dequeue_burst */
 	/* TODO: optional q_data->queue_stats.acc_offload_cycles stats */
 	if (nb_deq)
-		rte_bbdev_log_debug("Dequeued %d ops type %d q %d lcore %d total " PRId64,
+		rte_bbdev_log_debug("RX: %d ops type %d q %d lcore %d total %" PRId64,
 				nb_deq, q_data->conf.op_type, Q_TO_Q_NUM(q_data),
 				rte_lcore_id(), q_data->queue_stats.dequeued_count);
 	return nb_deq;
