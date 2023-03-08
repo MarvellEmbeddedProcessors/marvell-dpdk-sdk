@@ -63,6 +63,7 @@ roc_dpi_configure(struct roc_dpi *roc_dpi)
 	uint64_t aura_handle;
 	plt_iova_t iova;
 	char name[32];
+	uint64_t reg;
 
 	if (!roc_dpi) {
 		plt_err("roc_dpi is NULL");
@@ -113,6 +114,11 @@ roc_dpi_configure(struct roc_dpi *roc_dpi)
 		rc = -ENOMEM;
 		goto err2;
 	}
+
+	roc_dpi_disable(roc_dpi);
+	reg = plt_read64(roc_dpi->rbase + DPI_VDMA_SADDR);
+	while (!(reg & BIT_ULL(63)))
+		reg = plt_read64(roc_dpi->rbase + DPI_VDMA_SADDR);
 
 	roc_dpi->aura_handle = aura_handle;
 	/* subtract 2 as they have already been alloc'ed above */
