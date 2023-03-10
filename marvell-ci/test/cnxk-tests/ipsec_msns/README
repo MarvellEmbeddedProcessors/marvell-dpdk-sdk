@@ -38,7 +38,7 @@ And expects the received packet to be decrypted.
 
 Usage:
 ======
-./cnxk_ipsec_msns -a 0002:02:00.0,custom_sa_act=1 -a 0002:1d:00.0 -a 0002:20:00.1 -- [--perf] [--pfc]
+./cnxk_ipsec_msns -a 0002:02:00.0,custom_sa_act=1 -a 0002:1d:00.0 -a 0002:20:00.1 -- [--perf] [--pfc] [--nb-mbufs]
 
 Perf mode:
 ==========
@@ -51,3 +51,7 @@ PFC:
 ====
 When "--pfc" argument is given, each port would be assigned a PFC channel sequentially and PFC
 would be enabled.
+
+MBUF COUNT:
+==========
+When "--nb-mbufs" argument is given, packet pool will be created for specified count.

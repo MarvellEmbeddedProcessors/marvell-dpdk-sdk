@@ -37,7 +37,7 @@
 #define TX_HTHRESH 0  /**< Default values of TX host threshold reg. */
 #define TX_WTHRESH 0  /**< Default values of TX write-back threshold reg. */
 
-#define NB_MBUF 10240
+#define NB_MBUF 10240U
 
 static struct rte_mempool *mbufpool[RTE_MAX_ETHPORTS];
 static struct rte_mempool *sess_pool;
@@ -106,6 +106,7 @@ static struct sa_index_map bmap[RTE_MAX_ETHPORTS][2];
 
 static uint32_t ethdev_port_mask = RTE_PORT_ALL;
 static volatile bool force_quit;
+static uint32_t nb_bufs = 0;
 static bool perf_mode;
 static bool pfc;
 static int eventdev_id;
@@ -852,7 +853,7 @@ static void
 print_usage(const char *name)
 {
 	printf("Invalid arguments\n");
-	printf("usage: %s [--perf] [--pfc] [--portmask\n", name);
+	printf("usage: %s [--perf] [--pfc] [--portmask] [--nb-mbufs <count >]\n", name);
 }
 
 static int
@@ -884,6 +885,13 @@ parse_args(int argc, char **argv)
 			continue;
 		}
 
+		if (!strcmp(argv[0], "--nb-mbufs") && (argc > 1)) {
+			nb_bufs = atoi(argv[1]);
+			argc-=2;
+			argv+=2;
+			continue;
+		}
+
 		/* Unknown args */
 		print_usage(name);
 		return -1;
@@ -897,6 +905,8 @@ ut_setup(int argc, char **argv)
 {
 	uint16_t nb_rx_queue = 1, nb_tx_queue = 1;
 	int socketid = 0, ret;
+	uint32_t nb_lcores;
+	uint32_t nb_mbufs;
 	uint16_t nb_ports;
 	uint16_t nb_rxd;
 	uint16_t nb_txd;
@@ -926,15 +936,21 @@ ut_setup(int argc, char **argv)
 		return -1;
 	}
 
+	nb_lcores = rte_lcore_count();
+
 	nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 	nb_txd = RTE_TEST_TX_DESC_DEFAULT;
+
+	nb_mbufs = nb_bufs ? nb_bufs : RTE_MAX(nb_ports * (nb_rxd + nb_txd +
+							   nb_lcores * MEMPOOL_CACHE_SIZE),
+					       NB_MBUF);
 
 	/* Setup all available ports */
 	RTE_ETH_FOREACH_DEV(portid) {
 		if ((ethdev_port_mask & RTE_BIT64(portid)) == 0)
 			continue;
 
-		ret = init_pktmbuf_pool(portid, NB_MBUF);
+		ret = init_pktmbuf_pool(portid, nb_mbufs);
 		if (ret) {
 			printf("Failed to setup pktmbuf pool for port=%d, ret=%d", portid, ret);
 			return ret;
