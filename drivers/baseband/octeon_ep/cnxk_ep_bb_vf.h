@@ -139,7 +139,7 @@
 #define CNXK_EP_R_OUT_CTL_ROR_P              (1ULL << 24)
 #define CNXK_EP_R_OUT_CTL_IMODE              (1ULL << 23)
 
-#define PCI_DEVID_CNF10KA_EP_BBDEV_VF		0xEF02
+#define PCI_DEVID_CNF10KA_EP_BBDEV_VF		0xEF07
 
 int
 cnxk_ep_bb_vf_setup_device(struct cnxk_ep_bb_device *sdpvf);
