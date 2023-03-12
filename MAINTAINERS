@@ -1229,6 +1229,8 @@ F: doc/guides/dmadevs/hisilicon.rst
 Marvell CNXK DPI DMA
 M: Radha Mohan Chintakuntla <radhac@marvell.com>
 M: Veerasenareddy Burru <vburru@marvell.com>
+M: Sibaranjan Pattnayak <spattnayak@marvell.com>
+F: drivers/common/cnxk/roc_dpi*
 F: drivers/dma/cnxk/
 F: doc/guides/dmadevs/cnxk.rst
 
