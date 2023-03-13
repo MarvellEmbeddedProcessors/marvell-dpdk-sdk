@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <rte_atomic.h>
 #include <rte_bitmap.h>
