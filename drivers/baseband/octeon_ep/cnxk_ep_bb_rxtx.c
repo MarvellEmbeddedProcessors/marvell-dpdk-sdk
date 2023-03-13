@@ -144,7 +144,7 @@ cnxk_ep_bb_init_instr_queue(struct cnxk_ep_bb_device *cnxk_ep_bb_vf, int iq_no, 
 		goto iq_init_fail;
 	}
 
-	cnxk_ep_bb_info("IQ[%d]: base: %p basedma: " PRIx64 " count: %d",
+	cnxk_ep_bb_info("IQ[%d]: base: %p basedma: %" PRIx64 " count: %d",
 		     iq_no, iq->base_addr, (unsigned long)iq->base_addr_dma,
 		     iq->nb_desc);
 
@@ -322,7 +322,7 @@ cnxk_ep_bb_init_droq(struct cnxk_ep_bb_device *cnxk_ep_bb_vf, uint32_t q_no,
 	droq->desc_ring_dma = droq->desc_ring_mz->iova;
 	droq->desc_ring = (struct cnxk_ep_bb_droq_desc *)droq->desc_ring_mz->addr;
 
-	cnxk_ep_bb_dbg("OQ[%d]: desc_ring: virt: 0x%p, dma: " PRIx64,
+	cnxk_ep_bb_dbg("OQ[%d]: desc_ring: virt: 0x%p, dma: %" PRIx64,
 		    q_no, droq->desc_ring, (unsigned long)droq->desc_ring_dma);
 	cnxk_ep_bb_dbg("OQ[%d]: num_desc: %d", q_no, droq->nb_desc);
 
@@ -892,7 +892,7 @@ cnxk_ep_bb_droq_read_packet(struct cnxk_ep_bb_device *cnxk_ep_bb_vf,
 	if (unlikely(!info->length)) {
 		int retry = CNXK_EP_BB_MAX_DELAYED_PKT_RETRIES;
 		/* cnxk_ep_bb_dbg("OCTEON DROQ[%d]: read_idx: %d; Data not ready "
-		 * "yet, Retry; pending=" PRId64, droq->q_no, droq->read_idx,
+		 * "yet, Retry; pending=%" PRId64, droq->q_no, droq->read_idx,
 		 * droq->pkts_pending);
 		 */
 		droq->stats.pkts_delayed_data++;
@@ -921,7 +921,7 @@ cnxk_ep_bb_droq_read_packet(struct cnxk_ep_bb_device *cnxk_ep_bb_vf,
 		droq_pkt  = droq->recv_buf_list[droq->read_idx];
 		if (likely(droq_pkt != NULL)) {
 			droq_pkt->data_off += info_size;
-			/* cnxk_ep_bb_dbg("OQ: pkt_len[" PRId64 "], buffer_size %d\n",
+			/* cnxk_ep_bb_dbg("OQ: pkt_len[%" PRId64 "], buffer_size %d\n",
 			 * (long)info->length, droq->buffer_size);
 			 */
 			pkt_len = (uint32_t)info->length;
