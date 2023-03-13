@@ -324,6 +324,7 @@ tim_free_lf_count_get(struct dev *dev, uint16_t *nb_lfs)
 
 	*nb_lfs = rsrc_cnt->tim;
 	mbox_put(mbox);
+
 	return 0;
 }
 
