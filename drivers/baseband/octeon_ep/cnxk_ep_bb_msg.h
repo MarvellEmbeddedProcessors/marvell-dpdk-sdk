@@ -33,30 +33,30 @@ struct oct_bbdev_op_sg_list {
 
 struct oct_bbdev_op_turbo_enc {
 	struct rte_bbdev_enc_op		op;		/* Operation payload input by library */
-	rte_iova_t			out_buf;	/* Output buffer address */
 	struct oct_bbdev_op_sg_list	in_sg_list;	/* Input scatter-gather list */
+	struct oct_bbdev_op_sg_list	out_sg_list;	/* Output scatter-gather list */
 };
 
 struct oct_bbdev_op_ldpc_enc {
 	struct rte_bbdev_enc_op		op;		/* Operation payload input by library */
-	rte_iova_t			out_buf;	/* Output buffer address */
 	struct oct_bbdev_op_sg_list	in_sg_list;	/* Input scatter-gather list */
+	struct oct_bbdev_op_sg_list	out_sg_list;	/* Output scatter-gather list */
 };
 
 struct oct_bbdev_op_turbo_dec {
 	struct rte_bbdev_dec_op		op;		/* Operation payload input by library */
-	rte_iova_t			hard_out_buf;	/* Oard output buffer address */
 	rte_iova_t			soft_out_buf;	/* Soft output buffer address */
 	struct oct_bbdev_op_sg_list	in_sg_list;	/* Input scatter-gather list */
+	struct oct_bbdev_op_sg_list	out_sg_list;	/* Output scatter-gather list */
 };
 
 struct oct_bbdev_op_ldpc_dec {
 	struct rte_bbdev_dec_op		op;		/* Operation payload input by library */
-	rte_iova_t			hard_out_buf;	/* Hard output address */
 	rte_iova_t			soft_out_buf;	/* Soft output address */
 	rte_iova_t			harq_cmb_in_buf;/* Hard combined input address */
 	rte_iova_t			harq_cmb_out_buf;/* Hard combined output address */
 	struct oct_bbdev_op_sg_list	in_sg_list;	/* Input scatter-gather list */
+	struct oct_bbdev_op_sg_list	out_sg_list;	/* Output scatter-gather list */
 };
 
 /* TX SDP message format for command/operation */

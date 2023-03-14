@@ -144,6 +144,7 @@ info_get(struct rte_bbdev *bbdev, struct rte_bbdev_driver_info *dev_info)
 						RTE_BBDEV_LDPC_RATE_MATCH |
 						RTE_BBDEV_LDPC_CRC_16_ATTACH |
 						RTE_BBDEV_LDPC_CRC_24A_ATTACH |
+						RTE_BBDEV_LDPC_ENC_SCATTER_GATHER |
 						RTE_BBDEV_LDPC_CRC_24B_ATTACH,
 				.num_buffers_src =
 						RTE_BBDEV_LDPC_MAX_CODE_BLOCKS,
@@ -161,6 +162,7 @@ info_get(struct rte_bbdev *bbdev, struct rte_bbdev_driver_info *dev_info)
 					RTE_BBDEV_LDPC_CRC_TYPE_24B_DROP |
 					RTE_BBDEV_LDPC_HQ_COMBINE_IN_ENABLE |
 					RTE_BBDEV_LDPC_HQ_COMBINE_OUT_ENABLE |
+					RTE_BBDEV_LDPC_DEC_SCATTER_GATHER |
 					RTE_BBDEV_LDPC_ITERATION_STOP_ENABLE,
 			.llr_size = 8,
 			.llr_decimals = 4,
@@ -275,13 +277,13 @@ static const struct rte_bbdev_ops pmd_ops = {
 
 #define	MBUF_IOVA_CHK(m)	((m) ? rte_pktmbuf_iova(m) : 0)
 
-#define	MBUF_SEG_IOVA(m, s)	do {	\
+#define	MBUF_IN_SEG_IOVA(m, s)	do {	\
 	(s)->data = rte_pktmbuf_iova(m);\
 	(s)->length = (m)->data_len;	\
 } while (0)
 
 static int
-fill_iova_chain(struct rte_bbdev_op_data *input, struct oct_bbdev_op_sg_list *sg_list)
+fill_in_sg_list(struct rte_bbdev_op_data *input, struct oct_bbdev_op_sg_list *sg_list)
 {
 	struct rte_mbuf *mbuf = input->data;
 	struct oct_bbdev_seg_data *seg = sg_list->seg_data;
@@ -293,11 +295,38 @@ fill_iova_chain(struct rte_bbdev_op_data *input, struct oct_bbdev_op_sg_list *sg
 	sg_list->num_segs = mbuf->nb_segs;
 	/* Translate each segment */
 	do {
-		MBUF_SEG_IOVA(mbuf, seg);
+		MBUF_IN_SEG_IOVA(mbuf, seg);
 		++seg;
 		mbuf = mbuf->next;
 	} while (mbuf);
+	/* already set: input->data->pkt_len = input->length = totlen; */
+	return 0;
+}
 
+
+#define	MBUF_OUT_SEG_IOVA(m, s)	do {		\
+	(s)->data = rte_pktmbuf_iova(m);	\
+	(s)->length = rte_pktmbuf_tailroom(m);	\
+} while (0)
+
+static int
+fill_out_sg_list(struct rte_bbdev_op_data *output, struct oct_bbdev_op_sg_list *sg_list)
+{
+	struct rte_mbuf *mbuf = output->data;
+	struct oct_bbdev_seg_data *seg = sg_list->seg_data;
+
+	/* Check if segments exceed max limit */
+	if (unlikely(mbuf->nb_segs > OCTEON_EP_MAX_SG_ENTRIES))
+		return -1;
+	/* Set segment count, total length */
+	sg_list->num_segs = mbuf->nb_segs;
+	/* Translate each segment */
+	do {
+		MBUF_OUT_SEG_IOVA(mbuf, seg);
+		++seg;
+		mbuf = mbuf->next;
+	} while (mbuf);
+	/* output->data->pkt_len, output->length are 0 here */
 	return 0;
 }
 
@@ -348,14 +377,15 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->msg_type = RTE_BBDEV_OP_TURBO_DEC;
 			req = &msg->u.turbo_dec;
 			op = ops[i];
-			err = fill_iova_chain(&op->turbo_dec.input, &req->in_sg_list);
+			err = fill_in_sg_list(&op->turbo_dec.input, &req->in_sg_list);
+			err |= fill_out_sg_list(&op->turbo_dec.hard_output, &req->out_sg_list);
 			/* Stop further enqueue if sg_list overflow */
 			if (unlikely(err))
 				goto exit;
 			req->op = *op;
 			msg->op_ptr = op;
-			req->hard_out_buf = rte_pktmbuf_iova(op->turbo_dec.hard_output.data);
 			req->soft_out_buf = MBUF_IOVA_CHK(op->turbo_dec.soft_output.data);
+			/* input length is already set; output lengths are 0; set if required */
 		}
 		break;
 	}
@@ -372,13 +402,14 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->msg_type = RTE_BBDEV_OP_TURBO_ENC;
 			req = &msg->u.turbo_enc;
 			op = ops[i];
-			err = fill_iova_chain(&op->turbo_enc.input, &req->in_sg_list);
+			err = fill_in_sg_list(&op->turbo_enc.input, &req->in_sg_list);
+			err |= fill_out_sg_list(&op->turbo_enc.output, &req->out_sg_list);
 			/* Stop further enqueue if sg_list overflow */
 			if (unlikely(err))
 				goto exit;
 			req->op = *op;
 			msg->op_ptr = op;
-			req->out_buf = rte_pktmbuf_iova(op->turbo_enc.output.data);
+			/* input length is already set; output lengths are 0; set if required */
 		}
 		break;
 	}
@@ -395,17 +426,18 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->msg_type = RTE_BBDEV_OP_LDPC_DEC;
 			req = &msg->u.ldpc_dec;
 			op = ops[i];
-			err = fill_iova_chain(&op->ldpc_dec.input, &req->in_sg_list);
+			err = fill_in_sg_list(&op->ldpc_dec.input, &req->in_sg_list);
+			err |= fill_out_sg_list(&op->ldpc_dec.hard_output, &req->out_sg_list);
 			/* Stop further enqueue if sg_list overflow */
 			if (unlikely(err))
 				goto exit;
 			req->op = *op;
 			msg->op_ptr = op;
-			req->hard_out_buf = rte_pktmbuf_iova(op->ldpc_dec.hard_output.data);
 			req->soft_out_buf = MBUF_IOVA_CHK(op->ldpc_dec.soft_output.data);
 			req->harq_cmb_in_buf = MBUF_IOVA_CHK(op->ldpc_dec.harq_combined_input.data);
 			req->harq_cmb_out_buf =
 				MBUF_IOVA_CHK(op->ldpc_dec.harq_combined_output.data);
+			/* input length is already set; output lengths are 0; set if required */
 		}
 		break;
 	}
@@ -422,13 +454,13 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->msg_type = RTE_BBDEV_OP_LDPC_ENC;
 			req = &msg->u.ldpc_enc;
 			op = ops[i];
-			err = fill_iova_chain(&op->ldpc_enc.input, &req->in_sg_list);
+			err = fill_in_sg_list(&op->ldpc_enc.input, &req->in_sg_list);
+			err |= fill_out_sg_list(&op->ldpc_enc.output, &req->out_sg_list);
 			/* Stop further enqueue if sg_list overflow */
 			if (unlikely(err))
 				goto exit;
 			req->op = *op;
 			msg->op_ptr = op;
-			req->out_buf = rte_pktmbuf_iova(op->ldpc_enc.output.data);
 		}
 		break;
 	}
@@ -518,37 +550,56 @@ enqueue_dec_ops(struct rte_bbdev_queue_data *q_data,
 	cnt;								\
 })
 
+static void
+upd_out_sg_len(struct rte_bbdev_op_data *output, struct oct_bbdev_op_sg_list *sg_list)
+{
+	struct oct_bbdev_seg_data *seg = sg_list->seg_data;
+	struct rte_mbuf *mbuf = output->data;
+
+	/* Set total packet length */
+	mbuf->pkt_len = output->length;
+	/* Set each segment length */
+	while (mbuf) {
+		mbuf->data_len = seg->length;
+		++seg;
+		mbuf = mbuf->next;
+	}
+	/* Not validating num_segs or sum of segment length vs total length */
+}
+
+#define UPD_MBUF_LEN_CHK(buf)	do {			\
+	if ((buf)->data)				\
+		(buf)->data->data_len = (buf)->length;	\
+} while (0)
+
 /* Copy response into original request */
 #define	COPY_RESP()	do {		\
 	switch (q_data->conf.op_type) {	\
 	case RTE_BBDEV_OP_TURBO_DEC: {	\
 		struct rte_bbdev_dec_op *op1 = req->op_ptr, *op2 = &resp->u.turbo_dec.op;	\
-		memcpy(op1, op2, sizeof(struct rte_bbdev_dec_op));	\
-		op1->turbo_dec.hard_output.data->data_len =		\
-			op1->turbo_dec.hard_output.data->pkt_len =	\
-			op2->turbo_dec.hard_output.length;		\
+		*op1 = *op2;		\
+		upd_out_sg_len(&op1->turbo_dec.hard_output, &resp->u.turbo_dec.out_sg_list);	\
+		UPD_MBUF_LEN_CHK(&op1->turbo_dec.soft_output);					\
 		break;			\
 	}				\
 	case RTE_BBDEV_OP_LDPC_DEC: {	\
 		struct rte_bbdev_dec_op *op1 = req->op_ptr, *op2 = &resp->u.ldpc_dec.op;	\
-		memcpy(op1, op2, sizeof(struct rte_bbdev_dec_op));	\
-		op1->ldpc_dec.hard_output.data->data_len =		\
-			op1->ldpc_dec.hard_output.data->pkt_len =	\
-			op2->ldpc_dec.hard_output.length;		\
+		*op1 = *op2;		\
+		upd_out_sg_len(&op1->ldpc_dec.hard_output, &resp->u.ldpc_dec.out_sg_list);	\
+		UPD_MBUF_LEN_CHK(&op1->ldpc_dec.soft_output);					\
+		UPD_MBUF_LEN_CHK(&op1->ldpc_dec.harq_combined_output);				\
 		break;			\
 	}				\
 	case RTE_BBDEV_OP_TURBO_ENC: {	\
 		struct rte_bbdev_enc_op *op1 = req->op_ptr, *op2 = &resp->u.turbo_enc.op;	\
-		memcpy(op1, op2, sizeof(struct rte_bbdev_enc_op));	\
-		op1->turbo_enc.output.data->data_len = op1->turbo_enc.output.data->pkt_len =	\
-			op2->turbo_enc.output.length;			\
+		*op1 = *op2;		\
+		upd_out_sg_len(&op1->turbo_enc.output, &resp->u.turbo_enc.out_sg_list);		\
 		break;			\
 	}				\
 	case RTE_BBDEV_OP_LDPC_ENC: {	\
 		struct rte_bbdev_enc_op *op1 = req->op_ptr, *op2 = &resp->u.ldpc_enc.op;	\
-		memcpy(op1, op2, sizeof(struct rte_bbdev_enc_op));	\
-		op1->ldpc_enc.output.data->data_len = op1->ldpc_enc.output.data->pkt_len =	\
-			op2->ldpc_enc.output.length;			\
+		*op1 = *op2;		\
+		upd_out_sg_len(&op1->ldpc_enc.output, &resp->u.ldpc_enc.out_sg_list);		\
 		break;			\
 	}				\
 	default:			\
@@ -751,8 +802,8 @@ dequeue_ops(struct rte_bbdev_queue_data *q_data, void **ops, uint16_t nb_ops)
 	/* stats is already updated in dequeue_burst */
 	/* TODO: optional q_data->queue_stats.acc_offload_cycles stats */
 	if (nb_deq)
-		rte_bbdev_log_debug("RX: %d ops type %d q %d lcore %d total %" PRId64,
-				nb_deq, q_data->conf.op_type, Q_TO_Q_NUM(q_data),
+		rte_bbdev_log_debug("RX: %d/%d ops type %d q %d lcore %d total %" PRId64,
+				nb_deq, nb_ops, q_data->conf.op_type, Q_TO_Q_NUM(q_data),
 				rte_lcore_id(), q_data->queue_stats.dequeued_count);
 	return nb_deq;
 }
