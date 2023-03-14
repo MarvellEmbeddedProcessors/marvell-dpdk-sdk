@@ -259,6 +259,8 @@ otx_ep_dev_close(struct rte_eth_dev *eth_dev)
 
 	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
 		eth_dev->dev_ops = NULL;
+		eth_dev->rx_pkt_burst = NULL;
+		eth_dev->tx_pkt_burst = NULL;
 		return 0;
 	}
 
@@ -620,6 +622,8 @@ otx_ep_eth_dev_uninit(struct rte_eth_dev *eth_dev)
 {
 	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
 		eth_dev->dev_ops = NULL;
+		eth_dev->rx_pkt_burst = NULL;
+		eth_dev->tx_pkt_burst = NULL;
 		return 0;
 	}
 
@@ -672,6 +676,8 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	/* Single process support */
 	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
 		eth_dev->dev_ops = &otx_ep_eth_dev_ops;
+		eth_dev->rx_pkt_burst = &otx_ep_recv_pkts;
+		eth_dev->tx_pkt_burst = &otx2_ep_xmit_pkts;
 		return 0;
 	}
 
