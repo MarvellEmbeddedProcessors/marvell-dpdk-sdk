@@ -16,6 +16,7 @@ SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 SSO_DEVICE="$SSO_DEV"
 
 TEST_TYPE=$1
+EVENT_INLINE_IPSEC_OUT=event_inline_ipsec_tests.txt
 
 if [[ -f $SCRIPTPATH/../../../../app/test/dpdk-test ]]; then
 	# This is running from build directory
@@ -38,19 +39,53 @@ register_event_inline_ipsec_test() {
 }
 
 run_event_inline_ipsec_tests() {
+	unbuffer="$(command -v stdbuf) -o 0" || unbuffer=
+	local in=event_inline_ipsec_in.txt
+	local out=event_inline_ipsec_out.txt
+	local parse=log_ipsec_parse_out.txt
+	itr=0
+	touch $in
+	rm -rf $parse
 	for test in ${!event_inline_ipsec_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN ${event_inline_ipsec_test_args[$test]}
+		tail -f $in | $unbuffer $DPDK_TEST_BIN \
+		${event_inline_ipsec_test_args[$test]} &>$out 2>&1 &
+		while ! (tail -n1 $out | grep -q "RTE>>") do
+			sleep 0.1
+			((itr+=1))
+			if [[ itr -eq 1000 ]]
+			then
+				echo "Timeout waiting for dpdk-test";
+				exit 1;
+			fi
+			continue;
+		done
 	done
+	echo "$test" >>$in
+	sleep 10
+	echo "quit" >>$in
+	sleep 2
+
+	cat $out | grep "failed" > one.txt
+	awk '!/soft expiry/' one.txt > two.txt
+	awk '!/DSCP 0/' two.txt > three.txt
+	awk '!/DSCP 1/' three.txt > $parse
+	rm -rf one.txt two.txt three.txt
+
+	while IFS= read -r line
+	do
+		check=`echo "$line" | awk '{print $NF}'`
+		if [ $check == "failed" ]; then
+			echo "Evenet inline ipsec autotest failed"
+			exit 1
+		fi
+	done < $parse
+	echo "Event inline ipsec autotest success"
 }
 
 run_inline_ipsec_tests() {
 	case $PLAT in
 		cn9*) run_event_inline_ipsec_tests ;;
 	esac
-
-	for test in ${!event_inline_ipsec_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN ${event_inline_ipsec_test_args[$test]}
-	done
 }
 
 
