@@ -985,21 +985,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	droq_pkt->l3_len = hdr_lens.l3_len;
 	droq_pkt->l4_len = hdr_lens.l4_len;
 
-	if (droq_pkt->pkt_len > otx_ep->eth_dev->data->mtu) {
-		rte_pktmbuf_free(droq_pkt);
-		goto oq_read_fail;
-	}
-
-	if (droq_pkt->nb_segs > 1 &&
-	    !(otx_ep->rx_offloads & RTE_ETH_RX_OFFLOAD_SCATTER)) {
-		rte_pktmbuf_free(droq_pkt);
-		goto oq_read_fail;
-	}
-
 	return droq_pkt;
-
-oq_read_fail:
-	return NULL;
 }
 
 static inline uint32_t
