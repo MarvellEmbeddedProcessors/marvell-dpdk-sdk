@@ -624,7 +624,7 @@ nix_inl_eng_caps_get(struct nix *nix)
 		return;
 	}
 
-	/* Fill CPT_INST_S for WRITE_SA microcode op */
+	/* Fill CPT_INST_S for LOAD_FVC/HW_CRYPTO_SUPPORT microcode op */
 	memset(&inst, 0, sizeof(struct cpt_inst_s));
 	inst.res_addr = (uint64_t)hw_res;
 	inst.rptr = (uint64_t)rptr;
@@ -639,7 +639,7 @@ nix_inl_eng_caps_get(struct nix *nix)
 		uint64_t lmt_status;
 
 		hw_res->cn9k.compcode = CPT_COMP_NOT_DONE;
-		rte_io_wmb();
+		plt_io_wmb();
 
 		do {
 			roc_lmt_mov_seg((void *)lmt_base, &inst, 4);
@@ -682,12 +682,12 @@ nix_inl_eng_caps_get(struct nix *nix)
 
 		if (res.cn10k.compcode != CPT_COMP_GOOD || res.cn10k.uc_compcode) {
 			plt_err("LOAD FVC operation timed out");
-			return;
+			goto exit;
 		}
 	}
 
 	nix->cpt_eng_caps = plt_be_to_cpu_64(*rptr);
-
+exit:
 	plt_free(rptr);
 	plt_free(hw_res);
 }
