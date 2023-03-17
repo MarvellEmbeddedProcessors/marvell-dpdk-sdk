@@ -131,6 +131,9 @@ cnxk_ep_bb_chip_specific_setup(struct cnxk_ep_bb_device *cnxk_ep_bb_vf)
 	switch (dev_id) {
 	case PCI_DEVID_CNF10KA_EP_BBDEV_VF:
 		cnxk_ep_bb_vf->chip_id = dev_id;
+		cnxk_ep_bb_vf->pf_num = pdev->addr.bus;
+		cnxk_ep_bb_vf->vf_num = (((pdev->addr.devid & 0x1F) << 3) |
+					(pdev->addr.function & 0x7)) - 1;
 		ret = cnxk_ep_bb_vf_setup_device(cnxk_ep_bb_vf);
 		cnxk_ep_bb_vf->fn_list.disable_io_queues(cnxk_ep_bb_vf);
 		if (cnxk_ep_bb_ism_setup(cnxk_ep_bb_vf))
@@ -142,7 +145,8 @@ cnxk_ep_bb_chip_specific_setup(struct cnxk_ep_bb_device *cnxk_ep_bb_vf)
 	}
 
 	if (!ret)
-		cnxk_ep_bb_info("OTX_EP dev_id[%X]", dev_id);
+		cnxk_ep_bb_info("OTX_EP dev_id[%X] PF[%d] VF[%d]", dev_id, cnxk_ep_bb_vf->pf_num,
+				cnxk_ep_bb_vf->vf_num);
 
 	return ret;
 }

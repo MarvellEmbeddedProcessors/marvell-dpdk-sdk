@@ -7,18 +7,9 @@
 #define	OCTEON_EP_MAX_SG_ENTRIES	8
 #define	OCTEON_EP_MAX_BURST_SIZE	64
 
-/* Queue number to op_type mapping on cnxk; host can use any assignment
- * Queue #	Operation type
- *	0	RTE_BBDEV_OP_TURBO_DEC
- *	1	RTE_BBDEV_OP_TURBO_ENC
- *	2	RTE_BBDEV_OP_LDPC_DEC
- *	3	RTE_BBDEV_OP_LDPC_ENC
- */
-#define Q_TO_OP_TYPE(q)		((q) + RTE_BBDEV_OP_TURBO_DEC)
-
 /** Different command types supported by the device */
 enum oct_bbdev_cmd_type {
-	OTX_BBDEV_CMD_INFO_GET = 0x8000,/**< info_get */
+	OTX_BBDEV_CMD_INFO_GET = 0x80,	/**< info_get */
 	OTX_BBDEV_CMD_SETUP_QUES,	/**< device config */
 	OTX_BBDEV_CMD_QUE_SETUP,	/**< queue setup */
 	OTX_BBDEV_CMD_QUE_RELEASE,	/**< queue release */
@@ -71,11 +62,14 @@ struct oct_bbdev_op_ldpc_dec {
 /* TX SDP message format for command/operation */
 struct oct_bbdev_op_msg {
 	/* Fake ethernet header to aid NIX parsing */
-	uint8_t		rsvd[11];
+	uint8_t		rsvd[12];
+	uint16_t	tpid;		/* 0x8100 */
+	/* vf_id, q_no form vlan ID */
+	uint8_t		vf_id;
 	uint8_t		q_no;
-	uint16_t	tpid;
-	uint16_t	msg_type;	/**< cmd/op (union oct_bbdev_msg_type) */
-	uint16_t	etype;
+	/* msg_type forms ether_type */
+	uint8_t		msg_type;	/* cmd/op (union oct_bbdev_msg_type) */
+	uint8_t		unused;
 	void		*op_ptr;	/* rte_bbdev input op ptr save location */
 
 	/* Followed by bbdev command/operation payload */

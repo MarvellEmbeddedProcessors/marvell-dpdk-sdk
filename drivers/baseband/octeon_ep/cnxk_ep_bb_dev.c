@@ -342,10 +342,10 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			/* Populate turbo_dec message */
 			msg = MBUF_TO_OCT_MSG(mbufs[i]);
 			mbufs[i]->data_len = sizeof(struct oct_bbdev_op_msg);
+			msg->vf_id = cnxk_ep_bb_vf->vf_num;
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
-			msg->msg_type = rte_cpu_to_be_16(RTE_BBDEV_OP_TURBO_DEC);
-			msg->etype = rte_cpu_to_be_16(0x800);
+			msg->msg_type = RTE_BBDEV_OP_TURBO_DEC;
 			req = &msg->u.turbo_dec;
 			op = ops[i];
 			err = fill_iova_chain(&op->turbo_dec.input, &req->in_sg_list);
@@ -366,10 +366,10 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			/* Populate turbo_enc message */
 			msg = MBUF_TO_OCT_MSG(mbufs[i]);
 			mbufs[i]->data_len = sizeof(struct oct_bbdev_op_msg);
+			msg->vf_id = cnxk_ep_bb_vf->vf_num;
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
-			msg->msg_type = rte_cpu_to_be_16(RTE_BBDEV_OP_TURBO_ENC);
-			msg->etype = rte_cpu_to_be_16(0x800);
+			msg->msg_type = RTE_BBDEV_OP_TURBO_ENC;
 			req = &msg->u.turbo_enc;
 			op = ops[i];
 			err = fill_iova_chain(&op->turbo_enc.input, &req->in_sg_list);
@@ -389,10 +389,10 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			/* Populate ldpc_dec message */
 			msg = MBUF_TO_OCT_MSG(mbufs[i]);
 			mbufs[i]->data_len = sizeof(struct oct_bbdev_op_msg);
+			msg->vf_id = cnxk_ep_bb_vf->vf_num;
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
-			msg->msg_type = rte_cpu_to_be_16(RTE_BBDEV_OP_LDPC_DEC);
-			msg->etype = rte_cpu_to_be_16(0x800);
+			msg->msg_type = RTE_BBDEV_OP_LDPC_DEC;
 			req = &msg->u.ldpc_dec;
 			op = ops[i];
 			err = fill_iova_chain(&op->ldpc_dec.input, &req->in_sg_list);
@@ -416,10 +416,10 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			/* Populate ldpc_enc message */
 			msg = MBUF_TO_OCT_MSG(mbufs[i]);
 			mbufs[i]->data_len = sizeof(struct oct_bbdev_op_msg);
+			msg->vf_id = cnxk_ep_bb_vf->vf_num;
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
-			msg->msg_type = rte_cpu_to_be_16(RTE_BBDEV_OP_LDPC_ENC);
-			msg->etype = rte_cpu_to_be_16(0x800);
+			msg->msg_type = RTE_BBDEV_OP_LDPC_ENC;
 			req = &msg->u.ldpc_enc;
 			op = ops[i];
 			err = fill_iova_chain(&op->ldpc_enc.input, &req->in_sg_list);
