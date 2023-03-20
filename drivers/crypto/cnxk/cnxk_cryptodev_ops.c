@@ -699,7 +699,7 @@ sym_session_configure(struct roc_cpt *roc_cpt, int driver_id,
 	if (sess_priv->cpt_op & ROC_SE_OP_CIPHER_MASK) {
 		switch (sess_priv->roc_se_ctx.fc_type) {
 		case ROC_SE_FC_GEN:
-			if (sess_priv->aes_gcm || sess_priv->chacha_poly)
+			if (sess_priv->aes_gcm || sess_priv->aes_ccm || sess_priv->chacha_poly)
 				thr_type = CPT_DP_THREAD_TYPE_FC_AEAD;
 			else
 				thr_type = CPT_DP_THREAD_TYPE_FC_CHAIN;
