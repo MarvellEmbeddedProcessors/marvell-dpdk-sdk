@@ -35,12 +35,13 @@
 
 #define NIX_XMIT_FC_OR_RETURN(txq, pkts)                                       \
 	do {                                                                   \
+		int64_t avail;                                                 \
 		/* Cached value is low, Update the fc_cache_pkts */            \
 		if (unlikely((txq)->fc_cache_pkts < (pkts))) {                 \
+			avail = txq->nb_sqb_bufs_adj - *(txq->fc_mem);         \
 			/* Multiply with sqe_per_sqb to express in pkts */     \
 			(txq)->fc_cache_pkts =                                 \
-				((txq)->nb_sqb_bufs_adj - *(txq)->fc_mem)      \
-				<< (txq)->sqes_per_sqb_log2;                   \
+				(avail << (txq)->sqes_per_sqb_log2) - avail;   \
 			/* Check it again for the room */                      \
 			if (unlikely((txq)->fc_cache_pkts < (pkts)))           \
 				return 0;                                      \
@@ -147,15 +148,14 @@ retry:
 			     : [addr] "r"(txq->fc_mem),
 			       [adj_addr] "r"(&txq->nb_sqb_bufs_adj)
 			     : "memory");
-		refill <<= txq->sqes_per_sqb_log2;
 #else
 		do {
-			refill =
-				(txq->nb_sqb_bufs_adj -
-				 __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED))
-				<< txq->sqes_per_sqb_log2;
+			refill = (txq->nb_sqb_bufs_adj -
+				  __atomic_load_n(txq->fc_mem,
+						  __ATOMIC_RELAXED));
 		} while (refill <= 0);
 #endif
+		refill = (refill << txq->sqes_per_sqb_log2) - refill;
 		__atomic_compare_exchange(&txq->fc_cache_pkts, &cached, &refill,
 					  0, __ATOMIC_RELEASE,
 					  __ATOMIC_RELAXED);
@@ -338,6 +338,7 @@ cn10k_nix_sec_fc_wait_one(struct cn10k_eth_txq *txq)
 		     : [nb_desc] "r"(nb_desc), [addr] "r"(txq->cpt_fc)
 		     : "memory");
 #else
+	RTE_SET_USED(fc);
 	while (nb_desc <= __atomic_load_n(txq->cpt_fc, __ATOMIC_RELAXED))
 		;
 #endif
