@@ -35,12 +35,13 @@
 
 #define NIX_XMIT_FC_OR_RETURN(txq, pkts)                                       \
 	do {                                                                   \
+		int64_t avail;                                                 \
 		/* Cached value is low, Update the fc_cache_pkts */            \
 		if (unlikely((txq)->fc_cache_pkts < (pkts))) {                 \
+			avail = txq->nb_sqb_bufs_adj - *(txq->fc_mem);         \
 			/* Multiply with sqe_per_sqb to express in pkts */     \
 			(txq)->fc_cache_pkts =                                 \
-				((txq)->nb_sqb_bufs_adj - *(txq)->fc_mem)      \
-				<< (txq)->sqes_per_sqb_log2;                   \
+				(avail << (txq)->sqes_per_sqb_log2) - avail;   \
 			/* Check it again for the room */                      \
 			if (unlikely((txq)->fc_cache_pkts < (pkts)))           \
 				return 0;                                      \
@@ -104,20 +105,57 @@ static __plt_always_inline void
 cn10k_nix_vwqe_wait_fc(struct cn10k_eth_txq *txq, int64_t req)
 {
 	int64_t cached, refill;
+	int16_t pkts;
 
 retry:
+#ifdef RTE_ARCH_ARM64
+
+	asm volatile(PLT_CPU_FEATURE_PREAMBLE
+		     "		ldxrh %w[pkts], [%[addr]]		\n"
+		     "		tbz %w[pkts], 15, .Ldne%=		\n"
+		     "		sevl					\n"
+		     ".Lrty%=:	wfe					\n"
+		     "		ldxrh %w[pkts], [%[addr]]		\n"
+		     "		tbnz %w[pkts], 15, .Lrty%=		\n"
+		     ".Ldne%=:						\n"
+		     : [pkts] "=&r"(pkts)
+		     : [addr] "r"(&txq->fc_cache_pkts)
+		     : "memory");
+#else
+	RTE_SET_USED(pkts);
 	while (__atomic_load_n(&txq->fc_cache_pkts, __ATOMIC_RELAXED) < 0)
 		;
+#endif
 	cached = __atomic_sub_fetch(&txq->fc_cache_pkts, req, __ATOMIC_ACQUIRE);
 	/* Check if there is enough space, else update and retry. */
 	if (cached < 0) {
 		/* Check if we have space else retry. */
+#ifdef RTE_ARCH_ARM64
+		asm volatile(PLT_CPU_FEATURE_PREAMBLE
+			     "		ldrsh %[adj], [%[adj_addr]]	\n"
+			     "		ldxr %[refill], [%[addr]]	\n"
+			     "		sub %[refill], %[adj], %[refill]\n"
+			     "		cmp %[refill], #0x0		\n"
+			     "		b.gt .Ldne%=			\n"
+			     "		sevl				\n"
+			     ".Lrty%=:	wfe				\n"
+			     "		ldxr %[refill], [%[addr]]	\n"
+			     "		sub %[refill], %[adj], %[refill]\n"
+			     "		cmp %[refill], #0x0		\n"
+			     "		b.le .Lrty%=			\n"
+			     ".Ldne%=:					\n"
+			     : [refill] "=&r"(refill), [adj] "=&r"(pkts)
+			     : [addr] "r"(txq->fc_mem),
+			       [adj_addr] "r"(&txq->nb_sqb_bufs_adj)
+			     : "memory");
+#else
 		do {
-			refill =
-				(txq->nb_sqb_bufs_adj -
-				 __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED))
-				<< txq->sqes_per_sqb_log2;
+			refill = (txq->nb_sqb_bufs_adj -
+				  __atomic_load_n(txq->fc_mem,
+						  __ATOMIC_RELAXED));
 		} while (refill <= 0);
+#endif
+		refill = (refill << txq->sqes_per_sqb_log2) - refill;
 		__atomic_compare_exchange(&txq->fc_cache_pkts, &cached, &refill,
 					  0, __ATOMIC_RELEASE,
 					  __ATOMIC_RELAXED);
@@ -283,10 +321,27 @@ static __rte_always_inline void
 cn10k_nix_sec_fc_wait_one(struct cn10k_eth_txq *txq)
 {
 	uint64_t nb_desc = txq->cpt_desc;
-	uint64_t *fc = txq->cpt_fc;
+	uint64_t fc;
 
-	while (nb_desc <= __atomic_load_n(fc, __ATOMIC_RELAXED))
+#ifdef RTE_ARCH_ARM64
+	asm volatile(PLT_CPU_FEATURE_PREAMBLE
+		     "		ldxr %[space], [%[addr]]		\n"
+		     "		cmp %[nb_desc], %[space]		\n"
+		     "		b.hi .Ldne%=				\n"
+		     "		sevl					\n"
+		     ".Lrty%=:	wfe					\n"
+		     "		ldxr %[space], [%[addr]]		\n"
+		     "		cmp %[nb_desc], %[space]		\n"
+		     "		b.ls .Lrty%=				\n"
+		     ".Ldne%=:						\n"
+		     : [space] "=&r"(fc)
+		     : [nb_desc] "r"(nb_desc), [addr] "r"(txq->cpt_fc)
+		     : "memory");
+#else
+	RTE_SET_USED(fc);
+	while (nb_desc <= __atomic_load_n(txq->cpt_fc, __ATOMIC_RELAXED))
 		;
+#endif
 }
 
 static __rte_always_inline void
