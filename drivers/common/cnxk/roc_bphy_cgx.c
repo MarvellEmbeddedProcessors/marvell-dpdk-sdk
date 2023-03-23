@@ -238,7 +238,7 @@ roc_bphy_cgx_start_stop_rxtx(struct roc_bphy_cgx *roc_cgx, unsigned int lmac,
 	if (!roc_bphy_cgx_lmac_exists(roc_cgx, lmac))
 		return -ENODEV;
 
-	if (roc_model_is_cnf10kb()) {
+	if (roc_model_is_cnf10kb() || roc_model_is_cnf10ka()) {
 		reg = CGX_MTI_MAC100X_COMMAND_CONFIG;
 		rx_field = CGX_MTI_MAC100X_COMMAND_CONFIG_RX_ENA;
 		tx_field = CGX_MTI_MAC100X_COMMAND_CONFIG_TX_ENA;
