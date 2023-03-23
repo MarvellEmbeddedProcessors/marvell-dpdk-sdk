@@ -295,6 +295,11 @@ function stop_testpmd()
 
 function run_testpmd()
 {
+	if [[ -d /sys/kernel/debug/cn10k ]]; then
+		mbufs=4096
+	else
+		mbufs=2048
+	fi
 	testpmd_launch $TXPRFX \
         	"-l 0-10 -n 1 -a $TESTPMD_TXPORT" \
         	"--no-flush-rx --nb-cores=8 --forward-mode=txonly --txq=8 --rxq=8"
@@ -304,20 +309,20 @@ function run_testpmd()
 	if [ $1 == "mempool" ] ;then
 		testpmd_launch $RXPRFX \
 			"-l 11-20 -n 1 -a $TESTPMD_RXPORT" \
-			"--no-flush-rx --nb-cores=8 --forward-mode=rxonly --txq=8 --rxq=8 --total-num-mbufs=4096"
+			"--no-flush-rx --nb-cores=4 --forward-mode=rxonly --txq=4 --rxq=4 --total-num-mbufs=$mbufs"
 	fi
 
 	if [ $1 == "queue" ] ;then
 		testpmd_launch $RXPRFX \
 			"-l 11-20 -n 1 -a $TESTPMD_RXPORT" \
-			"--no-flush-rx --nb-cores=8 --forward-mode=rxonly --txq=8 --rxq=8"
+			"--no-flush-rx --nb-cores=4 --forward-mode=rxonly --txq=4 --rxq=4"
 	fi
 
 }
 
 function configure_mode()
 {
-	for i in 0 1 2 3 4 5 6 7
+	for i in 0 1 2 3
 	do
 		if [ $3 == "queue" ] ;then
 			testpmd_cmd $RXPRFX "set port cman config 0 $i obj queue mode red $1 $2 1"
@@ -361,8 +366,13 @@ check_stats $RXPRFX 1 1
 stop_testpmd
 sleep 2
 run_testpmd queue
-configure_mode 40 60 queue
-check_stats $RXPRFX 40 60
+if [[ -d /sys/kernel/debug/cn10k ]]; then
+	configure_mode 40 60 queue
+	check_stats $RXPRFX 40 60
+else
+	configure_mode 10 20 queue
+	check_stats $RXPRFX 10 20
+fi
 stop_testpmd
 sleep 2
 run_testpmd queue
