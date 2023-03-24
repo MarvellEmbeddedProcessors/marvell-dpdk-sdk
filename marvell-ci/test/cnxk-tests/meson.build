@@ -5,6 +5,10 @@ if not get_option('tests')
     subdir_done()
 endif
 
+if not host_machine.cpu_family().startswith('aarch')
+    subdir_done()
+endif
+
 subdir('common')
 
 # The developer is expected to add new scripts in subdirectories and add it to
