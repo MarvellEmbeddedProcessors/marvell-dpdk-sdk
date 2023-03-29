@@ -175,7 +175,7 @@ roc_bphy_cgx_dev_id(struct roc_bphy_cgx *roc_cgx)
 {
 	uint64_t cgx_id;
 
-	if (roc_model_is_cnf10kb())
+	if (roc_model_is_cnf10kb() || roc_model_is_cnf10ka())
 		cgx_id = GENMASK_ULL(27, 24);
 	else if (roc_model_is_cn10k())
 		cgx_id = GENMASK_ULL(26, 24);
