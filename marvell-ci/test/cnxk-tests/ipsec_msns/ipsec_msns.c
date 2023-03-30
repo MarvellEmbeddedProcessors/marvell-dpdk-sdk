@@ -1505,24 +1505,33 @@ ut_ipsec_ipv4_perf(void)
 
 			switch (alg) {
 			case RTE_PMD_CNXK_SEC_ACTION_ALG0:
-				spi = (0x1 << 28 | sa_index);
+				spi = (0x2 << 28 | sa_index);
 				sa_hi = (spi >> 16) & 0xffff;
 				sa_lo = 0x0;
 				break;
 			case RTE_PMD_CNXK_SEC_ACTION_ALG1:
-				spi = (sa_index << 28) | 0x0000001;
+				/* Only SPI[31:28] are considered as SA[3:0] hence use.
+				 * rest from SPI[15:4].
+				 */
+				spi = ((sa_index & 0xF) << 28) | ((sa_index >> 4) << 4);
 				sa_hi = (spi >> 16) & 0xffff;
-				sa_lo = 0x0001;
+				sa_lo = 0x0000;
 				break;
 			case RTE_PMD_CNXK_SEC_ACTION_ALG2:
-				spi = (sa_index << 25) | 0x00000001;
+				/* Only SPI[27:25] are considered as SA[2:0] hence use.
+				 * rest from SPI[15:3].
+				 */
+				spi = ((sa_index & 0x7) << 25) | ((sa_index >> 3) << 3);
 				sa_hi = (spi >> 16) & 0xffff;
-				sa_lo = 0x0001;
+				sa_lo = 0x0000;
 				break;
 			case RTE_PMD_CNXK_SEC_ACTION_ALG3:
-				spi = (sa_index << 25) | 0x00000001;
+				/* Only SPI[28:25] are considered as SA[3:0] hence use.
+				 * rest from SPI[15:4].
+				 */
+				spi = ((sa_index & 0xF) << 25) | ((sa_index >> 4) << 4);
 				sa_hi = (spi >> 16) & 0xffff;
-				sa_lo = 0x0001;
+				sa_lo = 0x0000;
 				break;
 			default:
 				break;
