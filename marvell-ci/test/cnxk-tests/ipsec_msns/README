@@ -45,7 +45,7 @@ Perf mode:
 When "--perf" argument is given, the application runs in perf mode by creating one inbound SA per
 ALG for each port and then listening on the inbound inline traffic and forwarding successfully
 decrypted packets. To generate the pcap for matching SPI, ipsec_msns/gentraffic.py script can be
-used.
+used. pcap_gen.sh can be used to generate for 7 ports.
 
 PFC:
 ====
