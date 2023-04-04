@@ -67,16 +67,11 @@ function setup_libpcap()
 
 function setup_ipsec_mb()
 {
-	local patch1="0001-enable-cross-compilation.patch"
-	local patch2="0001-Fix-build-error-with-AES_BLOCK_SIZE.patch"
-
 	mkdir -p $BUILD_ROOT/ipsec_mb
 
 	pushd $BUILD_ROOT/ipsec_mb
-	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2022.05.25/ipsec-mb-SECLIB-IPSEC-2022.05.25.tar.gz
-	tar -zxvf ipsec-mb-SECLIB-IPSEC-2022.05.25.tar.gz --strip-components=1
-	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch1
-	patch -p1 < $PROJECT_ROOT/marvell-ci/patches/ipsec_mb/$patch2
+	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2023.3.21/ipsec-mb-SECLIB-IPSEC-2023.3.21.tar.gz
+	tar -zxvf ipsec-mb-SECLIB-IPSEC-2023.3.21.tar.gz --strip-components=1
 	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y
 	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
