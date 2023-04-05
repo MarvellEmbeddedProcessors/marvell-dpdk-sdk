@@ -88,10 +88,13 @@ cpt_ciph_type_set(roc_se_cipher_type type, struct roc_se_ctx *ctx, uint16_t key_
 		fc_type = ROC_SE_FC_GEN;
 		break;
 	case ROC_SE_ZUC_EEA3:
-		if (chained_op)
+		if (chained_op) {
+			if (unlikely(key_len != 16))
+				return -1;
 			fc_type = ROC_SE_PDCP_CHAIN;
-		else
+		} else {
 			fc_type = ROC_SE_PDCP;
+		}
 		break;
 	case ROC_SE_SNOW3G_UEA2:
 		if (unlikely(key_len != 16))
