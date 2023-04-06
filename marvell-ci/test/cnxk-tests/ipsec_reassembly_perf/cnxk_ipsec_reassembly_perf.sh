@@ -229,7 +229,7 @@ function pmd_tx_launch_for_inb()
 		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap1,infinite_rx=1 -a $LIF1" \
 		"--nb-cores=2 --no-flush-rx"
 	fi
-	testpmd_cmd $TPMD_TX_PREFIX "port start 0"
+	testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
 	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
 	testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl tx off 0"
 	testpmd_cmd $TPMD_TX_PREFIX "port start 0"
