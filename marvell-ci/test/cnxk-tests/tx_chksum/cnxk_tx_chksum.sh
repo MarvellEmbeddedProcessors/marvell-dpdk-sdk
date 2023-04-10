@@ -268,6 +268,13 @@ do
 
 	set -x
 	is_mseg=$((${tx_offloads[$i]} & 0x8000))
+	if [[ $((${tx_offloads[$i]} & 0x10001C)) != 1048604 ]]
+	then
+		l4_sw_csum=1;
+	else
+		l4_sw_csum=0;
+	fi
+
 	if [[ $need_mseg == 1 ]] && [[ $is_mseg == 0 ]]
 	then
 		echo "Skipped non mseg testcase"
@@ -276,6 +283,18 @@ do
 		((++i))
 	set +x
 		continue
+	else
+		if [[ $need_mseg == 1 ]] && [[ $is_mseg == 32768 ]]
+		then
+			if [[ $l4_sw_csum == 1 ]]
+			then
+				echo "Skipped mseg with tcp udp sw chksum testcase"
+				echo -e "############################################# " \
+					"END of ITERATION $i #####################\n"
+				((++i))
+				continue
+			fi
+		fi
 	fi
 	set +x
 
