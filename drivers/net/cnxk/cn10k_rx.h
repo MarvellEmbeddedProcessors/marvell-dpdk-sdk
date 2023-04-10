@@ -211,6 +211,9 @@ nix_sec_attach_frags(const struct cpt_parse_hdr_s *hdr,
 		/* Update dynamic field with userdata */
 		*rte_security_dynfield(mbuf) = (uint64_t)inb_priv->userdata;
 
+		/* Mark frag as get */
+		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
+
 		cnxk_ip_reassembly_dynfield(mbuf, off)->nb_frags =
 			hdr->w0.num_frags - 2;
 		cnxk_ip_reassembly_dynfield(mbuf, off)->next_frag = NULL;
@@ -239,6 +242,9 @@ nix_sec_attach_frags(const struct cpt_parse_hdr_s *hdr,
 		/* Update dynamic field with userdata */
 		*rte_security_dynfield(mbuf) = (uint64_t)inb_priv->userdata;
 
+		/* Mark frag as get */
+		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
+
 		cnxk_ip_reassembly_dynfield(mbuf, off)->nb_frags =
 			hdr->w0.num_frags - 3;
 		cnxk_ip_reassembly_dynfield(mbuf, off)->next_frag = NULL;
@@ -262,6 +268,9 @@ nix_sec_attach_frags(const struct cpt_parse_hdr_s *hdr,
 		mbuf->pkt_len = frag_size;
 		mbuf->ol_flags = ol_flags;
 		mbuf->next = NULL;
+
+		/* Mark frag as get */
+		RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
 
 		/* Update dynamic field with userdata */
 		*rte_security_dynfield(mbuf) = (uint64_t)inb_priv->userdata;
