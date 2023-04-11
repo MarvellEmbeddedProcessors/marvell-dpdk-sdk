@@ -104,6 +104,9 @@ struct thread_info {
 	bool launched;
 } __rte_cache_aligned;
 
+struct rte_mempool *shinfo_pool;
+struct rte_mbuf_ext_shared_info *s[MAX_PKT_BURST];
+
 static void
 print_event_stats(struct global_event_resources *rsrc, bool show_pps)
 {
@@ -246,8 +249,16 @@ initialize(struct port_info *pinfo, struct app_arg *arg)
 	pinfo->pinned_pool =
 		rte_pktmbuf_pool_create(name, nb_mbufs, MEMPOOL_CACHE_SIZE, 0,
 				MTU, rte_socket_id());
-	if (pinfo->pool == NULL)
-		EXIT("Cannot init mbuf pool\n");
+	if (pinfo->pinned_pool == NULL)
+		EXIT("Cannot init mbuf pinned_pool\n");
+
+	snprintf(name, sizeof(name), "mbuf_shinfo_pool_%u", portid);
+	shinfo_pool =
+		rte_mempool_create(name, nb_mbufs, sizeof(struct rte_mbuf_ext_shared_info),
+				   MEMPOOL_CACHE_SIZE, 0, NULL, NULL, NULL, NULL,
+				   SOCKET_ID_ANY, 0);
+	if (shinfo_pool == NULL)
+		EXIT("Cannot init mbuf shinfo_pool\n");
 
 	NOTICE("Initializing port %u... ", portid);
 
@@ -351,6 +362,8 @@ finalize(struct port_info *pinfo)
 
 	if (pinfo->pinned_pool)
 		rte_mempool_free(pinfo->pinned_pool);
+	if (shinfo_pool)
+		rte_mempool_free(shinfo_pool);
 }
 
 static void
@@ -365,7 +378,7 @@ free_cb_compl(void *addr, void *opaque)
 {
 	struct rte_mbuf *m = (struct rte_mbuf *)addr;
 	rte_pktmbuf_free(m);
-	RTE_SET_USED(opaque);
+	rte_mempool_put(shinfo_pool, opaque);
 }
 
 static void
@@ -380,7 +393,7 @@ static void
 init_shinfo_compl(struct rte_mbuf_ext_shared_info *s)
 {
 	s->free_cb = free_cb_compl;
-	s->fcb_opaque = NULL;
+	s->fcb_opaque = s;
 	rte_mbuf_ext_refcnt_set(s, 1);
 }
 
@@ -620,7 +633,6 @@ free_usrbuf:
 static int
 launch_lcore_tx_perf_compl(void *args)
 {
-	struct rte_mbuf_ext_shared_info s[MAX_PKT_BURST];
 	unsigned int lcore, j, portid, qid;
 	struct rte_mbuf *m[MAX_PKT_BURST];
 	struct rte_mbuf *pinned_m[MAX_PKT_BURST];
@@ -640,7 +652,7 @@ launch_lcore_tx_perf_compl(void *args)
 	fflush(stdout);
 	NOTICE("\nWARNING: Please use tx_compl_ena=1 as devargs to support");
 	NOTICE("\n         transmit completion else completion is invoked");
-	NOTICE("\n         before packet is actually transmitted");
+	NOTICE("\n         before packet is actually transmitted\n");
 	fflush(stdout);
 
 	while (keep_running) {
@@ -654,12 +666,15 @@ launch_lcore_tx_perf_compl(void *args)
 			break;
 		}
 
+		if (rte_mempool_get_bulk(shinfo_pool, (void **)s, MAX_PKT_BURST) != 0)
+			ERROR("Failed to allocate shinfo\n");
+
 		/* Attach the user memory to the segments */
 		for (j = 0; j < MAX_PKT_BURST; j++) {
-			init_shinfo_compl(&s[j]);
+			init_shinfo_compl(s[j]);
 			rte_pktmbuf_attach_extbuf(
 				m[j], pinned_m[j], (uint64_t)pinned_m[j],
-				sizeof(struct rte_mbuf), &s[j]);
+				sizeof(struct rte_mbuf), s[j]);
 			m[j]->data_len = sizeof(struct rte_mbuf);
 			m[j]->data_off = 0;
 			m[j]->next = NULL;
