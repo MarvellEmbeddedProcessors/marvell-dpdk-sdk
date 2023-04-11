@@ -1,0 +1,29 @@
+From e2e8703463f6f388076d340a7f7229332a35e709 Mon Sep 17 00:00:00 2001
+From: Ashwin Sekhar T K <asekhar@marvell.com>
+Date: Thu, 21 Jul 2022 10:56:44 +0530
+Subject: [PATCH] Fix build error with AES_BLOCK_SIZE
+
+fix build error with AES_BLOCK_SIZE
+
+Signed-off-by: Ashwin Sekhar T K <asekhar@marvell.com>
+---
+ lib/ipsec-mb.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lib/ipsec-mb.h b/lib/ipsec-mb.h
+index acdca5a..f8976f3 100644
+--- a/lib/ipsec-mb.h
++++ b/lib/ipsec-mb.h
+@@ -324,7 +324,9 @@ typedef enum {
+ #define DES_KEY_SCHED_SIZE      IMB_DES_KEY_SCHED_SIZE
+ #define DES_BLOCK_SIZE          IMB_DES_BLOCK_SIZE
+ 
++#ifndef AES_BLOCK_SIZE
+ #define AES_BLOCK_SIZE          IMB_AES_BLOCK_SIZE
++#endif
+ 
+ #define SHA1_DIGEST_SIZE_IN_BYTES   IMB_SHA1_DIGEST_SIZE_IN_BYTES
+ #define SHA224_DIGEST_SIZE_IN_BYTES IMB_SHA224_DIGEST_SIZE_IN_BYTES
+-- 
+2.25.1
+
