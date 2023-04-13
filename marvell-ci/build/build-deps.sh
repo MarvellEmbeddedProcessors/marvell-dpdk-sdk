@@ -118,7 +118,8 @@ function setup_libtmc()
 	fetch_dep https://github.com/PavanNikhilesh/libtmc/archive/refs/tags/pthread_timed_join.tar.gz
 	tar -zxvf pthread_timed_join.tar.gz --strip-components=1
 	./bootstrap
-	./configure --host=aarch64-marvell-linux-gnu \
+	CC=aarch64-marvell-linux-gnu-gcc ./configure \
+		--host=aarch64-marvell-linux-gnu \
 		--prefix=$INSTALL_ROOT
 	make -j${MAKE_J}
 	make install -j${MAKE_J}
