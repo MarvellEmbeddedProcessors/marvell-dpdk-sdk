@@ -56,7 +56,7 @@ cn10k_sso_tx_one(struct cn10k_sso_hws *ws, struct rte_mbuf *m, uint64_t *cmd, ui
 	ROC_LMT_BASE_ID_GET(lmt_addr, lmt_id);
 
 	if (flags & NIX_TX_OFFLOAD_MBUF_NOFF_F && txq->tx_compl.ena)
-		handle_tx_completion_pkts(txq, 1, 1);
+		handle_tx_completion_pkts(txq, 1);
 
 	cn10k_nix_tx_skeleton(txq, cmd, flags, 0);
 	/* Perform header writes before barrier
