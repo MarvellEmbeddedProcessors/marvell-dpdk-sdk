@@ -796,7 +796,7 @@ cn9k_sso_hws_event_tx(uint64_t base, struct rte_event *ev, uint64_t *cmd,
 	txq = cn9k_sso_hws_xtract_meta(m, txq_data);
 
 	if (flags & NIX_TX_OFFLOAD_MBUF_NOFF_F && txq->tx_compl.ena)
-		handle_tx_completion_pkts(txq, 1, 1);
+		handle_tx_completion_pkts(txq, 1);
 
 	if (cn9k_sso_sq_depth(txq) <= 0)
 		return 0;
