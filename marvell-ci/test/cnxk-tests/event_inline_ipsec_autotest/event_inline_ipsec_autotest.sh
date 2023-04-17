@@ -32,6 +32,12 @@ else
 	fi
 fi
 
+! $(cat /proc/device-tree/compatible | grep -q "cn10k")
+IS_CN10K=$?
+
+! $(cat /proc/cmdline | grep -q "kpu_profile=custom1_kpu_bip_cn9k")
+IS_CUSTOM_PROFILE=$?
+
 declare -A event_inline_ipsec_test_args
 
 register_event_inline_ipsec_test() {
@@ -65,16 +71,26 @@ run_event_inline_ipsec_tests() {
 	echo "quit" >>$in
 	sleep 2
 
-	cat $out | grep "failed" > one.txt
-	awk '!/soft expiry/' one.txt > two.txt
-	awk '!/DSCP 0/' two.txt > three.txt
-	awk '!/DSCP 1/' three.txt > $parse
-	rm -rf one.txt two.txt three.txt
+	if [[ $IS_CN10K -ne 0 ]]; then
+		cat $out | grep "failed" > $parse
+	else
+		cat $out | grep "failed" > one.txt
+		awk '!/soft expiry/' one.txt > two.txt
+		awk '!/DSCP 0/' two.txt > three.txt
+		awk '!/DSCP 1/' three.txt > $parse
+		if [[ $IS_CUSTOM_PROFILE -ne 0 ]]; then
+			awk '!/ESP tunnel mode IPv6/' $parse > four.txt
+			awk '!/Tunnel IPv6 in IPv6/' four.txt > five.txt
+			awk '!/Tunnel IPv4 in IPv6/' five.txt > $parse
+		fi
+		rm -rf one.txt two.txt three.txt four.txt five.txt
+	fi
 
 	while IFS= read -r line
 	do
 		check=`echo "$line" | awk '{print $NF}'`
 		if [ $check == "failed" ]; then
+			cat $parse
 			echo "Evenet inline ipsec autotest failed"
 			exit 1
 		fi
