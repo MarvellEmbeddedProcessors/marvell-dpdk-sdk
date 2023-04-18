@@ -220,10 +220,10 @@ sg_inst_prep(struct roc_se_fc_params *params, struct cpt_inst_s *inst, uint64_t 
 	uint32_t mac_len = 0, aad_len = 0;
 	struct roc_se_ctx *se_ctx;
 	uint32_t i, g_size_bytes;
+	int zsk_flags, ret = 0;
 	uint64_t *offset_vaddr;
 	uint32_t s_size_bytes;
 	uint8_t *in_buffer;
-	int zsk_flags;
 	uint32_t size;
 	uint8_t *iv_d;
 
@@ -390,8 +390,13 @@ sg_inst_prep(struct roc_se_fc_params *params, struct cpt_inst_s *inst, uint64_t 
 	/* This is DPTR len in case of SG mode */
 	inst->w4.s.dlen = size;
 
+	if (unlikely(size > ROC_SG_MAX_DLEN_SIZE)) {
+		plt_dp_err("Exceeds max supported components. Reduce segments");
+		ret = -1;
+	}
+
 	inst->dptr = (uint64_t)in_buffer;
-	return 0;
+	return ret;
 }
 
 static __rte_always_inline int
@@ -404,12 +409,13 @@ sg2_inst_prep(struct roc_se_fc_params *params, struct cpt_inst_s *inst, uint64_t
 	void *m_vaddr = params->meta_buf.vaddr;
 	struct roc_se_buf_ptr *aad_buf = NULL;
 	uint32_t mac_len = 0, aad_len = 0;
+	uint16_t scatter_sz, gather_sz;
 	union cpt_inst_w5 cpt_inst_w5;
 	union cpt_inst_w6 cpt_inst_w6;
 	struct roc_se_ctx *se_ctx;
 	uint32_t i, g_size_bytes;
 	uint64_t *offset_vaddr;
-	int zsk_flags;
+	int zsk_flags, ret = 0;
 	uint32_t size;
 	uint8_t *iv_d;
 
@@ -429,6 +435,9 @@ sg2_inst_prep(struct roc_se_fc_params *params, struct cpt_inst_s *inst, uint64_t
 	m_vaddr = (uint8_t *)m_vaddr + ROC_SE_OFF_CTRL_LEN + RTE_ALIGN_CEIL(iv_len, 8);
 
 	inst->w4.s.opcode_major |= (uint64_t)ROC_DMA_MODE_SG;
+
+	/* This is DPTR len in case of SG mode */
+	inst->w4.s.dlen = inputlen + ROC_SE_OFF_CTRL_LEN;
 
 	/* iv offset is 0 */
 	*offset_vaddr = offset_ctrl;
@@ -500,9 +509,9 @@ sg2_inst_prep(struct roc_se_fc_params *params, struct cpt_inst_s *inst, uint64_t
 		}
 	}
 
-	cpt_inst_w5.s.gather_sz = ((i + 2) / 3);
+	gather_sz = (i + 2) / 3;
+	g_size_bytes = gather_sz * sizeof(struct roc_sg2list_comp);
 
-	g_size_bytes = ((i + 2) / 3) * sizeof(struct roc_sg2list_comp);
 	/*
 	 * Output Scatter List
 	 */
@@ -568,17 +577,23 @@ sg2_inst_prep(struct roc_se_fc_params *params, struct cpt_inst_s *inst, uint64_t
 		}
 	}
 
-	cpt_inst_w6.s.scatter_sz = ((i + 2) / 3);
+	scatter_sz = (i + 2) / 3;
 
-	/* This is DPTR len in case of SG mode */
-	inst->w4.s.dlen = inputlen + ROC_SE_OFF_CTRL_LEN;
+	cpt_inst_w5.s.gather_sz = gather_sz;
+	cpt_inst_w6.s.scatter_sz = scatter_sz;
 
 	cpt_inst_w5.s.dptr = (uint64_t)gather_comp;
 	cpt_inst_w6.s.rptr = (uint64_t)scatter_comp;
 
 	inst->w5.u64 = cpt_inst_w5.u64;
 	inst->w6.u64 = cpt_inst_w6.u64;
-	return 0;
+
+	if (unlikely((scatter_sz >> 4) || (gather_sz >> 4))) {
+		plt_dp_err("Exceeds max supported components. Reduce segments");
+		ret = -1;
+	}
+
+	return ret;
 }
 
 static __rte_always_inline int
@@ -594,6 +609,7 @@ cpt_digest_gen_sg_ver1_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_pa
 	struct roc_se_ctx *ctx;
 	uint8_t *in_buffer;
 	uint32_t size, i;
+	int ret = 0;
 
 	ctx = params->ctx;
 
@@ -687,22 +703,27 @@ cpt_digest_gen_sg_ver1_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_pa
 
 	size = g_size_bytes + s_size_bytes + ROC_SG_LIST_HDR_SIZE;
 
+	if (unlikely(size > ROC_SG_MAX_DLEN_SIZE)) {
+		plt_dp_err("Exceeds max supported components. Reduce segments");
+		ret = -1;
+	}
+
 	/* This is DPTR len in case of SG mode */
 	cpt_inst_w4.s.dlen = size;
 
 	inst->dptr = (uint64_t)in_buffer;
 	inst->w4.u64 = cpt_inst_w4.u64;
 
-	return 0;
+	return ret;
 }
 
 static __rte_always_inline int
 cpt_digest_gen_sg_ver2_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_params *params,
 			    struct cpt_inst_s *inst)
 {
+	uint16_t data_len, mac_len, key_len, scatter_sz, gather_sz;
 	struct roc_sg2list_comp *gather_comp, *scatter_comp;
 	void *m_vaddr = params->meta_buf.vaddr;
-	uint16_t data_len, mac_len, key_len;
 	union cpt_inst_w4 cpt_inst_w4;
 	union cpt_inst_w5 cpt_inst_w5;
 	union cpt_inst_w6 cpt_inst_w6;
@@ -710,6 +731,7 @@ cpt_digest_gen_sg_ver2_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_pa
 	struct roc_se_ctx *ctx;
 	uint32_t g_size_bytes;
 	uint32_t size, i;
+	int ret = 0;
 
 	ctx = params->ctx;
 
@@ -763,9 +785,9 @@ cpt_digest_gen_sg_ver2_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_pa
 		plt_dp_err("Insufficient dst IOV size, short by %dB", size);
 		return -1;
 	}
-	cpt_inst_w5.s.gather_sz = ((i + 2) / 3);
 
-	g_size_bytes = ((i + 2) / 3) * sizeof(struct roc_sg2list_comp);
+	gather_sz = (i + 2) / 3;
+	g_size_bytes = gather_sz * sizeof(struct roc_sg2list_comp);
 
 	/*
 	 * Output Gather list
@@ -792,7 +814,10 @@ cpt_digest_gen_sg_ver2_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_pa
 		}
 	}
 
-	cpt_inst_w6.s.scatter_sz = ((i + 2) / 3);
+	scatter_sz = (i + 2) / 3;
+
+	cpt_inst_w5.s.gather_sz = gather_sz;
+	cpt_inst_w6.s.scatter_sz = scatter_sz;
 
 	cpt_inst_w5.s.dptr = (uint64_t)gather_comp;
 	cpt_inst_w6.s.rptr = (uint64_t)scatter_comp;
@@ -802,7 +827,12 @@ cpt_digest_gen_sg_ver2_prep(uint32_t flags, uint64_t d_lens, struct roc_se_fc_pa
 
 	inst->w4.u64 = cpt_inst_w4.u64;
 
-	return 0;
+	if (unlikely((scatter_sz >> 4) || (gather_sz >> 4))) {
+		plt_dp_err("Exceeds max supported components. Reduce segments");
+		ret = -1;
+	}
+
+	return ret;
 }
 
 static inline int
@@ -819,6 +849,7 @@ pdcp_chain_sg1_prep(struct roc_se_fc_params *params, struct roc_se_ctx *cpt_ctx,
 	uint8_t *iv_d, *in_buffer;
 	uint64_t *offset_vaddr;
 	uint32_t size;
+	int ret = 0;
 
 	/* save space for IV */
 	offset_vaddr = m_vaddr;
@@ -899,13 +930,18 @@ pdcp_chain_sg1_prep(struct roc_se_fc_params *params, struct roc_se_ctx *cpt_ctx,
 
 	size = g_size_bytes + s_size_bytes + ROC_SG_LIST_HDR_SIZE;
 
+	if (unlikely(size > ROC_SG_MAX_DLEN_SIZE)) {
+		plt_dp_err("Exceeds max supported components. Reduce segments");
+		ret = -1;
+	}
+
 	/* This is DPTR len in case of SG mode */
 	w4.s.dlen = size;
 	inst->w4.u64 = w4.u64;
 
 	inst->dptr = (uint64_t)in_buffer;
 
-	return 0;
+	return ret;
 }
 
 static inline int
@@ -917,6 +953,7 @@ pdcp_chain_sg2_prep(struct roc_se_fc_params *params, struct roc_se_ctx *cpt_ctx,
 {
 	struct roc_sg2list_comp *gather_comp, *scatter_comp;
 	void *m_vaddr = params->meta_buf.vaddr;
+	uint16_t scatter_sz, gather_sz;
 	const uint32_t mac_len = 4;
 	uint32_t i, g_size_bytes;
 	uint64_t *offset_vaddr;
@@ -924,6 +961,7 @@ pdcp_chain_sg2_prep(struct roc_se_fc_params *params, struct roc_se_ctx *cpt_ctx,
 	union cpt_inst_w6 w6;
 	uint8_t *iv_d;
 	uint32_t size;
+	int ret = 0;
 
 	/* save space for IV */
 	offset_vaddr = m_vaddr;
@@ -963,9 +1001,9 @@ pdcp_chain_sg2_prep(struct roc_se_fc_params *params, struct roc_se_ctx *cpt_ctx,
 			return -1;
 		}
 	}
-	w5.s.gather_sz = ((i + 2) / 3);
-	w5.s.dptr = (uint64_t)gather_comp;
-	g_size_bytes = ((i + 2) / 3) * sizeof(struct roc_sg2list_comp);
+
+	gather_sz = (i + 2) / 3;
+	g_size_bytes = gather_sz * sizeof(struct roc_sg2list_comp);
 
 	/*
 	 * Output Scatter List
@@ -996,14 +1034,24 @@ pdcp_chain_sg2_prep(struct roc_se_fc_params *params, struct roc_se_ctx *cpt_ctx,
 		}
 	}
 
-	w6.s.scatter_sz = ((i + 2) / 3);
+	scatter_sz = (i + 2) / 3;
+
+	w5.s.gather_sz = gather_sz;
+	w6.s.scatter_sz = scatter_sz;
+
+	w5.s.dptr = (uint64_t)gather_comp;
 	w6.s.rptr = (uint64_t)scatter_comp;
 
 	inst->w4.u64 = w4.u64;
 	inst->w5.u64 = w5.u64;
 	inst->w6.u64 = w6.u64;
 
-	return 0;
+	if (unlikely((scatter_sz >> 4) || (gather_sz >> 4))) {
+		plt_dp_err("Exceeds max supported components. Reduce segments");
+		ret = -1;
+	}
+
+	return ret;
 }
 
 static __rte_always_inline int
