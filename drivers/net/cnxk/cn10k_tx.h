@@ -102,21 +102,21 @@ cn10k_nix_tx_mbuf_validate(struct rte_mbuf *m, const uint32_t flags)
 }
 
 static __plt_always_inline void
-cn10k_nix_vwqe_wait_fc(struct cn10k_eth_txq *txq, int64_t req)
+cn10k_nix_vwqe_wait_fc(struct cn10k_eth_txq *txq, uint16_t req)
 {
 	int64_t cached, refill;
-	int16_t pkts;
+	int64_t pkts;
 
 retry:
 #ifdef RTE_ARCH_ARM64
 
 	asm volatile(PLT_CPU_FEATURE_PREAMBLE
-		     "		ldxrh %w[pkts], [%[addr]]		\n"
-		     "		tbz %w[pkts], 15, .Ldne%=		\n"
+		     "		ldxr %[pkts], [%[addr]]			\n"
+		     "		tbz %[pkts], 63, .Ldne%=		\n"
 		     "		sevl					\n"
 		     ".Lrty%=:	wfe					\n"
-		     "		ldxrh %w[pkts], [%[addr]]		\n"
-		     "		tbnz %w[pkts], 15, .Lrty%=		\n"
+		     "		ldxr %[pkts], [%[addr]]			\n"
+		     "		tbnz %[pkts], 63, .Lrty%=		\n"
 		     ".Ldne%=:						\n"
 		     : [pkts] "=&r"(pkts)
 		     : [addr] "r"(&txq->fc_cache_pkts)
@@ -128,39 +128,46 @@ retry:
 #endif
 	cached = __atomic_sub_fetch(&txq->fc_cache_pkts, req, __ATOMIC_ACQUIRE);
 	/* Check if there is enough space, else update and retry. */
-	if (cached < 0) {
-		/* Check if we have space else retry. */
+	if (cached >= 0)
+		return;
+
+	/* Check if we have space else retry. */
 #ifdef RTE_ARCH_ARM64
-		asm volatile(PLT_CPU_FEATURE_PREAMBLE
-			     "		ldrsh %[adj], [%[adj_addr]]	\n"
-			     "		ldxr %[refill], [%[addr]]	\n"
-			     "		sub %[refill], %[adj], %[refill]\n"
-			     "		cmp %[refill], #0x0		\n"
-			     "		b.gt .Ldne%=			\n"
-			     "		sevl				\n"
-			     ".Lrty%=:	wfe				\n"
-			     "		ldxr %[refill], [%[addr]]	\n"
-			     "		sub %[refill], %[adj], %[refill]\n"
-			     "		cmp %[refill], #0x0		\n"
-			     "		b.le .Lrty%=			\n"
-			     ".Ldne%=:					\n"
-			     : [refill] "=&r"(refill), [adj] "=&r"(pkts)
-			     : [addr] "r"(txq->fc_mem),
-			       [adj_addr] "r"(&txq->nb_sqb_bufs_adj)
-			     : "memory");
+	int64_t val;
+
+	asm volatile(PLT_CPU_FEATURE_PREAMBLE
+		     "		ldxr %[val], [%[addr]]			\n"
+		     "		sub %[val], %[adj], %[val]		\n"
+		     "		lsl %[refill], %[val], %[shft]		\n"
+		     "		sub %[refill], %[refill], %[val]	\n"
+		     "		sub %[refill], %[refill], %[sub]	\n"
+		     "		cmp %[refill], #0x0			\n"
+		     "		b.ge .Ldne%=				\n"
+		     "		sevl					\n"
+		     ".Lrty%=:	wfe					\n"
+		     "		ldxr %[val], [%[addr]]			\n"
+		     "		sub %[val], %[adj], %[val]		\n"
+		     "		lsl %[refill], %[val], %[shft]		\n"
+		     "		sub %[refill], %[refill], %[val]	\n"
+		     "		sub %[refill], %[refill], %[sub]	\n"
+		     "		cmp %[refill], #0x0			\n"
+		     "		b.lt .Lrty%=				\n"
+		     ".Ldne%=:						\n"
+		     : [refill] "=&r"(refill), [val] "=&r" (val)
+		     : [addr] "r"(txq->fc_mem), [adj] "r"(txq->nb_sqb_bufs_adj),
+		       [shft] "r"(txq->sqes_per_sqb_log2), [sub] "r"(req)
+		     : "memory");
 #else
-		do {
-			refill = (txq->nb_sqb_bufs_adj -
-				  __atomic_load_n(txq->fc_mem,
-						  __ATOMIC_RELAXED));
-		} while (refill <= 0);
-#endif
+	do {
+		refill = (txq->nb_sqb_bufs_adj - __atomic_load_n(txq->fc_mem, __ATOMIC_RELAXED));
 		refill = (refill << txq->sqes_per_sqb_log2) - refill;
-		__atomic_compare_exchange(&txq->fc_cache_pkts, &cached, &refill,
-					  0, __ATOMIC_RELEASE,
-					  __ATOMIC_RELAXED);
+		refill -= req;
+	} while (refill < 0);
+#endif
+	if (!__atomic_compare_exchange(&txq->fc_cache_pkts, &cached, &refill,
+				  0, __ATOMIC_RELEASE,
+				  __ATOMIC_RELAXED))
 		goto retry;
-	}
 }
 
 /* Function to determine no of tx subdesc required in case ext
@@ -349,7 +356,7 @@ cn10k_nix_sec_fc_wait(struct cn10k_eth_txq *txq, uint16_t nb_pkts)
 {
 	int32_t nb_desc, val, newval;
 	int32_t *fc_sw;
-	volatile uint64_t *fc;
+	uint64_t *fc;
 
 	/* Check if there is any CPT instruction to submit */
 	if (!nb_pkts)
@@ -357,21 +364,59 @@ cn10k_nix_sec_fc_wait(struct cn10k_eth_txq *txq, uint16_t nb_pkts)
 
 again:
 	fc_sw = txq->cpt_fc_sw;
-	val = __atomic_sub_fetch(fc_sw, nb_pkts, __ATOMIC_RELAXED);
+#ifdef RTE_ARCH_ARM64
+	asm volatile(PLT_CPU_FEATURE_PREAMBLE
+		     "		ldxr %w[pkts], [%[addr]]		\n"
+		     "		tbz %w[pkts], 31, .Ldne%=		\n"
+		     "		sevl					\n"
+		     ".Lrty%=:	wfe					\n"
+		     "		ldxr %w[pkts], [%[addr]]		\n"
+		     "		tbnz %w[pkts], 31, .Lrty%=		\n"
+		     ".Ldne%=:						\n"
+		     : [pkts] "=&r"(val)
+		     : [addr] "r"(fc_sw)
+		     : "memory");
+#else
+	/* Wait for primary core to refill FC. */
+	while (__atomic_load_n(fc_sw, __ATOMIC_RELAXED) < 0)
+		;
+#endif
+
+	val = __atomic_sub_fetch(fc_sw, nb_pkts, __ATOMIC_ACQUIRE);
 	if (likely(val >= 0))
 		return;
 
 	nb_desc = txq->cpt_desc;
 	fc = txq->cpt_fc;
+#ifdef RTE_ARCH_ARM64
+	asm volatile(PLT_CPU_FEATURE_PREAMBLE
+		     "		ldxr %[refill], [%[addr]]		\n"
+		     "		sub %[refill], %[desc], %[refill]	\n"
+		     "		sub %[refill], %[refill], %[pkts]	\n"
+		     "		cmp %[refill], #0x0			\n"
+		     "		b.ge .Ldne%=				\n"
+		     "		sevl					\n"
+		     ".Lrty%=:	wfe					\n"
+		     "		ldxr %[refill], [%[addr]]		\n"
+		     "		sub %[refill], %[desc], %[refill]	\n"
+		     "		sub %[refill], %[refill], %[pkts]	\n"
+		     "		cmp %[refill], #0x0			\n"
+		     "		b.lt .Lrty%=				\n"
+		     ".Ldne%=:						\n"
+		     : [refill] "=&r"(newval)
+		     : [addr] "r"(fc), [desc] "r"(nb_desc), [pkts] "r"(nb_pkts)
+		     : "memory");
+#else
 	while (true) {
 		newval = nb_desc - __atomic_load_n(fc, __ATOMIC_RELAXED);
 		newval -= nb_pkts;
 		if (newval >= 0)
 			break;
 	}
+#endif
 
-	if (!__atomic_compare_exchange_n(fc_sw, &val, newval, false,
-					 __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+	if (!__atomic_compare_exchange_n(fc_sw, &val, newval, false, __ATOMIC_RELEASE,
+					 __ATOMIC_RELAXED))
 		goto again;
 }
 
@@ -3088,10 +3133,16 @@ again:
 		wd.data[1] |= ((uint64_t)(lnum - 17)) << 12;
 		wd.data[1] |= (uint64_t)(lmt_id + 16);
 
-		if (flags & NIX_TX_VWQE_F)
-			cn10k_nix_vwqe_wait_fc(txq,
-				burst - (cn10k_nix_pkts_per_vec_brst(flags) >>
-					 1));
+		if (flags & NIX_TX_VWQE_F) {
+			if (flags & NIX_TX_MULTI_SEG_F) {
+				if (burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1) > 0)
+					cn10k_nix_vwqe_wait_fc(
+						txq,
+						burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1));
+			} else
+				cn10k_nix_vwqe_wait_fc(
+					txq, burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1));
+		}
 		/* STEOR1 */
 		roc_lmt_submit_steorl(wd.data[1], pa);
 	} else if (lnum) {

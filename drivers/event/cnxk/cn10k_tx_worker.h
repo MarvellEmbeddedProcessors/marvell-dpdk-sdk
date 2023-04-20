@@ -25,10 +25,9 @@ static __rte_always_inline void
 cn10k_sso_txq_fc_wait(const struct cn10k_eth_txq *txq)
 {
 #ifdef RTE_ARCH_ARM64
-	uint64_t adj, space;
+	uint64_t space;
 
 	asm volatile(PLT_CPU_FEATURE_PREAMBLE
-		     "		ldr %[adj], [%[adj_addr]]		\n"
 		     "		ldxr %[space], [%[addr]]		\n"
 		     "		cmp %[adj], %[space] 			\n"
 		     "		b.hi .Ldne%=				\n"
@@ -38,8 +37,8 @@ cn10k_sso_txq_fc_wait(const struct cn10k_eth_txq *txq)
 		     "		cmp %[adj], %[space]			\n"
 		     "		b.ls .Lrty%=				\n"
 		     ".Ldne%=:						\n"
-		     : [adj] "=&r"(adj), [space] "=&r"(space)
-		     : [adj_addr] "r"(&txq->nb_sqb_bufs_adj), [addr] "r"(txq->fc_mem)
+		     : [space] "=&r"(space)
+		     : [adj] "r"(txq->nb_sqb_bufs_adj), [addr] "r"(txq->fc_mem)
 		     : "memory");
 #else
 	while ((uint64_t)txq->nb_sqb_bufs_adj <=
