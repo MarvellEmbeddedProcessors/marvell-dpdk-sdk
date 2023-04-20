@@ -179,12 +179,35 @@ function macfltr_pkt_test_verify()
 		exit 1
 	fi
 }
+function check_port_status()
+{
+	# Wait for receiving all packets
+	start_ts=`date +%s`
+	start_ts=$((start_ts + 60))
+	link_status=""
+	while [[ "$link_status" != " up" ]]
+	do
+		testpmd_cmd $PRFX "show port info $1"
+		sleep 3
+		link_status=`testpmd_log $PRFX | tail -60 | \
+			grep "Link status: " | cut --complement -f 1 -d ":"`
+		ts=`date +%s`
+		if (( $ts > $start_ts ))
+		then
+			echo "Timeout port is down"
+			cleanup_interface
+			exit 1
+		fi
+		echo "link status $link_status"
+	done
+}
 
 function macfltr_pkt_test()
 {
 	testpmd_cmd_refresh $PRFX "port stop $1"
 	testpmd_cmd_refresh $PRFX "port config $1 loopback 1"
 	testpmd_cmd_refresh $PRFX "port start $1"
+	check_port_status $1
 
 	if [[ $3 == "mcast" ]]
 	then
@@ -231,6 +254,7 @@ function xmit_pkts()
 	testpmd_cmd_refresh $PRFX "port stop $1"
 	testpmd_cmd_refresh $PRFX "port config $1 loopback 1"
 	testpmd_cmd_refresh $PRFX "port start $1"
+	check_port_status $1
 	testpmd_cmd_refresh $PRFX "clear port stats all"
 	testpmd_cmd_refresh $PRFX "start"
 }
@@ -342,7 +366,7 @@ testpmd_cmd $PRFX "show port $MACFLTR_PORT_INDEX macs"
 sleep 1
 CNT=$(macfltr_mac_cnt)
 if [[ $CNT -eq $NUM_MAX_UCAST_MAC ]] || \
-	[[ $CNT -eq $(expr $NUM_MAX_UCAST_MAC + 1) ]]
+	[[ $CNT -eq $(expr $NUM_MAX_UCAST_MAC - 1) ]]
 then
 	echo "Total $CNT unicast MAC addresses add successful"
 else
