@@ -12873,6 +12873,13 @@ test_deq_callback_setup(void)
 	struct rte_cryptodev_cb *cb;
 	uint16_t qp_id = 0;
 
+	if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
+		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
+		return TEST_SKIPPED;
+
 	/* Stop the device in case it's started so it can be configured */
 	rte_cryptodev_stop(ts_params->valid_devs[0]);
 
