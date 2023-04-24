@@ -49,9 +49,9 @@ cores, RESULT
 ------------------------------------------------------------------------
 VECTOR_MODE (atomic queue) output in packets per second
 cores, RESULT
-1, 83.632
-8, 87.804
-16, 87.428
+1, 84.3
+8, 88.2
+16, 88.0
 
 ------------------------------------------------------------------------
 CRYPTO_ADAPTER_FWD (parallel queue) output in packets per second
