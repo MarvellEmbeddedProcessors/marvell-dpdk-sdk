@@ -2375,6 +2375,7 @@ test_pktmbuf_ext_shinfo_init_helper(struct rte_mempool *pktmbuf_pool)
 		GOTO_FAIL("%s: Bad packet length\n", __func__);
 
 	/* attach the same external buffer to the cloned mbuf */
+	clone->ol_flags = 0;
 	rte_pktmbuf_attach_extbuf(clone, ext_buf_addr, buf_iova, buf_len,
 			ret_shinfo);
 	if (clone->ol_flags != RTE_MBUF_F_EXTERNAL)
