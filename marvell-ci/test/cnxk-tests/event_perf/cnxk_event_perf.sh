@@ -12,7 +12,7 @@ IF1=${IF1:-0002:01:00.1}
 IF2=${IF2:-0002:01:00.2}
 SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
 TOLERANCE=${TOLERANCE:-5}
-MAX_RETRY_COUNT=${MAX_RETRY_COUNT:-10}
+MAX_RETRY_COUNT=${MAX_RETRY_COUNT:-3}
 GENERATOR_SCRIPT=${GENERATOR_SCRIPT:-cnxk_event_perf_gen.sh}
 TARGET_SSH_CMD=${TARGET_SSH_CMD:-"ssh -o LogLevel=ERROR -o ServerAliveInterval=30 \
 	-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"}
@@ -89,7 +89,12 @@ get_test_args()
 		CRYPTO_ADAPTER_FWD)
 			local req_cores=$((num_cores * 2))
 			local max_cores=$(($(grep -c ^processor /proc/cpuinfo) - 1))
-			((req_cores = req_cores>max_cores?max_cores:req_cores))
+
+			if ((num_cores * 2 > max_cores)); then
+				num_cores=$(( (max_cores + 1) / 2 ))
+				req_cores=$max_cores
+			fi
+
 			echo "-l 0-$req_cores -n 4 -a $CPT_DEV -a $SSO_DEV --" \
 				"--prod_type_cryptodev --crypto_adptr_mode 1 --nb_flows=100" \
 				"--nb_pkts=0 --test=perf_atq --stlist=${sched_mode:0:1}" \
@@ -300,17 +305,15 @@ run_event_perf_test()
 
 run_event_perf_regression()
 {
+	local return_code=0
 	# Test info in <test_name>\t<test_bin>\t<test_pattern> format
 	local test_info="
 	L2FWD_EVENT		dpdk-l2fwd-event	=*
 	L3FWD_EVENT		dpdk-l3fwd		L3FWD: entering lpm_event_loop_single on lcore [0-9]*
 	PERF_ATQ		dpdk-test-eventdev	0.000 mpps avg 0.000 mpps
-	PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
-	#FIXME: crypto adapter tests are not finishing on cn10k + dpdk-22.11-devel branch
-	if [[ $PLAT == cn9k ]]; then
-		test_info+="
-		CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
-	fi
+	PIPELINE_ATQ_TX_FIRST	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
+	CRYPTO_ADAPTER_FWD	dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps"
+
 	if [[ $PLAT == cn10k ]]; then
 		test_info+="
 		GW_MODE_NO_PREF		dpdk-test-eventdev	[0-9]*\.[0-9]* mpps avg [0-9]*\.[0-9]* mpps
@@ -333,11 +336,14 @@ run_event_perf_regression()
 			if [[ retry_count -gt 0 ]]; then
 				printf "Retry checking ${info[0]} numbers\n"
 			else
-				printf "${info[0]} regression check failed\n"
-				exit 1
+				printf "${info[0]} regression check failed\n\n"
+				return_code=1
+				break
 			fi
 		done
 	done <<< "$test_info"
+
+	return $return_code
 }
 
 run_event_perf_regression
