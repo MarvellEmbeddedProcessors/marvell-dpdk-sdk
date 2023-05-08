@@ -16,7 +16,7 @@
 static __rte_always_inline void
 cn10k_wqe_to_mbuf(uint64_t wqe, const uint64_t __mbuf, uint8_t port_id,
 		  const uint32_t tag, const uint32_t flags,
-		  const void *const lookup_mem, uintptr_t cpth)
+		  const void *const lookup_mem, uintptr_t cpth, uintptr_t sa_base)
 {
 	const uint64_t mbuf_init = 0x100010000ULL | RTE_PKTMBUF_HEADROOM |
 				   (flags & NIX_RX_OFFLOAD_TSTAMP_F ? 8 : 0);
@@ -24,7 +24,7 @@ cn10k_wqe_to_mbuf(uint64_t wqe, const uint64_t __mbuf, uint8_t port_id,
 
 	cn10k_nix_cqe_to_mbuf((struct nix_cqe_hdr_s *)wqe, tag,
 			      (struct rte_mbuf *)mbuf, lookup_mem,
-			      mbuf_init | ((uint64_t)port_id) << 48, cpth, flags);
+			      mbuf_init | ((uint64_t)port_id) << 48, cpth, sa_base, flags);
 }
 
 static void
@@ -136,7 +136,7 @@ cn10k_process_vwqe(uintptr_t vwqe, uint16_t port_id, const uint32_t flags, struc
 		}
 
 		cn10k_nix_cqe_to_mbuf(cqe, cqe->tag, mbuf, lookup_mem,
-				      mbuf_init, cpth, flags);
+				      mbuf_init, cpth, sa_base, flags);
 
 		if (flags & NIX_RX_OFFLOAD_TSTAMP_F)
 			cn10k_sso_process_tstamp((uint64_t)wqe[0],
@@ -159,6 +159,8 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 {
 	u64[0] = (u64[0] & (0x3ull << 32)) << 6 |
 		 (u64[0] & (0x3FFull << 36)) << 4 | (u64[0] & 0xffffffff);
+	uintptr_t sa_base = 0;
+
 	if (CNXK_EVENT_TYPE_FROM_TAG(u64[0]) == RTE_EVENT_TYPE_CRYPTODEV) {
 		u64[1] = cn10k_cpt_crypto_adapter_dequeue(u64[1]);
 	} else if (CNXK_EVENT_TYPE_FROM_TAG(u64[0]) == RTE_EVENT_TYPE_CRYPTODEV_VECTOR) {
@@ -183,7 +185,6 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 				0x100010000ULL | RTE_PKTMBUF_HEADROOM |
 				(flags & NIX_RX_OFFLOAD_TSTAMP_F ? 8 : 0);
 			struct rte_mbuf *m;
-			uintptr_t sa_base;
 			uint64_t iova = 0;
 			uint8_t loff = 0;
 			uint16_t d_off;
@@ -219,7 +220,7 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 
 		u64[0] = CNXK_CLR_SUB_EVENT(u64[0]);
 		cn10k_wqe_to_mbuf(u64[1], mbuf, port, u64[0] & 0xFFFFF, flags,
-				  ws->lookup_mem, cpth);
+				  ws->lookup_mem, cpth, sa_base);
 		if (flags & NIX_RX_OFFLOAD_TSTAMP_F)
 			cn10k_sso_process_tstamp(u64[1], mbuf,
 						 ws->tstamp[port]);
