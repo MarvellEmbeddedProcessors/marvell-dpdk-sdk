@@ -978,8 +978,8 @@ vf_flr_handle_msg(void *param, dev_intr_t *flr)
 			flr->bits[vf / max_bits] &= ~(BIT_ULL(vf % max_bits));
 
 			/* Signal FLR finish */
-			plt_write64(BIT_ULL(vf), dev->bar2 +
-				     RVU_PF_VFTRPENDX(vf / max_bits));
+			plt_write64(BIT_ULL(vf % max_bits),
+				    dev->bar2 + RVU_PF_VFTRPENDX(vf / max_bits));
 		}
 	}
 }
@@ -990,12 +990,15 @@ pf_vf_mbox_thread_main(void *arg)
 	struct dev *dev = arg;
 	bool is_flr, is_mbox;
 	dev_intr_t flr, intr;
-	int sz;
+	int sz, rc;
 
 	sz = sizeof(intr.bits[0]) * MAX_VFPF_DWORD_BITS;
 	pthread_mutex_lock(&dev->sync.mutex);
 	while (dev->sync.start_thread) {
-		pthread_cond_wait(&dev->sync.pfvf_msg_cond, &dev->sync.mutex);
+		do {
+			rc = pthread_cond_wait(&dev->sync.pfvf_msg_cond, &dev->sync.mutex);
+		} while (rc != 0);
+
 		if (!dev->sync.msg_avail) {
 			continue;
 		} else {
