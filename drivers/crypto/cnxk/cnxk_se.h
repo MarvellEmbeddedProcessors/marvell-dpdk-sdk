@@ -8,8 +8,6 @@
 
 #include <rte_cryptodev.h>
 
-#include "roc_model.h"
-
 #include "cnxk_cryptodev.h"
 #include "cnxk_cryptodev_ops.h"
 #include "cnxk_sg.h"
@@ -1823,10 +1821,6 @@ fill_sess_aead(struct rte_crypto_sym_xform *xform, struct cnxk_se_sess *sess)
 		aes_gcm = 1;
 		break;
 	case RTE_CRYPTO_AEAD_AES_CCM:
-		if (!roc_model_is_cn98xx()) {
-			plt_dp_err("AES CCM is not supported\n");
-			return -1;
-		}
 		enc_type = ROC_SE_AES_CCM;
 		cipher_key_len = 16;
 		aes_ccm = 1;
