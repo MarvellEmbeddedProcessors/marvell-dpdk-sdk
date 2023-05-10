@@ -256,12 +256,16 @@ struct otx_ep_droq_desc {
 #define OTX_EP_DROQ_DESC_SIZE	(sizeof(struct otx_ep_droq_desc))
 
 /* Receive Header, only present in NIC mode. */
-union otx_ep_rh {
-	uint64_t rh64;
+struct otx_ep_rh {
+	/* Reserved. */
+	uint64_t rsvd:48;
+
+	/* rx offload flags */
+	uint64_t rx_ol_flags:16;
 };
 
-#define OTX_EP_RH_SIZE (sizeof(union otx_ep_rh))
-#define OTX_EP_RH_SIZE_NIC (sizeof(union otx_ep_rh))
+#define OTX_EP_RH_SIZE_NIC (sizeof(struct otx_ep_rh))
+#define OTX_EP_RH_EXT_SIZE (sizeof(struct otx_ep_rh))
 #define OTX_EP_RH_SIZE_LOOP 0  /* Nothing in LOOP mode */
 
 /** Information about packet DMA'ed by OCTEON TX2.
@@ -275,12 +279,10 @@ struct otx_ep_droq_info {
 	uint64_t length;
 
 	/* The Output Receive Header, only present in NIC mode */
-	union otx_ep_rh rh;
+	struct otx_ep_rh rh;
 };
+
 #define OTX_EP_DROQ_INFO_SIZE_NIC	(sizeof(struct otx_ep_droq_info))
-#define OTX_EP_DROQ_INFO_SIZE_LOOP	(sizeof(struct otx_ep_droq_info) + \
-						OTX_EP_RH_SIZE_LOOP - \
-						OTX_EP_RH_SIZE_NIC)
 
 /* DROQ statistics. Each output queue has four stats fields. */
 struct otx_ep_droq_stats {
@@ -457,6 +459,17 @@ struct otx_ep_fn_list {
 	int (*disable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
 };
 
+struct otx_ep_fw_info {
+	/* pkind value to be used in every Tx hardware descriptor */
+	uint8_t pkind;
+	/* front size data */
+	uint8_t fsz;
+	/* supported rx offloads */
+	uint16_t rx_ol_flags;
+	/* supported tx offloads */
+	uint16_t tx_ol_flags;
+};
+
 /* OTX_EP EP VF device data structure */
 struct otx_ep_device {
 	/* PCI device pointer */
@@ -465,8 +478,6 @@ struct otx_ep_device {
 	uint16_t chip_id;
 	uint16_t pf_num;
 	uint16_t vf_num;
-
-	uint32_t pkind;
 
 	struct rte_eth_dev *eth_dev;
 
@@ -524,6 +535,14 @@ struct otx_ep_device {
 
 	/* Negotiated Mbox version */
 	uint32_t mbox_neg_ver;
+
+	/* firmware info */
+	struct otx_ep_fw_info fw_info;
+
+	/* Extended Response Header in packet data received from Hardware.
+	 * Includes metadata like checksum status.
+	 */
+	uint32_t rh_ext_size;
 };
 
 int otx_ep_setup_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no,

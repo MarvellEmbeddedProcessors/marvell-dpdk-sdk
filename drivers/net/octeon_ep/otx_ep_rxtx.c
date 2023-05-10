@@ -23,12 +23,6 @@
 #define DROQ_REFILL_THRESHOLD 16
 #define OTX2_SDP_REQUEST_ISM	(0x1ULL << 63)
 
-/* These arrays indexed by otx_ep_device->sdp_packet_mode */
-static uint8_t front_size[2] = {OTX2_EP_FSZ_NIC, OTX2_EP_FSZ_LOOP};
-static uint8_t rh_size[2] = {OTX_EP_RH_SIZE_NIC, OTX_EP_RH_SIZE_LOOP};
-static uint8_t droq_info_size[2] = {OTX_EP_DROQ_INFO_SIZE_NIC,
-				    OTX_EP_DROQ_INFO_SIZE_LOOP};
-
 static void
 otx_ep_dmazone_free(const struct rte_memzone *mz)
 {
@@ -569,7 +563,7 @@ otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 
 	/* ih invars */
 	iqcmd.ih.s.fsz = OTX_EP_FSZ;
-	iqcmd.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
+	iqcmd.ih.s.pkind = otx_ep->fw_info.pkind;
 
 	/* pki ih3 invars */
 	iqcmd.pki_ih3.s.w = 1;
@@ -710,8 +704,8 @@ otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 	iqcmd2.irh.u64 = 0;
 
 	/* ih invars */
-	iqcmd2.ih.s.fsz = front_size[otx_ep->sdp_packet_mode];
-	iqcmd2.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
+	iqcmd2.ih.s.fsz = otx_ep->fw_info.fsz;
+	iqcmd2.ih.s.pkind = otx_ep->fw_info.pkind;
 	/* irh invars, ignored in LOOP mode */
 	iqcmd2.irh.s.opcode = OTX_EP_NW_PKT_OP;
 
@@ -872,7 +866,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	int next_idx;
 	int info_size;
 
-	info_size = droq_info_size[otx_ep->sdp_packet_mode];
+	info_size = INFO_SIZE + otx_ep->rh_ext_size;
 	droq_pkt  = droq->recv_buf_list[droq->read_idx];
 	droq_pkt2  = droq->recv_buf_list[droq->read_idx];
 	info = rte_pktmbuf_mtod(droq_pkt, struct otx_ep_droq_info *);
@@ -906,7 +900,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	/* Deduce the actual data size */
 	total_pkt_len = info->length + INFO_SIZE;
 	if (total_pkt_len <= droq->buffer_size) {
-		info->length -=  rh_size[otx_ep->sdp_packet_mode];
+		info->length -=  otx_ep->rh_ext_size;
 		droq_pkt  = droq->recv_buf_list[droq->read_idx];
 		if (likely(droq_pkt != NULL)) {
 			droq_pkt->data_off += info_size;

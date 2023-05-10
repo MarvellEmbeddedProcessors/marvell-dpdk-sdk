@@ -36,13 +36,27 @@ static void
 otx_ep_interrupt_handler(void *param)
 {
 	struct otx_ep_device *otx_epvf = (struct otx_ep_device *)param;
+	union otx_ep_mbox_word *notif;
 	uint64_t reg_val;
+
 	if (otx_epvf) {
 		/* Clear Mbox interrupts */
 		reg_val = rte_read64((uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
 		rte_write64(reg_val, (uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
-		otx_ep_info("otx_epdev_interrupt_handler is called pf_num: %d vf_num: %d port_id: %d\n",
-		otx_epvf->pf_num, otx_epvf->vf_num, otx_epvf->port_id);
+		reg_val = otx2_read64((uint8_t *)otx_epvf->hw_addr + SDP_VF_R_MBOX_PF_VF_DATA(0));
+
+		notif = (union otx_ep_mbox_word *)&reg_val;
+		switch (notif->s_link_status.opcode) {
+		case OTX_EP_MBOX_NOTIF_LINK_STATUS:
+			if (notif->s_link_status.status)
+				otx_ep_dbg("LINK UP\n");
+			else
+				otx_ep_dbg("LINK DOWN\n");
+			break;
+		default:
+			otx_ep_err("Received unsupported notif %d\n", notif->s_link_status.opcode);
+			break;
+		}
 	} else {
 		otx_ep_err("otx_epdev_interrupt_handler is called with dev NULL\n");
 	}
@@ -704,33 +718,15 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 
 	if (otx_epdev_init(otx_epvf))
 		return -ENOMEM;
-	if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CN10KA_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CN10KB_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CNF10KA_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CNF10KB_EP_NET_VF) {
-		if (otx_epvf->sdp_packet_mode == SDP_PACKET_MODE_NIC) {
-			otx_epvf->pkind = SDP_OTX2_PKIND_FS24;
-			otx_ep_info("Using pkind %d for NIC packet mode.\n",
-				  otx_epvf->pkind);
-		} else {
-			otx_epvf->pkind = SDP_OTX2_PKIND_FS0;
-			otx_ep_info("Using pkind %d for LOOP packet mode.\n",
-				  otx_epvf->pkind);
-		}
-	} else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF) {
-		otx_epvf->pkind = SDP_PKIND;
-		otx_ep_info("Using pkind %d.\n", otx_epvf->pkind);
-	} else {
-		otx_ep_err("Invalid chip id\n");
+
+	if (otx_ep_mbox_version_check(eth_dev))
 		return -EINVAL;
-	}
-	if (otx_ep_mbox_version_check(eth_dev)) {
+
+	if (otx_ep_mbox_get_fw_info(eth_dev))
 		return -EINVAL;
-	}
+	if (otx_epvf->fw_info.rx_ol_flags)
+		otx_epvf->rh_ext_size = OTX_EP_RH_EXT_SIZE;
+
 	if (otx_ep_eth_dev_query_set_vf_mac(eth_dev,
 				(struct rte_ether_addr *)&vf_mac_addr)) {
 		otx_ep_err("set mac addr failed\n");
