@@ -52,6 +52,7 @@ struct cn10k_eth_txq {
 	uint16_t sq_desc;
 	uint16_t sqes_per_sqb_log2;
 	int16_t nb_sqb_bufs_adj;
+	uint8_t flag;
 	rte_iova_t cpt_io_addr;
 	uint64_t sa_base;
 	uint64_t *cpt_fc;
