@@ -1289,6 +1289,9 @@ struct rte_security_capability_idx {
 		struct {
 			enum rte_security_docsis_direction direction;
 		} docsis;
+		struct {
+			enum rte_security_macsec_alg alg;
+		} macsec;
 	};
 };
 
