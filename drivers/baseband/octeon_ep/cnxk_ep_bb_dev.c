@@ -3,6 +3,7 @@
  */
 
 #include <string.h>
+#include <time.h>
 
 #include <rte_malloc.h>
 #include <rte_kvargs.h>
@@ -14,7 +15,6 @@
 
 #include "cnxk_ep_bb_common.h"
 #include "cnxk_ep_bb_vf.h"
-#include "cnxk_ep_bb_msg.h"
 
 RTE_LOG_REGISTER_DEFAULT(bbdev_octeon_ep_logtype, NOTICE);
 
@@ -95,64 +95,141 @@ exit:
 }
 #endif
 
-/* Get device info */
 static void
-info_get(struct rte_bbdev *bbdev, struct rte_bbdev_driver_info *dev_info)
+add_to_mbufq(struct rte_mbuf **mbufs, int num, struct mbufq_s *mbufq)
 {
-	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+	struct rte_mbuf *first, *last;
+	int i;
 
-	/* TODO_NOW: get similar capabilities for octeon bbdev */
-	static const struct rte_bbdev_op_cap bbdev_capabilities[] = {
-/* TODO_CAPA: #ifdef RTE_BBDEV_SDK_AVX2 */
-		{
-			.type = RTE_BBDEV_OP_TURBO_DEC,
-			.cap.turbo_dec = {
-				.capability_flags =
-					RTE_BBDEV_TURBO_SUBBLOCK_DEINTERLEAVE |
-					RTE_BBDEV_TURBO_POS_LLR_1_BIT_IN |
-					RTE_BBDEV_TURBO_NEG_LLR_1_BIT_IN |
-					RTE_BBDEV_TURBO_CRC_TYPE_24B |
-					RTE_BBDEV_TURBO_DEC_TB_CRC_24B_KEEP |
-					RTE_BBDEV_TURBO_EARLY_TERMINATION,
-				.max_llr_modulus = 16,
-				.num_buffers_src =
-						RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
-				.num_buffers_hard_out =
-						RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
-				.num_buffers_soft_out = 0,
-			}
-		},
-		{
-			.type   = RTE_BBDEV_OP_TURBO_ENC,
-			.cap.turbo_enc = {
-				.capability_flags =
-						RTE_BBDEV_TURBO_CRC_24B_ATTACH |
-						RTE_BBDEV_TURBO_CRC_24A_ATTACH |
-						RTE_BBDEV_TURBO_RATE_MATCH |
-						RTE_BBDEV_TURBO_RV_INDEX_BYPASS,
-				.num_buffers_src =
-						RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
-				.num_buffers_dst =
-						RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
-			}
-		},
-/* TODO:CAPA #ifdef RTE_BBDEV_SDK_AVX512 */
-		{
-			.type   = RTE_BBDEV_OP_LDPC_ENC,
-			.cap.ldpc_enc = {
-				.capability_flags =
-						RTE_BBDEV_LDPC_RATE_MATCH |
-						RTE_BBDEV_LDPC_CRC_16_ATTACH |
-						RTE_BBDEV_LDPC_CRC_24A_ATTACH |
-						RTE_BBDEV_LDPC_ENC_SCATTER_GATHER |
-						RTE_BBDEV_LDPC_CRC_24B_ATTACH,
-				.num_buffers_src =
-						RTE_BBDEV_LDPC_MAX_CODE_BLOCKS,
-				.num_buffers_dst =
-						RTE_BBDEV_LDPC_MAX_CODE_BLOCKS,
-			}
-		},
-		{
+	first = last = mbufs[0];
+	for (i = 1; i < num; ++i) {
+		last->next = mbufs[i];
+		last = mbufs[i];
+	}
+	last->next = NULL;
+	if (mbufq->tail)
+		mbufq->tail->next = first;
+	else
+		mbufq->head = first;
+	mbufq->tail = last;
+}
+
+/* Enqueue a config command and get response */
+static void
+send_cfg_get_resp(struct rte_bbdev *bbdev, enum oct_bbdev_cmd_type cmd, struct rte_mbuf **pmbuf)
+{
+	int i, q_no = 0;
+	struct rte_mbuf *mbuf = *pmbuf, *mbuf_rx;
+	struct timespec delay = { .tv_sec = 0, .tv_nsec = 100 };
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+	struct oct_bbdev_op_msg *msg = MBUF_TO_OCT_MSG(mbuf), *msg_rx;
+	void *q_priv;
+
+	/* Fill info common to all commands */
+	mbuf->data_len = sizeof(struct oct_bbdev_op_msg);
+	msg->vf_id = cnxk_ep_bb_vf->vf_num;
+	msg->q_no = q_no;
+	msg->tpid = rte_cpu_to_be_16(0x8100);
+	msg->msg_type = cmd;
+
+	/* Configure/start queue 0 if not already done */
+	q_priv = chk_q0_config_start(bbdev);
+	if (q_priv == NULL) {
+		msg->status = -OTX_BBDEV_CMD_FAIL_Q0_SETUP;
+		return;
+	}
+	/* Enqueue to device */
+	if (cnxk_ep_bb_enqueue_ops(q_priv, &mbuf, 1) == 0) {
+		msg->status = -OTX_BBDEV_CMD_FAIL_ENQUE;
+		return;
+	}
+	/* Dequeue response; poll for 0.1 sec */
+	for (i = 1000000; i > 0; --i) {
+		/* Receive a response */
+		nanosleep(&delay, NULL);
+		if (cnxk_ep_bb_dequeue_ops(q_priv, &mbuf_rx, 1)) {
+			msg_rx = MBUF_TO_OCT_MSG(mbuf_rx);
+			/* Check if it is expected config response */
+			if (msg_rx->msg_type == cmd)
+				break;
+			if (msg_rx->msg_type >= OTX_BBDEV_CMD_INFO_GET) {
+				/* Unexpected config; drop with error log */
+				rte_bbdev_log(ERR, "Drop response with unexp config cmd, "
+					"BBDev %u exp cmd %u got %u", bbdev->data->dev_id,
+					cmd, msg_rx->msg_type);
+				rte_pktmbuf_free(mbuf_rx);
+			} else
+				/* OP response; save for later dequeue processing */
+				add_to_mbufq(&mbuf_rx, 1,
+					&cnxk_ep_bb_vf->mbuf_queues[q_no].sv_mbufs);
+		}
+	}
+	/* Restore queue 0 to its previous state */
+	restore_q0_config_start(bbdev);
+	/* Check for timeout */
+	if (i == 0) {
+		msg->status = -OTX_BBDEV_CMD_FAIL_TMOUT;
+		return;
+	}
+	/* Replace input mbuf with response mbuf */
+	rte_pktmbuf_free(mbuf);
+	*pmbuf = mbuf_rx;
+}
+
+/* Parameters expected to be specified by device */
+/* TODO: remove this call if target supplies these always */
+static void
+default_info_get(struct oct_bbdev_info *bbdev_info)
+{
+	struct rte_bbdev_driver_info *rte_info = &bbdev_info->rte_info;
+	struct rte_bbdev_op_cap turbo_dec_cap = {
+		.type = RTE_BBDEV_OP_TURBO_DEC,
+		.cap.turbo_dec = {
+			.capability_flags =
+				RTE_BBDEV_TURBO_SUBBLOCK_DEINTERLEAVE |
+				RTE_BBDEV_TURBO_POS_LLR_1_BIT_IN |
+				RTE_BBDEV_TURBO_NEG_LLR_1_BIT_IN |
+				RTE_BBDEV_TURBO_CRC_TYPE_24B |
+				RTE_BBDEV_TURBO_DEC_TB_CRC_24B_KEEP |
+				RTE_BBDEV_TURBO_EARLY_TERMINATION,
+			.max_llr_modulus = 16,
+			.num_buffers_src =
+					RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
+			.num_buffers_hard_out =
+					RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
+			.num_buffers_soft_out = 0,
+		}
+	};
+	struct rte_bbdev_op_cap turbo_enc_cap = {
+		.type   = RTE_BBDEV_OP_TURBO_ENC,
+		.cap.turbo_enc = {
+			.capability_flags =
+					RTE_BBDEV_TURBO_CRC_24B_ATTACH |
+					RTE_BBDEV_TURBO_CRC_24A_ATTACH |
+					RTE_BBDEV_TURBO_RATE_MATCH |
+					RTE_BBDEV_TURBO_RV_INDEX_BYPASS,
+			.num_buffers_src =
+					RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
+			.num_buffers_dst =
+					RTE_BBDEV_TURBO_MAX_CODE_BLOCKS,
+		}
+	};
+	struct rte_bbdev_op_cap ldpc_enc_cap = {
+		.type   = RTE_BBDEV_OP_LDPC_ENC,
+		.cap.ldpc_enc = {
+			.capability_flags =
+					RTE_BBDEV_LDPC_RATE_MATCH |
+					RTE_BBDEV_LDPC_CRC_16_ATTACH |
+					RTE_BBDEV_LDPC_CRC_24A_ATTACH |
+					RTE_BBDEV_LDPC_ENC_SCATTER_GATHER |
+					RTE_BBDEV_LDPC_CRC_24B_ATTACH,
+			.num_buffers_src =
+					RTE_BBDEV_LDPC_MAX_CODE_BLOCKS,
+			.num_buffers_dst =
+					RTE_BBDEV_LDPC_MAX_CODE_BLOCKS,
+		}
+	};
+	struct rte_bbdev_op_cap ldpc_dec_cap = {
 		.type   = RTE_BBDEV_OP_LDPC_DEC,
 		.cap.ldpc_dec = {
 			.capability_flags =
@@ -172,41 +249,95 @@ info_get(struct rte_bbdev *bbdev, struct rte_bbdev_driver_info *dev_info)
 					RTE_BBDEV_LDPC_MAX_CODE_BLOCKS,
 			.num_buffers_soft_out = 0,
 		}
-		},
-		RTE_BBDEV_END_OF_CAPABILITIES_LIST()
 	};
+	struct rte_bbdev_op_cap end_cap = RTE_BBDEV_END_OF_CAPABILITIES_LIST();
 
+	/* Target can set bbdev_info->cpu_flag_reqs or set rte_info->cpu_flag_reqs to NULL */
+	rte_info->cpu_flag_reqs = &bbdev_info->cpu_flag_reqs;
 #ifdef RTE_BBDEV_SDK_AVX2
-	static const enum rte_cpu_flag_t cpu_flag = RTE_CPUFLAG_SSE4_2;
-	dev_info->cpu_flag_reqs = &cpu_flag;
+	bbdev_info->cpu_flag_reqs = RTE_CPUFLAG_SSE4_2;
 #else
-	dev_info->cpu_flag_reqs = NULL;
+	rte_info->cpu_flag_reqs = NULL;
 #endif
-	/* Get EP info such as rx/tx_offloads, max_pktlen */
+	rte_info->max_dl_queue_priority = 0;
+	rte_info->max_ul_queue_priority = 0;
+	bbdev_info->capabilities[0] = turbo_dec_cap;
+	bbdev_info->capabilities[1] = turbo_enc_cap;
+	bbdev_info->capabilities[2] = ldpc_enc_cap;
+	bbdev_info->capabilities[3] = ldpc_dec_cap;
+	bbdev_info->capabilities[4] = end_cap;
+	rte_info->min_alignment = 64;
+	rte_info->harq_buffer_size = 0;
+	rte_info->data_endianness = RTE_LITTLE_ENDIAN;
+}
+
+/* Get device info */
+static void
+info_get(struct rte_bbdev *bbdev, struct rte_bbdev_driver_info *dev_info_out)
+{
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+	struct oct_bbdev_info *bbdev_info;
+	struct rte_bbdev_driver_info *rte_info;
+	struct rte_mbuf *mbuf;
+	struct oct_bbdev_op_msg *msg;
+
+	/* Allocate message buffer */
+	mbuf = rte_pktmbuf_alloc(cnxk_ep_bb_vf->msg_pool);
+	if (mbuf == NULL)
+		goto exit1;
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	bbdev_info = &msg->dev_info;
+	rte_info = &bbdev_info->rte_info;
+
+	/* TODO: may be unnecessary; get default values for target parameters */
+	default_info_get(bbdev_info);
+
+	/* Fill in PMD related info */
 	cnxk_ep_bb_dev_info_get(cnxk_ep_bb_vf);
 
-	memset(&dev_info->default_queue_conf, 0, sizeof(struct rte_bbdev_queue_conf));
-	dev_info->default_queue_conf.socket = bbdev->data->socket_id;
+	memset(&rte_info->default_queue_conf, 0, sizeof(struct rte_bbdev_queue_conf));
+	rte_info->default_queue_conf.socket = bbdev->data->socket_id;
 
 	/* Use EP queue sizes */
-	dev_info->queue_size_lim = RTE_MIN(cnxk_ep_bb_vf->conf->num_iqdef_descs,
+	rte_info->queue_size_lim = RTE_MIN(cnxk_ep_bb_vf->conf->num_iqdef_descs,
 					cnxk_ep_bb_vf->conf->num_oqdef_descs);
-	dev_info->default_queue_conf.queue_size = dev_info->queue_size_lim;
+	rte_info->default_queue_conf.queue_size = rte_info->queue_size_lim;
 
-	dev_info->driver_name = RTE_STR(DRIVER_NAME);
-	dev_info->max_num_queues = RTE_MIN(cnxk_ep_bb_vf->max_rx_queues,
+	rte_strscpy(bbdev_info->driver_name, RTE_STR(DRIVER_NAME), sizeof(bbdev_info->driver_name));
+	rte_info->max_num_queues = RTE_MIN(cnxk_ep_bb_vf->max_rx_queues,
 					cnxk_ep_bb_vf->max_tx_queues);
-	dev_info->hardware_accelerated = true;
-	dev_info->max_dl_queue_priority = 0;
-	dev_info->max_ul_queue_priority = 0;
-	dev_info->capabilities = bbdev_capabilities;
-	dev_info->min_alignment = 64;
-	dev_info->harq_buffer_size = 0;
-	dev_info->data_endianness = RTE_LITTLE_ENDIAN;
+	rte_info->hardware_accelerated = true;
 
-	/* TODO_LATER: send this dev_info to EP, get updates & match EP rev # */
+	/* Get updated dev_info from EP */
+	send_cfg_get_resp(bbdev, OTX_BBDEV_CMD_INFO_GET, &mbuf);
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	/* Exit on error */
+	if (msg->status)
+		goto exit;
+	/* TODO: match EP rev # */
 
+	/* Cache dev info in local EP structure */
+	cnxk_ep_bb_vf->bbdev_info = msg->dev_info;
+	bbdev_info = &cnxk_ep_bb_vf->bbdev_info;
+	/* Set dev_info pointers to actual values */
+	rte_info = &bbdev_info->rte_info;
+	rte_info->driver_name = bbdev_info->driver_name;
+	rte_info->capabilities = bbdev_info->capabilities;
+	/* Keep this ptr set to NULL if target has set it to NULL */
+	if (rte_info->cpu_flag_reqs)
+		rte_info->cpu_flag_reqs = &bbdev_info->cpu_flag_reqs;
+
+	/* copy dev_info into output */
+	*dev_info_out = *rte_info;
 	rte_bbdev_log_debug("got device info from %u", bbdev->data->dev_id);
+	return;
+
+exit:
+	rte_bbdev_log(ERR, "device %u %s error %i\n", bbdev->data->dev_id, __func__, msg->status);
+	rte_pktmbuf_free(mbuf);
+exit1:
+	/* info_get does not support return value; hopefully, this is sufficient */
+	memset(dev_info_out, 0, sizeof(struct rte_bbdev_driver_info));
 }
 
 /* Configure device */
@@ -214,10 +345,36 @@ info_get(struct rte_bbdev *bbdev, struct rte_bbdev_driver_info *dev_info)
  * app is passing the same value
  */
 static int
-setup_queues(struct rte_bbdev *bbdev, uint16_t num_queues, int socket_id __rte_unused)
+dev_config(struct rte_bbdev *bbdev, uint16_t num_queues, int socket_id __rte_unused)
 {
-	/* TODO_LATER: send this to EP */
-	return cnxk_ep_bb_dev_configure(CNXK_BB_DEV(bbdev), num_queues);
+	int ret;
+	struct rte_mbuf *mbuf;
+	struct oct_bbdev_op_msg *msg;
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+
+	/* Do local init */
+	ret = cnxk_ep_bb_dev_configure(cnxk_ep_bb_vf, num_queues);
+	if (ret)
+		goto err;
+	/* Prepare config message */
+	mbuf = rte_pktmbuf_alloc(cnxk_ep_bb_vf->msg_pool);
+	if (mbuf == NULL) {
+		ret = -OTX_BBDEV_CMD_FAIL_NOMBUF;
+		goto err;
+	}
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	msg->dev_config.num_queues = num_queues;
+	/* Send config & get response */
+	send_cfg_get_resp(bbdev, OTX_BBDEV_CMD_DEV_CONFIG, &mbuf);
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	/* Return status */
+	ret = msg->status;
+	rte_pktmbuf_free(mbuf);
+
+err:
+	if (ret)
+		rte_bbdev_log(ERR, "BBDev %u config error %i\n", bbdev->data->dev_id, ret);
+	return ret;
 }
 
 /* Release queue */
@@ -225,12 +382,39 @@ static int
 q_release(struct rte_bbdev *bbdev, uint16_t q_no)
 {
 	int ret;
+	struct rte_mbuf *mbuf;
+	struct oct_bbdev_op_msg *msg;
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
 
-	/* TODO_LATER: send this to EP */
-	ret = cnxk_ep_bb_queue_release(CNXK_BB_DEV(bbdev), q_no);
+	/* Do local q release */
+	if (q_no == 0) {
+		/* Stop q0 because we keep it active in dev_stop */
+		cnxk_ep_bb_vf->fn_list.disable_iq(cnxk_ep_bb_vf, 0);
+		cnxk_ep_bb_vf->fn_list.disable_oq(cnxk_ep_bb_vf, 0);
+		cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_IDLE;
+	}
+	ret = cnxk_ep_bb_queue_release(cnxk_ep_bb_vf, q_no);
 	bbdev->data->queues[q_no].queue_private = NULL;
-	rte_bbdev_log_debug("released device queue %u:%u",
-			bbdev->data->dev_id, q_no);
+	if (ret)
+		goto err;
+	/* Prepare config message */
+	mbuf = rte_pktmbuf_alloc(cnxk_ep_bb_vf->msg_pool);
+	if (mbuf == NULL) {
+		ret = -OTX_BBDEV_CMD_FAIL_NOMBUF;
+		goto err;
+	}
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	msg->queue_release.q_no = q_no;
+	/* Send config & get response */
+	send_cfg_get_resp(bbdev, OTX_BBDEV_CMD_QUE_RELEASE, &mbuf);
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	ret = msg->status;
+	rte_pktmbuf_free(mbuf);
+
+err:
+	if (ret)
+		rte_bbdev_log(ERR, "BBDev %u q%u release error %i\n", bbdev->data->dev_id,
+			      q_no, ret);
 	return ret;
 }
 
@@ -240,13 +424,44 @@ q_setup(struct rte_bbdev *bbdev, uint16_t q_no,
 		const struct rte_bbdev_queue_conf *queue_conf)
 {
 	int ret;
+	struct rte_mbuf *mbuf;
+	struct oct_bbdev_op_msg *msg;
 	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
 
-	/* TODO_LATER: send this to EP */
+	/* Do local q setup */
 	ret = cnxk_ep_bb_queue_setup(cnxk_ep_bb_vf, q_no, queue_conf);
-	bbdev->data->queues[q_no].queue_private = cnxk_ep_bb_vf->droq[q_no];
-	rte_bbdev_log_debug("setup device queue %u:%u",
-			bbdev->data->dev_id, q_no);
+	if (ret)
+		goto err;
+	/* Prepare config message */
+	mbuf = rte_pktmbuf_alloc(cnxk_ep_bb_vf->msg_pool);
+	if (mbuf == NULL) {
+		ret = -OTX_BBDEV_CMD_FAIL_NOMBUF;
+		goto err1;
+	}
+	if (q_no == 0)
+		cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_CONFIGURED;
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	msg->queue_setup.q_no = q_no;
+	msg->queue_setup.q_conf = *queue_conf;
+	/* Send config & get response */
+	send_cfg_get_resp(bbdev, OTX_BBDEV_CMD_QUE_SETUP, &mbuf);
+	msg = MBUF_TO_OCT_MSG(mbuf);
+	ret = msg->status;
+	rte_pktmbuf_free(mbuf);
+	/* Update status */
+	if (ret) {
+		/* Stop q0 which was started to send this config */
+		if (q_no == 0) {
+			cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_IDLE;
+			cnxk_ep_bb_vf->fn_list.disable_iq(cnxk_ep_bb_vf, 0);
+			cnxk_ep_bb_vf->fn_list.disable_oq(cnxk_ep_bb_vf, 0);
+		}
+err1:		/* Release queue as config failed at target */
+		ret = cnxk_ep_bb_queue_release(cnxk_ep_bb_vf, q_no);
+err:		rte_bbdev_log(ERR, "BBDev %u q%u config error %i\n", bbdev->data->dev_id,
+				q_no, ret);
+	} else
+		bbdev->data->queues[q_no].queue_private = cnxk_ep_bb_vf->droq[q_no];
 	return ret;
 }
 
@@ -254,21 +469,61 @@ q_setup(struct rte_bbdev *bbdev, uint16_t q_no,
 static int
 dev_start(struct rte_bbdev *bbdev)
 {
-	/* TODO_LATER: send this to EP */
-	return cnxk_ep_bb_dev_start(CNXK_BB_DEV(bbdev));
+	int ret;
+	struct rte_mbuf *mbuf;
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+
+	/* Do local dev_start */
+	ret = cnxk_ep_bb_dev_start_q0_chk(cnxk_ep_bb_vf);
+	cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_ACTIVE;
+	if (ret)
+		goto err;
+	/* Prepare config message */
+	mbuf = rte_pktmbuf_alloc(cnxk_ep_bb_vf->msg_pool);
+	if (mbuf == NULL) {
+		ret = -OTX_BBDEV_CMD_FAIL_NOMBUF;
+		goto err;
+	}
+	/* Send config & get response */
+	send_cfg_get_resp(bbdev, OTX_BBDEV_CMD_DEV_START, &mbuf);
+	ret = MBUF_TO_OCT_MSG(mbuf)->status;
+	rte_pktmbuf_free(mbuf);
+
+err:
+	if (ret)
+		rte_bbdev_log(ERR, "BBDev %u start error %i", bbdev->data->dev_id, ret);
+	return ret;
 }
 
 /* Stop device */
 static void
 dev_stop(struct rte_bbdev *bbdev)
 {
-	/* TODO_LATER: send this to EP */
-	cnxk_ep_bb_dev_stop(CNXK_BB_DEV(bbdev));
+	int ret;
+	struct rte_mbuf *mbuf;
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+
+	/* Do local dev_stop; do not stop q0 */
+	cnxk_ep_bb_dev_stop_q0_skip(cnxk_ep_bb_vf);
+	/* Prepare config message */
+	mbuf = rte_pktmbuf_alloc(cnxk_ep_bb_vf->msg_pool);
+	if (mbuf == NULL) {
+		ret = -OTX_BBDEV_CMD_FAIL_NOMBUF;
+		goto err;
+	}
+	/* Send config & get response */
+	send_cfg_get_resp(bbdev, OTX_BBDEV_CMD_DEV_STOP, &mbuf);
+	ret = MBUF_TO_OCT_MSG(mbuf)->status;
+	rte_pktmbuf_free(mbuf);
+
+err:
+	if (ret)
+		rte_bbdev_log(ERR, "BBDev %u stop error %i", bbdev->data->dev_id, ret);
 }
 
 static const struct rte_bbdev_ops pmd_ops = {
 	.info_get = info_get,
-	.setup_queues = setup_queues,
+	.setup_queues = dev_config,
 	.queue_setup = q_setup,
 	.start = dev_start,
 	.stop = dev_stop,
@@ -330,25 +585,6 @@ fill_out_sg_list(struct rte_bbdev_op_data *output, struct oct_bbdev_op_sg_list *
 	return 0;
 }
 
-static void
-add_to_mbufq(struct rte_mbuf **mbufs, int num, struct mbufq_s *mbufq)
-{
-	struct rte_mbuf *first, *last;
-	int i;
-
-	first = last = mbufs[0];
-	for (i = 1; i < num; ++i) {
-		last->next = mbufs[i];
-		last = mbufs[i];
-	}
-	last->next = NULL;
-	if (mbufq->tail)
-		mbufq->tail->next = first;
-	else
-		mbufq->head = first;
-	mbufq->tail = last;
-}
-
 /* Enqueue limited single burst of command/operation messages */
 static uint16_t
 enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
@@ -375,7 +611,7 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
 			msg->msg_type = RTE_BBDEV_OP_TURBO_DEC;
-			req = &msg->u.turbo_dec;
+			req = &msg->turbo_dec;
 			op = ops[i];
 			err = fill_in_sg_list(&op->turbo_dec.input, &req->in_sg_list);
 			err |= fill_out_sg_list(&op->turbo_dec.hard_output, &req->out_sg_list);
@@ -400,7 +636,7 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
 			msg->msg_type = RTE_BBDEV_OP_TURBO_ENC;
-			req = &msg->u.turbo_enc;
+			req = &msg->turbo_enc;
 			op = ops[i];
 			err = fill_in_sg_list(&op->turbo_enc.input, &req->in_sg_list);
 			err |= fill_out_sg_list(&op->turbo_enc.output, &req->out_sg_list);
@@ -424,7 +660,7 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
 			msg->msg_type = RTE_BBDEV_OP_LDPC_DEC;
-			req = &msg->u.ldpc_dec;
+			req = &msg->ldpc_dec;
 			op = ops[i];
 			err = fill_in_sg_list(&op->ldpc_dec.input, &req->in_sg_list);
 			err |= fill_out_sg_list(&op->ldpc_dec.hard_output, &req->out_sg_list);
@@ -452,7 +688,7 @@ enqueue_burst(struct rte_bbdev_queue_data *q_data, void *ops[], uint16_t nb_ops)
 			msg->q_no = q_no;
 			msg->tpid = rte_cpu_to_be_16(0x8100);
 			msg->msg_type = RTE_BBDEV_OP_LDPC_ENC;
-			req = &msg->u.ldpc_enc;
+			req = &msg->ldpc_enc;
 			op = ops[i];
 			err = fill_in_sg_list(&op->ldpc_enc.input, &req->in_sg_list);
 			err |= fill_out_sg_list(&op->ldpc_enc.output, &req->out_sg_list);
@@ -576,30 +812,30 @@ upd_out_sg_len(struct rte_bbdev_op_data *output, struct oct_bbdev_op_sg_list *sg
 #define	COPY_RESP()	do {		\
 	switch (q_data->conf.op_type) {	\
 	case RTE_BBDEV_OP_TURBO_DEC: {	\
-		struct rte_bbdev_dec_op *op1 = req->op_ptr, *op2 = &resp->u.turbo_dec.op;	\
+		struct rte_bbdev_dec_op *op1 = req->op_ptr, *op2 = &resp->turbo_dec.op;		\
 		*op1 = *op2;		\
-		upd_out_sg_len(&op1->turbo_dec.hard_output, &resp->u.turbo_dec.out_sg_list);	\
+		upd_out_sg_len(&op1->turbo_dec.hard_output, &resp->turbo_dec.out_sg_list);	\
 		UPD_MBUF_LEN_CHK(&op1->turbo_dec.soft_output);					\
 		break;			\
 	}				\
 	case RTE_BBDEV_OP_LDPC_DEC: {	\
-		struct rte_bbdev_dec_op *op1 = req->op_ptr, *op2 = &resp->u.ldpc_dec.op;	\
+		struct rte_bbdev_dec_op *op1 = req->op_ptr, *op2 = &resp->ldpc_dec.op;		\
 		*op1 = *op2;		\
-		upd_out_sg_len(&op1->ldpc_dec.hard_output, &resp->u.ldpc_dec.out_sg_list);	\
+		upd_out_sg_len(&op1->ldpc_dec.hard_output, &resp->ldpc_dec.out_sg_list);	\
 		UPD_MBUF_LEN_CHK(&op1->ldpc_dec.soft_output);					\
 		UPD_MBUF_LEN_CHK(&op1->ldpc_dec.harq_combined_output);				\
 		break;			\
 	}				\
 	case RTE_BBDEV_OP_TURBO_ENC: {	\
-		struct rte_bbdev_enc_op *op1 = req->op_ptr, *op2 = &resp->u.turbo_enc.op;	\
+		struct rte_bbdev_enc_op *op1 = req->op_ptr, *op2 = &resp->turbo_enc.op;		\
 		*op1 = *op2;		\
-		upd_out_sg_len(&op1->turbo_enc.output, &resp->u.turbo_enc.out_sg_list);		\
+		upd_out_sg_len(&op1->turbo_enc.output, &resp->turbo_enc.out_sg_list);		\
 		break;			\
 	}				\
 	case RTE_BBDEV_OP_LDPC_ENC: {	\
-		struct rte_bbdev_enc_op *op1 = req->op_ptr, *op2 = &resp->u.ldpc_enc.op;	\
+		struct rte_bbdev_enc_op *op1 = req->op_ptr, *op2 = &resp->ldpc_enc.op;		\
 		*op1 = *op2;		\
-		upd_out_sg_len(&op1->ldpc_enc.output, &resp->u.ldpc_enc.out_sg_list);		\
+		upd_out_sg_len(&op1->ldpc_enc.output, &resp->ldpc_enc.out_sg_list);		\
 		break;			\
 	}				\
 	default:			\
@@ -654,18 +890,18 @@ upd_out_sg_len(struct rte_bbdev_op_data *output, struct oct_bbdev_op_sg_list *sg
 
 #define MSG_TO_OPAQUE(msg)	({	\
 	void *opaque;			\
-	switch (rte_be_to_cpu_16((msg)->msg_type)) {			\
+	switch (rte_be_to_cpu_16((msg)->msg_type)) {		\
 	case RTE_BBDEV_OP_TURBO_DEC:	\
-		opaque = (msg)->u.turbo_dec.op.opaque_data;	\
+		opaque = (msg)->turbo_dec.op.opaque_data;	\
 		break;			\
 	case RTE_BBDEV_OP_LDPC_DEC:	\
-		opaque = (msg)->u.ldpc_dec.op.opaque_data;	\
+		opaque = (msg)->ldpc_dec.op.opaque_data;	\
 		break;			\
 	case RTE_BBDEV_OP_TURBO_ENC:	\
-		opaque = (msg)->u.turbo_dec.op.opaque_data;	\
+		opaque = (msg)->turbo_dec.op.opaque_data;	\
 		break;			\
 	case RTE_BBDEV_OP_LDPC_ENC:	\
-		opaque = (msg)->u.ldpc_dec.op.opaque_data;	\
+		opaque = (msg)->ldpc_dec.op.opaque_data;	\
 		break;			\
 	default:			\
 		opaque = NULL;		\

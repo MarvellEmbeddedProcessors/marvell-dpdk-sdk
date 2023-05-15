@@ -4,17 +4,52 @@
 #ifndef _CNXK_EP_BB_MSG_H_
 #define _CNXK_EP_BB_MSG_H_
 
+#include <rte_bbdev.h>
+
 #define	OCTEON_EP_MAX_SG_ENTRIES	8
 #define	OCTEON_EP_MAX_BURST_SIZE	64
+#define	OCTEON_EP_MAX_CAPA_ENTRIES	8
 
 /** Different command types supported by the device */
 enum oct_bbdev_cmd_type {
-	OTX_BBDEV_CMD_INFO_GET = 0x80,	/**< info_get */
-	OTX_BBDEV_CMD_SETUP_QUES,	/**< device config */
-	OTX_BBDEV_CMD_QUE_SETUP,	/**< queue setup */
-	OTX_BBDEV_CMD_QUE_RELEASE,	/**< queue release */
-	OTX_BBDEV_CMD_DEV_START,	/**< device start */
-	OTX_BBDEV_CMD_DEV_STOP,		/**< device stop */
+	OTX_BBDEV_CMD_INFO_GET = 0x80,	/* info_get */
+	OTX_BBDEV_CMD_DEV_CONFIG,	/* device config */
+	OTX_BBDEV_CMD_QUE_SETUP,	/* queue setup */
+	OTX_BBDEV_CMD_QUE_RELEASE,	/* queue release */
+	OTX_BBDEV_CMD_DEV_START,	/* device start */
+	OTX_BBDEV_CMD_DEV_STOP,		/* device stop */
+};
+
+/* Config command status values */
+enum oct_bbdev_cmd_err {
+	OTX_BBDEV_CMD_NO_ERR = 0,	/* No error */
+	OTX_BBDEV_CMD_FAIL_Q0_SETUP,	/* Queue 0 setup failed */
+	OTX_BBDEV_CMD_FAIL_ENQUE,	/* Command enqueue failed */
+	OTX_BBDEV_CMD_FAIL_TMOUT,	/* Response timeout */
+	OTX_BBDEV_CMD_FAIL_NOMBUF,	/* Command mbuf alloc failed */
+};
+
+/* Get device info message payload */
+struct oct_bbdev_info {
+	struct rte_bbdev_driver_info	rte_info;	/* rte lib structure, pmd <==> dev */
+	/* Storage for pointer objects in drv_info */
+	char				driver_name[32];/* pmd <==> dev */
+	enum rte_cpu_flag_t		cpu_flag_reqs;	/* pmd <==> dev */
+	struct rte_bbdev_op_cap		capabilities[OCTEON_EP_MAX_CAPA_ENTRIES+1];
+							/* pmd <==> dev */
+};
+/* Device configure message payload */
+struct oct_bbdev_config {
+	uint16_t	num_queues;	/* pmd ==> dev */
+};
+/* Device queue setup message payload */
+struct oct_bbdev_queue_setup {
+	uint16_t	q_no;			/* pmd ==> dev */
+	struct rte_bbdev_queue_conf q_conf;	/* pmd ==> dev */
+};
+/* Device queue release message payload */
+struct oct_bbdev_queue_release {
+	uint16_t	q_no;		/* pmd ==> dev */
 };
 
 union oct_bbdev_msg_type {
@@ -59,7 +94,7 @@ struct oct_bbdev_op_ldpc_dec {
 	struct oct_bbdev_op_sg_list	out_sg_list;	/* Output scatter-gather list */
 };
 
-/* TX SDP message format for command/operation */
+/* TX SDP message format for config/operation commands */
 struct oct_bbdev_op_msg {
 	/* Fake ethernet header to aid NIX parsing */
 	uint8_t		rsvd[12];
@@ -70,23 +105,31 @@ struct oct_bbdev_op_msg {
 	/* msg_type forms ether_type */
 	uint8_t		msg_type;	/* cmd/op (union oct_bbdev_msg_type) */
 	uint8_t		unused;
-	void		*op_ptr;	/* rte_bbdev input op ptr save location */
 
-	/* Followed by bbdev command/operation payload */
+	/* Followed by bbdev config/operation payload */
 	union {
-#ifdef TODO_LATER
-		struct oct_bbdev_info_get	info_get;	/**< info_get */
-		struct oct_bbdev_setup_queues	setup_queues;	/**< device config */
-		struct oct_bbdev_queue_setup	queue_setup;	/**< queue setup */
-		struct oct_bbdev_start		start;		/**< device start */
-		struct oct_bbdev_stop		stop;		/**< device stop */
-		struct oct_bbdev_queue_release	queue_release;	/**< queue release */
-#endif
-		struct oct_bbdev_op_turbo_enc	turbo_enc;	/**< turbo enc */
-		struct oct_bbdev_op_turbo_dec	turbo_dec;	/**< turbo dec */
-		struct oct_bbdev_op_ldpc_enc	ldpc_enc;	/**< ldpc enc */
-		struct oct_bbdev_op_ldpc_dec	ldpc_dec;	/**< ldpc dec */
-	} u;
+		/* Config commands */
+		struct {
+			int	status;		/* Operation status, pmd <== dev */
+			union {
+				struct oct_bbdev_info		dev_info;	/* info_get */
+				struct oct_bbdev_config		dev_config;	/* device config */
+				struct oct_bbdev_queue_setup	queue_setup;	/* queue setup */
+				struct oct_bbdev_queue_release	queue_release;	/* queue release */
+				/* OTX_BBDEV_CMD_DEV_START/STOP have no args */
+			};
+		};
+		/* Operational commands */
+		struct {
+			void	*op_ptr;	/* rte_bbdev input op ptr save location */
+			union {
+				struct oct_bbdev_op_turbo_enc	turbo_enc;	/* turbo enc */
+				struct oct_bbdev_op_turbo_dec	turbo_dec;	/* turbo dec */
+				struct oct_bbdev_op_ldpc_enc	ldpc_enc;	/* ldpc enc */
+				struct oct_bbdev_op_ldpc_dec	ldpc_dec;	/* ldpc dec */
+			};
+		};
+	};
 };
 
 #define MBUF_TO_OCT_MSG(mbuf)		rte_pktmbuf_mtod(mbuf, struct oct_bbdev_op_msg *)

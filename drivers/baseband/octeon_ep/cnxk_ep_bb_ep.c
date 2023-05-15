@@ -80,10 +80,10 @@ cnxk_ep_bb_dev_start(struct cnxk_ep_bb_device *cnxk_ep_bb_vf)
 
 	for (q = 0; q < cnxk_ep_bb_vf->nb_rx_queues; q++) {
 		rte_write32(cnxk_ep_bb_vf->droq[q]->nb_desc,
-			    cnxk_ep_bb_vf->droq[q]->pkts_credit_reg);
+			cnxk_ep_bb_vf->droq[q]->pkts_credit_reg);
 		rte_wmb();
 		cnxk_ep_bb_info("OQ[%d] dbells [%d]", q,
-		rte_read32(cnxk_ep_bb_vf->droq[q]->pkts_credit_reg));
+			rte_read32(cnxk_ep_bb_vf->droq[q]->pkts_credit_reg));
 	}
 	cnxk_ep_bb_info("dev started");
 	return 0;
@@ -95,6 +95,97 @@ cnxk_ep_bb_dev_stop(struct cnxk_ep_bb_device *cnxk_ep_bb_vf)
 {
 	cnxk_ep_bb_vf->fn_list.disable_io_queues(cnxk_ep_bb_vf);
 	return 0;
+}
+
+void
+cnxk_ep_bb_dev_stop_q0_skip(struct cnxk_ep_bb_device *cnxk_ep_bb_vf)
+{
+	uint32_t q_no;
+
+	for (q_no = 1; q_no < cnxk_ep_bb_vf->sriov_info.rings_per_vf; q_no++) {
+		cnxk_ep_bb_vf->fn_list.disable_iq(cnxk_ep_bb_vf, q_no);
+		cnxk_ep_bb_vf->fn_list.disable_oq(cnxk_ep_bb_vf, q_no);
+	}
+}
+
+/* Same as cnxk_ep_bb_dev_start, skips q0 if it is already started */
+int
+cnxk_ep_bb_dev_start_q0_chk(struct cnxk_ep_bb_device *cnxk_ep_bb_vf)
+{
+	unsigned int q = cnxk_ep_bb_vf->status == CNXK_EP_BB_Q0_ACTIVE ? 1 : 0;
+	int ret;
+
+	for (; q < cnxk_ep_bb_vf->nb_rx_queues; q++) {
+		/* Enable IQ/OQ for this device */
+		ret = cnxk_ep_bb_vf->fn_list.enable_iq(cnxk_ep_bb_vf, q);
+		ret |= cnxk_ep_bb_vf->fn_list.enable_oq(cnxk_ep_bb_vf, q);
+		if (ret) {
+			cnxk_ep_bb_err("queue %u IOQ enable failed", q);
+			return ret;
+		}
+		/* Set input queue credit */
+		rte_write32(cnxk_ep_bb_vf->droq[q]->nb_desc,
+			cnxk_ep_bb_vf->droq[q]->pkts_credit_reg);
+		rte_wmb();
+	}
+	cnxk_ep_bb_info("dev started");
+	return 0;
+}
+
+/* Undo default config/start on q0 */
+void
+restore_q0_config_start(struct rte_bbdev *bbdev)
+{
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+
+	/* Stop/release q0 if it was default configured */
+	if (cnxk_ep_bb_vf->status == CNXK_EP_BB_Q0_ACTIVE_DEFAULT) {
+		cnxk_ep_bb_vf->fn_list.disable_iq(cnxk_ep_bb_vf, 0);
+		cnxk_ep_bb_vf->fn_list.disable_oq(cnxk_ep_bb_vf, 0);
+		cnxk_ep_bb_queue_release(cnxk_ep_bb_vf, 0);
+		cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_IDLE;
+	}
+}
+
+/* Configure/start queue 0 if not already done */
+void *
+chk_q0_config_start(struct rte_bbdev *bbdev)
+{
+	struct cnxk_ep_bb_device *cnxk_ep_bb_vf = CNXK_BB_DEV(bbdev);
+	int ret;
+
+	switch (cnxk_ep_bb_vf->status) {
+	case CNXK_EP_BB_Q0_ACTIVE:
+	case CNXK_EP_BB_Q0_ACTIVE_DEFAULT:
+		/* Nothing to do if q0 is already active */
+		break;
+	case CNXK_EP_BB_Q0_IDLE: {
+		/* Configure with default config if not already configured */
+		const struct rte_bbdev_queue_conf queue_conf = {
+			.socket = bbdev->data->socket_id,
+			.queue_size = RTE_MIN(cnxk_ep_bb_vf->conf->num_iqdef_descs,
+					cnxk_ep_bb_vf->conf->num_oqdef_descs)
+		};
+		ret = cnxk_ep_bb_queue_setup(cnxk_ep_bb_vf, 0, &queue_conf);
+		if (ret)
+			return NULL;
+		cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_ACTIVE_DEFAULT;
+		goto start;
+	}
+	case CNXK_EP_BB_Q0_CONFIGURED:
+		/* Start if already configured */
+		cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_ACTIVE;
+start:		ret = cnxk_ep_bb_vf->fn_list.enable_iq(cnxk_ep_bb_vf, 0);
+		ret |= cnxk_ep_bb_vf->fn_list.enable_oq(cnxk_ep_bb_vf, 0);
+		if (ret) {
+			cnxk_ep_bb_vf->status = CNXK_EP_BB_Q0_IDLE;
+			return NULL;
+		}
+		rte_write32(cnxk_ep_bb_vf->droq[0]->nb_desc,
+			cnxk_ep_bb_vf->droq[0]->pkts_credit_reg);
+		rte_wmb();
+	}
+	return cnxk_ep_bb_vf->droq[0];
 }
 
 /*

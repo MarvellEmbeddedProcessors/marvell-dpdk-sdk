@@ -8,6 +8,8 @@
 #include <rte_bbdev.h>
 #include <rte_bus_pci.h>
 
+#include "cnxk_ep_bb_msg.h"
+
 #define DRIVER_NAME octeon_ep_bb_vf
 
 #define CNXK_EP_BB_NW_PKT_OP		0x1220
@@ -493,6 +495,11 @@ struct mbuf_queues_s {
 	struct mbufq_s wait_ops, sv_mbufs;
 };
 
+#define	CNXK_EP_BB_Q0_IDLE		0
+#define	CNXK_EP_BB_Q0_CONFIGURED	1
+#define	CNXK_EP_BB_Q0_ACTIVE_DEFAULT	2
+#define	CNXK_EP_BB_Q0_ACTIVE		3
+
 /* CNXK EP BBDev VF device data structure */
 struct cnxk_ep_bb_device {
 	/* PCI device pointer */
@@ -504,12 +511,14 @@ struct cnxk_ep_bb_device {
 
 	uint32_t pkind;
 
-	struct rte_bbdev *bbdev;
-	struct rte_mempool *msg_pool;
-	cnxk_ep_bb_rx_burst_t rx_pkt_burst;
-	cnxk_ep_bb_tx_burst_t tx_pkt_burst;
-	struct mbuf_queues_s mbuf_queues[CNXK_EP_BB_MAX_IOQS_PER_VF];
-	uint32_t max_rx_pktlen;
+	struct rte_bbdev	*bbdev;
+	struct rte_mempool	*msg_pool;
+	cnxk_ep_bb_rx_burst_t	rx_pkt_burst;
+	cnxk_ep_bb_tx_burst_t	tx_pkt_burst;
+	struct mbuf_queues_s	mbuf_queues[CNXK_EP_BB_MAX_IOQS_PER_VF];
+	uint32_t		max_rx_pktlen;
+	struct oct_bbdev_info	bbdev_info;
+	uint32_t		status;
 
 	int port_id;
 
@@ -575,7 +584,11 @@ int cnxk_ep_bb_queue_setup(struct cnxk_ep_bb_device *cnxk_ep_bb_vf, uint16_t q_n
 		       const struct rte_bbdev_queue_conf *queue_conf);
 int cnxk_ep_bb_queue_release(struct cnxk_ep_bb_device *cnxk_ep_bb_vf, uint16_t q_no);
 int cnxk_ep_bb_dev_start(struct cnxk_ep_bb_device *cnxk_ep_bb_vf);
+void cnxk_ep_bb_dev_stop_q0_skip(struct cnxk_ep_bb_device *cnxk_ep_bb_vf);
+int cnxk_ep_bb_dev_start_q0_chk(struct cnxk_ep_bb_device *cnxk_ep_bb_vf);
 int cnxk_ep_bb_dev_stop(struct cnxk_ep_bb_device *cnxk_ep_bb_vf);
+void restore_q0_config_start(struct rte_bbdev *bbdev);
+void *chk_q0_config_start(struct rte_bbdev *bbdev);
 int cnxk_ep_bb_sdp_init(struct rte_bbdev *bbdev);
 int cnxk_ep_bb_dev_exit(struct cnxk_ep_bb_device *cnxk_ep_bb_vf);
 int cnxk_ep_bb_dequeue_ops(void *rx_queue, struct rte_mbuf **ops, uint16_t budget);
