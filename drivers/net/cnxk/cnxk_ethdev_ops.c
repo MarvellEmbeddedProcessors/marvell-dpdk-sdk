@@ -290,7 +290,7 @@ cnxk_nix_flow_ctrl_set(struct rte_eth_dev *eth_dev,
 	for (i = 0; i < data->nb_rx_queues; i++) {
 		struct roc_nix_fc_cfg fc_cfg;
 
-		/* Skip if RQ doesn't exist */
+		/* Skip if RQ does not exist */
 		if (!data->rx_queues[i])
 			continue;
 
@@ -321,7 +321,7 @@ cnxk_nix_flow_ctrl_set(struct rte_eth_dev *eth_dev,
 	for (i = 0; i < data->nb_tx_queues; i++) {
 		struct roc_nix_fc_cfg fc_cfg;
 
-		/* Skip if SQ doesn't exist */
+		/* Skip if SQ does not exist */
 		if (!data->tx_queues[i])
 			continue;
 
