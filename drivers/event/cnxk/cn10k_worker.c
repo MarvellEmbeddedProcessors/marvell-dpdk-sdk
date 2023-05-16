@@ -35,7 +35,7 @@ cn10k_sso_hws_fwd_swtag(struct cn10k_sso_hws *ws, const struct rte_event *ev)
 	 * cur_tt/new_tt     SSO_TT_ORDERED SSO_TT_ATOMIC SSO_TT_UNTAGGED
 	 *
 	 * SSO_TT_ORDERED        norm           norm             untag
-	 * SSO_TT_ATOMIC         norm           norm             untag
+	 * SSO_TT_ATOMIC         norm           norm		   untag
 	 * SSO_TT_UNTAGGED       norm           norm             NOOP
 	 */
 

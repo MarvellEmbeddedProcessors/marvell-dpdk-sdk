@@ -70,10 +70,11 @@ int __roc_api roc_sso_dev_init(struct roc_sso *roc_sso);
 int __roc_api roc_sso_dev_fini(struct roc_sso *roc_sso);
 
 /* SSO device configuration */
-int __roc_api roc_sso_rsrc_init(struct roc_sso *roc_sso, uint8_t nb_hws,
-				uint16_t nb_hwgrp);
+int __roc_api roc_sso_rsrc_init(struct roc_sso *roc_sso, uint8_t nb_hws, uint16_t nb_hwgrp,
+				uint16_t nb_tim_lfs);
 void __roc_api roc_sso_rsrc_fini(struct roc_sso *roc_sso);
-int __roc_api roc_sso_hwgrp_qos_config(struct roc_sso *roc_sso, struct roc_sso_hwgrp_qos *qos,
+int __roc_api roc_sso_hwgrp_qos_config(struct roc_sso *roc_sso,
+				       struct roc_sso_hwgrp_qos *qos,
 				       uint16_t nb_qos);
 int __roc_api roc_sso_hwgrp_alloc_xaq(struct roc_sso *roc_sso,
 				      uint32_t npa_aura_id, uint16_t hwgrps);

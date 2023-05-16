@@ -308,13 +308,33 @@ fail:
 }
 
 int
+tim_free_lf_count_get(struct dev *dev, uint16_t *nb_lfs)
+{
+	struct mbox *mbox = mbox_get(dev->mbox);
+	struct free_rsrcs_rsp *rsrc_cnt;
+	int rc;
+
+	mbox_alloc_msg_free_rsrc_cnt(mbox);
+	rc = mbox_process_msg(mbox, (void **)&rsrc_cnt);
+	if (rc) {
+		plt_err("Failed to get free resource count\n");
+		mbox_put(mbox);
+		return -EIO;
+	}
+
+	*nb_lfs = rsrc_cnt->tim;
+	mbox_put(mbox);
+
+	return 0;
+}
+
+int
 roc_tim_init(struct roc_tim *roc_tim)
 {
 	struct rsrc_attach_req *attach_req;
 	struct rsrc_detach_req *detach_req;
-	struct free_rsrcs_rsp *free_rsrc;
+	uint16_t nb_lfs, nb_free_lfs;
 	struct sso *sso;
-	uint16_t nb_lfs;
 	struct dev *dev;
 	int rc;
 
@@ -323,30 +343,31 @@ roc_tim_init(struct roc_tim *roc_tim)
 
 	sso = roc_sso_to_sso_priv(roc_tim->roc_sso);
 	dev = &sso->dev;
+	dev->roc_tim = roc_tim;
 	PLT_STATIC_ASSERT(sizeof(struct tim) <= TIM_MEM_SZ);
 	nb_lfs = roc_tim->nb_lfs;
-	mbox_alloc_msg_free_rsrc_cnt(mbox_get(dev->mbox));
-	rc = mbox_process_msg(dev->mbox, (void *)&free_rsrc);
+
+	rc = tim_free_lf_count_get(dev, &nb_free_lfs);
 	if (rc) {
-		plt_err("Unable to get free rsrc count.");
+		plt_tim_dbg("Failed to get TIM resource count");
 		nb_lfs = 0;
-		goto fail;
+		return nb_lfs;
 	}
 
-	if (nb_lfs && (free_rsrc->tim < nb_lfs)) {
-		plt_tim_dbg("Requested LFs : %d Available LFs : %d", nb_lfs,
-			    free_rsrc->tim);
+	if (nb_lfs && (nb_free_lfs < nb_lfs)) {
+		plt_tim_dbg("Requested LFs : %d Available LFs : %d", nb_lfs, nb_free_lfs);
 		nb_lfs = 0;
-		goto fail;
+		return nb_lfs;
 	}
 
+	mbox_get(dev->mbox);
 	attach_req = mbox_alloc_msg_attach_resources(dev->mbox);
 	if (attach_req == NULL) {
 		nb_lfs = 0;
 		goto fail;
 	}
 	attach_req->modify = true;
-	attach_req->timlfs = nb_lfs ? nb_lfs : free_rsrc->tim;
+	attach_req->timlfs = nb_lfs ? nb_lfs : nb_free_lfs;
 	nb_lfs = attach_req->timlfs;
 
 	rc = mbox_process(dev->mbox);
@@ -377,6 +398,7 @@ roc_tim_init(struct roc_tim *roc_tim)
 fail:
 	mbox_put(dev->mbox);
 done:
+	roc_tim->nb_lfs = nb_lfs;
 	return nb_lfs;
 }
 
