@@ -534,6 +534,8 @@ npa_aura_pool_pair_alloc(struct npa_lf *lf, const uint32_t block_size,
 	if (rc)
 		goto stack_mem_free;
 
+	lf->aura_attr[aura_id].shift = aura->shift;
+	lf->aura_attr[aura_id].limit = aura->limit;
 	*aura_handle = roc_npa_aura_handle_gen(aura_id, lf->base);
 	/* Update aura count */
 	roc_npa_aura_op_cnt_set(*aura_handle, 0, block_count);
@@ -656,6 +658,8 @@ npa_aura_alloc(struct npa_lf *lf, const uint32_t block_count, int pool_id,
 	if (rc)
 		return rc;
 
+	lf->aura_attr[aura_id].shift = aura->shift;
+	lf->aura_attr[aura_id].limit = aura->limit;
 	*aura_handle = roc_npa_aura_handle_gen(aura_id, lf->base);
 
 	return 0;
@@ -734,6 +738,9 @@ roc_npa_aura_limit_modify(uint64_t aura_handle, uint16_t aura_limit)
 	aura_req->aura.limit = aura_limit;
 	aura_req->aura_mask.limit = ~(aura_req->aura_mask.limit);
 	rc = mbox_process(mbox);
+	if (rc)
+		goto exit;
+	lf->aura_attr[aura_req->aura_id].limit = aura_req->aura.limit;
 exit:
 	mbox_put(mbox);
 	return rc;
@@ -930,7 +937,14 @@ roc_npa_aura_bp_configure(uint64_t aura_handle, uint16_t bpid, uint8_t bp_intf, 
 	req->aura.bp_ena = bp_intf;
 	req->aura_mask.bp_ena = ~(req->aura_mask.bp_ena);
 
-	mbox_process(mbox);
+	rc = mbox_process(mbox);
+	if (rc)
+		goto fail;
+
+	lf->aura_attr[aura_id].nix0_bpid = req->aura.nix0_bpid;
+	lf->aura_attr[aura_id].nix1_bpid = req->aura.nix1_bpid;
+	lf->aura_attr[aura_id].bp_ena = req->aura.bp_ena;
+	lf->aura_attr[aura_id].bp = req->aura.bp;
 fail:
 	mbox_put(mbox);
 	return rc;
