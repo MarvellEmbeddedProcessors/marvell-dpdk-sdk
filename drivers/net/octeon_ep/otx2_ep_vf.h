@@ -107,4 +107,8 @@ union out_cnts_t {
 #define OTX_EP_R_MBOX_PF_VF_INT(ring) \
 	(OTX_EP_R_MBOX_PF_VF_INT_START + ((ring) * OTX_EP_RING_OFFSET))
 
+#define OTX_EP_R_MBOX_PF_VF_DATA_START        (0x10210)
+#define OTX_EP_R_MBOX_PF_VF_DATA(ring)           \
+	(OTX_EP_R_MBOX_PF_VF_DATA_START + ((ring) * OTX_EP_RING_OFFSET))
+
 #endif /*_OTX2_EP_VF_H_ */

@@ -18,7 +18,9 @@
  * with new command and it's version info.
  */
 static uint32_t otx_ep_cmd_versions[OTX_EP_MBOX_CMD_MAX] = {
-	[0 ... OTX_EP_MBOX_CMD_DEV_REMOVE] = OTX_EP_MBOX_VERSION_V1
+	[0 ... OTX_EP_MBOX_CMD_DEV_REMOVE] = OTX_EP_MBOX_VERSION_V1,
+	[OTX_EP_MBOX_CMD_GET_FW_INFO ... OTX_EP_MBOX_NOTIF_LINK_STATUS] =
+		OTX_EP_MBOX_VERSION_V2
 };
 
 static int
@@ -332,4 +334,29 @@ int otx_ep_mbox_send_dev_exit(struct rte_eth_dev *eth_dev)
 	cmd.s_version.opcode = OTX_EP_MBOX_CMD_DEV_REMOVE;
 	ret = otx_ep_send_mbox_cmd(otx_ep, cmd, NULL);
 	return ret;
+}
+
+int otx_ep_mbox_get_fw_info(struct rte_eth_dev *eth_dev)
+{
+	union otx_ep_mbox_word cmd;
+	union otx_ep_mbox_word rsp;
+	int ret;
+	struct otx_ep_device *otx_ep =
+		(struct otx_ep_device *)(eth_dev)->data->dev_private;
+
+	cmd.u64 = 0;
+	cmd.s_fw_info.opcode = OTX_EP_MBOX_CMD_GET_FW_INFO;
+	ret = otx_ep_send_mbox_cmd(otx_ep, cmd, &rsp);
+	if (ret) {
+		otx_ep_err("Get fw info via VF Mbox send failed\n");
+		return ret;
+	}
+	otx_ep->fw_info.pkind = rsp.s_fw_info.pkind;
+	otx_ep->fw_info.fsz = rsp.s_fw_info.fsz;
+	otx_ep->fw_info.rx_ol_flags = rsp.s_fw_info.rx_ol_flags;
+	otx_ep->fw_info.tx_ol_flags = rsp.s_fw_info.tx_ol_flags;
+	otx_ep_dbg("Get fw info pkind:%d fsz:%d rx:%x tx:%x\n", rsp.s_fw_info.pkind,
+		   rsp.s_fw_info.fsz, rsp.s_fw_info.rx_ol_flags, rsp.s_fw_info.tx_ol_flags);
+
+	return 0;
 }
