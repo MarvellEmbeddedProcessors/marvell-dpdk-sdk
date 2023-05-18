@@ -10,6 +10,7 @@
 
 #include <cn10k_ethdev.h>
 #include <cn10k_rx.h>
+#include <cnxk_ethdev_mcs.h>
 #include <cnxk_security.h>
 #include <roc_priv.h>
 
@@ -1133,10 +1134,10 @@ cn10k_eth_sec_ops_override(void)
 	init_once = 1;
 
 	/* Update platform specific ops */
-	cnxk_eth_sec_ops.macsec_sa_create = NULL;
-	cnxk_eth_sec_ops.macsec_sc_create = NULL;
-	cnxk_eth_sec_ops.macsec_sa_destroy = NULL;
-	cnxk_eth_sec_ops.macsec_sc_destroy = NULL;
+	cnxk_eth_sec_ops.macsec_sa_create = cnxk_eth_macsec_sa_create;
+	cnxk_eth_sec_ops.macsec_sc_create = cnxk_eth_macsec_sc_create;
+	cnxk_eth_sec_ops.macsec_sa_destroy = cnxk_eth_macsec_sa_destroy;
+	cnxk_eth_sec_ops.macsec_sc_destroy = cnxk_eth_macsec_sc_destroy;
 	cnxk_eth_sec_ops.session_create = cn10k_eth_sec_session_create;
 	cnxk_eth_sec_ops.session_destroy = cn10k_eth_sec_session_destroy;
 	cnxk_eth_sec_ops.capabilities_get = cn10k_eth_sec_capabilities_get;
