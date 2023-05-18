@@ -15,6 +15,9 @@ ETHERNET_DEVICE="$ETH_DEV"
 CRYPTO_DEV=${CRYPTO_DEV:-$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')}
 CRYPTO_DEVICE="$CRYPTO_DEV"
 
+SSO_DEV=${SSO_DEV:-$(lspci -d :a0f9 | tail -1 | awk -e '{ print $1 }')}
+EVENT_DEVICE="$SSO_DEV"
+
 TEST_TYPE=$1
 
 if [[ -f $SCRIPTPATH/../../../../app/test/dpdk-test ]]; then
@@ -56,6 +59,7 @@ run_inline_ipsec_tests() {
 
 #					DPDK TEST NAME		TEST ARGS
 register_cn10k_inline_ipsec_test	inline_ipsec_autotest	"-a $ETHERNET_DEVICE -a $NIX_INL_DEVICE -a $CRYPTO_DEVICE"
+register_cn10k_inline_ipsec_test	event_inline_ipsec_autotest	"-a $ETHERNET_DEVICE -a $NIX_INL_DEVICE -a $CRYPTO_DEVICE -a $EVENT_DEVICE"
 
 case $TEST_TYPE in
 	inline_ipsec_tests)
