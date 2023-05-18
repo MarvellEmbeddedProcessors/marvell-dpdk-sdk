@@ -105,10 +105,14 @@ INTERNAL {
 	roc_se_auth_key_set;
 	roc_se_ciph_key_set;
 	roc_se_ctx_init;
+	roc_mcs_alloc_rsrc;
 	roc_mcs_dev_init;
 	roc_mcs_dev_fini;
 	roc_mcs_dev_get;
+	roc_mcs_free_rsrc;
 	roc_mcs_hw_info_get;
+	roc_mcs_sa_policy_read;
+	roc_mcs_sa_policy_write;
 	roc_nix_bpf_alloc;
 	roc_nix_bpf_config;
 	roc_nix_bpf_connect;
