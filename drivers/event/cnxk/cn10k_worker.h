@@ -206,7 +206,7 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 			meta_aura = mp ? mp->pool_id : m->pool->pool_id;
 
 			/* Update mempool pointer for full mode pkt */
-			if ((flags & NIX_RX_REAS_F) && (cq_w1 & BIT(11)) &&
+			if (mp && (flags & NIX_RX_REAS_F) && (cq_w1 & BIT(11)) &&
 			    !((*(uint64_t *)cpth) & BIT(15)))
 				((struct rte_mbuf *)mbuf)->pool = mp;
 
