@@ -1487,6 +1487,13 @@ This item is meant to use the same structure as `Item: PORT_REPRESENTOR`_.
 
 See also `Action: REPRESENTED_PORT`_.
 
+Item: ``TX_QUEUE``
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Matches on the Tx queue of send packet .
+
+- ``tx_queue``: Tx queue.
+
 Item: ``FLEX``
 ^^^^^^^^^^^^^^
 

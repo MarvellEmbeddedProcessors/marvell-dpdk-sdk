@@ -624,7 +624,34 @@ enum rte_flow_item_type {
 	 * See struct rte_flow_item_meter_color.
 	 */
 	RTE_FLOW_ITEM_TYPE_METER_COLOR,
+
+	/**
+	 * Match Tx queue number.
+	 * This is valid only for egress rules.
+	 *
+	 * @see struct rte_flow_item_tx_queue
+	 */
+	RTE_FLOW_ITEM_TYPE_TX_QUEUE,
 };
+
+/**
+ * RTE_FLOW_ITEM_TYPE_TX_QUEUE
+ *
+ * Tx queue number
+ *
+ * @see struct rte_flow_item_tx_queue
+ */
+struct rte_flow_item_tx_queue {
+	/** Tx queue number that packet is being transmitted */
+	uint16_t tx_queue;
+};
+
+/** Default mask for RTE_FLOW_ITEM_TX_QUEUE. */
+#ifndef __cplusplus
+static const struct rte_flow_item_tx_queue rte_flow_item_tx_queue_mask = {
+	.tx_queue = RTE_BE16(0xffff),
+};
+#endif
 
 /**
  *

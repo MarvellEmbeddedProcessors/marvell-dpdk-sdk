@@ -3712,6 +3712,10 @@ This section lists supported pattern items and their attributes, if any.
 
   - ``color {value}``: meter color value (green/yellow/red).
 
+- ``tx_queue``: match tx queue of send packet.
+
+  - ``tx_queue {value}``: send queue value (starts from 0).
+
 - ``send_to_kernel``: send packets to kernel.
 
 
