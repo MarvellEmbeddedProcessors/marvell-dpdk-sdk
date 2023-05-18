@@ -160,6 +160,7 @@ static const struct rte_flow_desc_data rte_flow_desc_item[] = {
 			rte_flow_item_flex_conv),
 	MK_FLOW_ITEM(L2TPV2, sizeof(struct rte_flow_item_l2tpv2)),
 	MK_FLOW_ITEM(PPP, sizeof(struct rte_flow_item_ppp)),
+	MK_FLOW_ITEM(TX_QUEUE, sizeof(struct rte_flow_item_tx_queue)),
 };
 
 /** Generate flow_action[] entry. */

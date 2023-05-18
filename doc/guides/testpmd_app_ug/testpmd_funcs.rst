@@ -3893,6 +3893,10 @@ This section lists supported pattern items and their attributes, if any.
   - ``ctrl {unsigned}``: PPP control.
   - ``proto_id {unsigned}``: PPP protocol identifier.
 
+- ``tx_queue``: match tx queue of send packet.
+
+  - ``tx_queue {value}``: send queue value (starts from 0).
+
 Actions list
 ^^^^^^^^^^^^
 

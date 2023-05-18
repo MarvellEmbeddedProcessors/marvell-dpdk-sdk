@@ -338,6 +338,8 @@ enum index {
 	ITEM_PPP_ADDR,
 	ITEM_PPP_CTRL,
 	ITEM_PPP_PROTO_ID,
+	ITEM_TX_QUEUE,
+	ITEM_TX_QUEUE_VALUE,
 
 	/* Validate/create actions. */
 	ACTIONS,
@@ -1062,6 +1064,7 @@ static const enum index next_item[] = {
 	ITEM_FLEX,
 	ITEM_L2TPV2,
 	ITEM_PPP,
+	ITEM_TX_QUEUE,
 	END_SET,
 	ZERO,
 };
@@ -1470,6 +1473,12 @@ static const enum index item_ppp[] = {
 	ITEM_PPP_ADDR,
 	ITEM_PPP_CTRL,
 	ITEM_PPP_PROTO_ID,
+	ITEM_NEXT,
+	ZERO,
+};
+
+static const enum index item_tx_queue[] = {
+	ITEM_TX_QUEUE_VALUE,
 	ITEM_NEXT,
 	ZERO,
 };
@@ -5301,6 +5310,22 @@ static const struct token token_list[] = {
 				ARGS_ENTRY(struct buffer, port)),
 		.call = parse_mp,
 	},
+	[ITEM_TX_QUEUE] = {
+		.name = "tx_queue",
+		.help = "match on the tx queue of send packet",
+		.priv = PRIV_ITEM(TX_QUEUE,
+				  sizeof(struct rte_flow_item_tx_queue)),
+		.next = NEXT(item_tx_queue),
+		.call = parse_vc,
+	},
+	[ITEM_TX_QUEUE_VALUE] = {
+		.name = "tx_queue_value",
+		.help = "tx queue value",
+		.next = NEXT(item_tx_queue, NEXT_ENTRY(COMMON_UNSIGNED),
+			     item_param),
+		.args = ARGS(ARGS_ENTRY(struct rte_flow_item_tx_queue,
+					tx_queue)),
+	},
 };
 
 /** Remove and return last entry from argument stack. */
@@ -8963,6 +8988,9 @@ flow_item_default_mask(const struct rte_flow_item *item)
 		break;
 	case RTE_FLOW_ITEM_TYPE_PPP:
 		mask = &rte_flow_item_ppp_mask;
+		break;
+	case RTE_FLOW_ITEM_TYPE_TX_QUEUE:
+		mask = &rte_flow_item_tx_queue_mask;
 		break;
 	default:
 		break;
