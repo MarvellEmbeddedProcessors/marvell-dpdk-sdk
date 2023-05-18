@@ -110,4 +110,7 @@
 #include "roc_nix_inl_dp.h"
 #include "roc_nix_inl.h"
 
+/* MACsec */
+#include "roc_mcs.h"
+
 #endif /* _ROC_API_H_ */

@@ -38,6 +38,7 @@ idev_set_defaults(struct idev_cfg *idev)
 	idev->num_lmtlines = 0;
 	idev->bphy = NULL;
 	idev->cpt = NULL;
+	idev->mcs = NULL;
 	idev->nix_inl_dev = NULL;
 	TAILQ_INIT(&idev->roc_nix_list);
 	plt_spinlock_init(&idev->nix_inl_dev_lock);
@@ -185,6 +186,26 @@ roc_idev_cpt_get(void)
 		return idev->cpt;
 
 	return NULL;
+}
+
+struct roc_mcs *
+roc_idev_mcs_get(void)
+{
+	struct idev_cfg *idev = idev_get_cfg();
+
+	if (idev != NULL)
+		return idev->mcs;
+
+	return NULL;
+}
+
+void
+roc_idev_mcs_set(struct roc_mcs *mcs)
+{
+	struct idev_cfg *idev = idev_get_cfg();
+
+	if (idev != NULL)
+		__atomic_store_n(&idev->mcs, mcs, __ATOMIC_RELEASE);
 }
 
 uint64_t *
