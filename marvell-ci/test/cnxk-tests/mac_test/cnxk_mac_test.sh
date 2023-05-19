@@ -155,12 +155,13 @@ function macfltr_pkt_test_verify()
 	# the number of packets dropped.
 	pkt_drop=`expr $tx_count - $rx_count`
 
+	OFF=`testpmd_log_sz $PRFX`
 	testpmd_cmd $PRFX "show port xstats $MACFLTR_PORT_INDEX"
 	sleep 5
 	# cgx_rx_dmac_filt_pkts is xstats counter which counts the number of
 	# packets with MAC address are filtered and dropped. This is a hardware
 	# counter.
-	rx_filter_pkts_af=$(macfltr_dmac_filt_pkts)
+	rx_filter_pkts_af=$(macfltr_dmac_filt_pkts $OFF)
 	xstats_pkt_drop=`expr $rx_filter_pkts_af - $rx_filter_pkts`
 
 	# pcap contains 2 packets of the configured mcast mac address.
@@ -169,6 +170,30 @@ function macfltr_pkt_test_verify()
 		echo "MAC filtering not working"
 		exit 1
 	fi
+}
+
+function check_port_status()
+{
+	# Wait for receiving all packets
+	start_ts=`date +%s`
+	start_ts=$((start_ts + 60))
+	link_status=""
+	while [[ "$link_status" != " up" ]]
+	do
+		OFF=`testpmd_log_sz $PRFX`
+		testpmd_cmd $PRFX "show port info $1"
+		sleep 3
+		link_status=`testpmd_log_off $PRFX $OFF | \
+			grep "Link status: " | cut --complement -f 1 -d ":"`
+		ts=`date +%s`
+		if (( $ts > $start_ts ))
+		then
+			echo "Timeout port is down"
+			cleanup_interface
+			exit 1
+		fi
+		echo "link status $link_status"
+	done
 }
 
 function macfltr_pkt_test()
@@ -193,21 +218,21 @@ function macfltr_pkt_test()
 
 function macfltr_dmac_filt_pkts()
 {
-	testpmd_log $PRFX | tail -62 |\
+	testpmd_log_off $PRFX $1 |\
 		grep -a "cgx_rx_dmac_filt_pkts: "|\
 		cut --complement -f 1 -d ":"
 }
 
 function macfltr_mac_cnt()
 {
-	testpmd_log $PRFX | tail -$MAC_UCAST_TAIL_LINES | \
+	testpmd_log_off $PRFX $1 | \
 		grep -a "Number of MAC address added: "| \
 		cut --complement -f 1 -d ":"
 }
 
 function macfltr_mcast_mac_cnt()
 {
-	testpmd_log $PRFX | tail -$MAC_MCAST_TAIL_LINES | \
+	testpmd_log_off $PRFX $1 | \
 		grep -a "Multicast MAC address added: "| \
 		cut --complement -f 1 -d ":"
 }
@@ -233,11 +258,11 @@ macfltr_bind_interface $MACFLTR_PORT
 echo "Starting unicast macfltr with port=$MACFLTR_PORT, coremask=$COREMASK"
 macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $UCAST_MAC_PCAP
 
-
+OFF=`testpmd_log_sz $PRFX`
 # Get MAX number of MAC's supported by the port.
 testpmd_cmd $PRFX "show port info $MACFLTR_PORT_INDEX"
 sleep 1
-NUM_MAX_MAC=`testpmd_log $PRFX | tail -57 | \
+NUM_MAX_MAC=`testpmd_log_off $PRFX $OFF | \
 	grep "Maximum number of MAC addresses: " | cut --complement -f 1 -d ":"`
 NUM_MAX_MAC=`expr $NUM_MAX_MAC - 1`
 
@@ -266,16 +291,18 @@ MAC_MCAST_TAIL_LINES=`expr $NUM_MAX_MCAST_MAC + 5`
 
 #Test-1: verify configuring default mac.
 echo "**** Test-1 Verify configuring default MAC address. ****"
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show device info $MACFLTR_PORT"
 sleep 1
-DEF_MAC=`testpmd_log $PRFX | tail -12 | grep "MAC address: " | \
+DEF_MAC=`testpmd_log_off $PRFX $OFF | grep "MAC address: " | \
 	cut --complement -f 1 -d ":"`
 
 testpmd_cmd_refresh $PRFX "mac_addr set $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[0]}"
 
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show device info $MACFLTR_PORT"
 sleep 1
-NEW_MAC=`testpmd_log $PRFX | tail -12 | grep "MAC address: " | \
+NEW_MAC=`testpmd_log_off $PRFX $OFF | grep "MAC address: " | \
 	cut --complement -f 1 -d ":"`
 # The MAC address in show command are in upper case and the MAC address in the
 # MAC address list are in lower case. Hence to match it up nocasematch is used.
@@ -292,10 +319,11 @@ shopt -u nocasematch
 
 
 #Test-2: verify the packets after configuring default unicast mac address.
+OFF=`testpmd_log_sz $PRFX`
 echo "**** Test-2 Verify packets with unicast mac filter  ****"
 testpmd_cmd $PRFX "show port xstats $MACFLTR_PORT_INDEX"
 sleep 5
-rx_filter_pkts=$(macfltr_dmac_filt_pkts)
+rx_filter_pkts=$(macfltr_dmac_filt_pkts $OFF)
 macfltr_pkt_test $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[0]} "unicast"
 echo "$rx_count packets with configured unicast MAC address \
 (${UCAST_DMAC_ARR[0]}) received successful."
@@ -310,6 +338,7 @@ testpmd_cmd_refresh $PRFX "mac_addr set $MACFLTR_PORT_INDEX $DEF_MAC"
 echo "Stop testpmd and exit."
 macfltr_cleanup
 
+OFF=`testpmd_log_sz $PRFX`
 echo "Starting unicast macfltr with port=$MACFLTR_PORT, poremask=$COREMASK"
 macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $UCAST_MAC_PCAP
 
@@ -324,11 +353,12 @@ do
 	let "mac+=1"
 done
 
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port $MACFLTR_PORT_INDEX macs"
 sleep 1
-CNT=$(macfltr_mac_cnt)
+CNT=$(macfltr_mac_cnt $OFF)
 if [[ $CNT -eq $NUM_MAX_UCAST_MAC ]] || \
-	[[ $CNT -eq $(expr $NUM_MAX_UCAST_MAC + 1) ]]
+	[[ $CNT -eq $(expr $NUM_MAX_UCAST_MAC - 1) ]]
 then
 	echo "Total $CNT unicast MAC addresses add successful"
 else
@@ -349,9 +379,10 @@ do
 	let "mac+=1"
 done
 
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port $MACFLTR_PORT_INDEX macs"
 sleep 1
-CNT=$(macfltr_mac_cnt)
+CNT=$(macfltr_mac_cnt $OFF)
 if [[ $CNT -eq 1 ]]
 then
 	echo "Unicast MAC addresses remove successful"
@@ -364,9 +395,10 @@ fi
 
 #Test-5: verify the packets after configuring unicast mac address.
 echo "**** Test-5 Verify packets with unicast mac filter  ****"
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port xstats $MACFLTR_PORT_INDEX"
 sleep 5
-rx_filter_pkts=$(macfltr_dmac_filt_pkts)
+rx_filter_pkts=$(macfltr_dmac_filt_pkts $OFF)
 macfltr_pkt_test $MACFLTR_PORT_INDEX ${UCAST_DMAC_ARR[1]} "unicast"
 echo "$rx_count packets with configured unicast MAC address \
 (${UCAST_DMAC_ARR[1]}) received successful."
@@ -392,9 +424,10 @@ do
 	let "mac+=1"
 done
 
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port $MACFLTR_PORT_INDEX mcast_macs"
 sleep 1
-CNT=$(macfltr_mcast_mac_cnt)
+CNT=$(macfltr_mcast_mac_cnt $OFF)
 if [[ $CNT -eq $NUM_MAX_MAC ]] || [[ $CNT -eq $NUM_MAX_MCAST_MAC ]]
 then
 	echo "Total $CNT multicast MAC addresses add successful"
@@ -415,9 +448,10 @@ do
 	let "mac+=1"
 done
 
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port $MACFLTR_PORT_INDEX mcast_macs"
 sleep 1
-CNT=$(macfltr_mcast_mac_cnt)
+CNT=$(macfltr_mcast_mac_cnt $OFF)
 if [[ $CNT -eq 0 ]]
 then
 	echo "Multicast MAC addresses remove successful"
@@ -430,9 +464,10 @@ fi
 
 #Test-8: verify the packets after configuring multicast mac address.
 echo "**** Test-8 Verify packets with mcast mac filter  ****"
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port xstats $MACFLTR_PORT_INDEX"
 sleep 5
-rx_filter_pkts=$(macfltr_dmac_filt_pkts)
+rx_filter_pkts=$(macfltr_dmac_filt_pkts $OFF)
 macfltr_pkt_test $MACFLTR_PORT_INDEX ${MCAST_DMAC_ARR[0]} "mcast"
 echo "$rx_count packets with configured mcast MAC address \
 (${MCAST_DMAC_ARR[0]}) received successful."
@@ -443,11 +478,12 @@ macfltr_cleanup
 #Test-9: verify MTU configuration lesser than minimum.
 echo "Test-9: MTU lesser than min for port=$MACFLTR_PORT, coremask=$COREMASK"
 macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_64B_PCAP
+check_port_status $MACFLTR_PORT_INDEX
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 30"
 sleep 1
 
-STRING=`testpmd_log $PRFX | tail -12 | grep "mtu cannot be less than 64"`
-echo $STRING
+STRING=`testpmd_log_off $PRFX $OFF | grep "mtu cannot be less than 64"`
 if [[ $STRING != "mtu cannot be less than 64" ]]
 then
 	echo "Test-9: MTU configuration lesser than minimum failed"
@@ -514,10 +550,11 @@ sleep 1
 testpmd_cmd $PRFX "port start all"
 sleep 1
 
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "show port info $MACFLTR_PORT_INDEX"
 sleep 1
 
-MAX_RX_LEN=`testpmd_log $PRFX | tail -57 | \
+MAX_RX_LEN=`testpmd_log_off $PRFX $OFF | \
 	grep "Maximum configurable length of RX packet: " |\
 	cut --complement -f 1 -d ":"`
 
@@ -545,10 +582,11 @@ macfltr_cleanup
 #Test-13: verify MTU configuration greater than maximum.
 echo "Test-13: MTU more than max for port=$MACFLTR_PORT, coremask=$COREMASK"
 macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_1518B_PCAP
+OFF=`testpmd_log_sz $PRFX`
 testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 15000"
 sleep 1
 
-STRING=`testpmd_log $PRFX | tail -12 | grep "Set MTU failed" | cut -f 1 -d "."`
+STRING=`testpmd_log_off $PRFX $OFF | grep "Set MTU failed" | cut -f 1 -d "."`
 if [[ $STRING != "Set MTU failed" ]]
 then
 	echo "Test-13: MTU configuration more than maximum failed"
