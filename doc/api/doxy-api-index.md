@@ -58,6 +58,7 @@ The public API headers are grouped by topics:
   [dlb2]               (@ref rte_pmd_dlb2.h),
   [ifpga]              (@ref rte_pmd_ifpga.h),
   [cnxk]               (@ref rte_pmd_cnxk.h)
+  [cnxk_mempool]       (@ref rte_pmd_cnxk_mempool.h),
 
 - **memory**:
   [memseg]             (@ref rte_memory.h),
