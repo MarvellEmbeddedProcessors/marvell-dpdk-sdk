@@ -3,7 +3,7 @@
  */
 
 /**
- * @file rte_pmd_cnxk.h
+ * @file rte_pmd_cnxk_mempool.h
  * Marvell CNXK Mempool PMD specific functions.
  *
  **/
