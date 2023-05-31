@@ -653,7 +653,7 @@ cnxk_cpt_inst_w7_get(struct cnxk_se_sess *sess, struct roc_cpt *roc_cpt)
 
 	inst_w7.s.cptr = (uint64_t)&sess->roc_se_ctx.se_ctx;
 
-	if (roc_errata_cpt_hang_on_mixed_ctx_val())
+	if (hw_ctx_cache_enable())
 		inst_w7.s.ctx_val = 1;
 	else
 		inst_w7.s.cptr += 8;
@@ -740,7 +740,7 @@ sym_session_configure(struct roc_cpt *roc_cpt, int driver_id,
 
 	set_sym_session_private_data(sess, driver_id, sess_priv);
 
-	if (roc_errata_cpt_hang_on_mixed_ctx_val())
+	if (hw_ctx_cache_enable())
 		roc_se_ctx_init(&sess_priv->roc_se_ctx);
 
 	return 0;
@@ -779,7 +779,7 @@ sym_session_clear(int driver_id, struct rte_cryptodev_sym_session *sess)
 	sess_priv = priv;
 
 	/* Trigger CTX flush + invalidate to remove from CTX_CACHE */
-	if (roc_errata_cpt_hang_on_mixed_ctx_val())
+	if (hw_ctx_cache_enable())
 		roc_cpt_lf_ctx_flush(sess_priv->lf, &sess_priv->roc_se_ctx.se_ctx, true);
 
 	if (sess_priv->roc_se_ctx.auth_key != NULL)
