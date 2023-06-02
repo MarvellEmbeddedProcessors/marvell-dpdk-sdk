@@ -31,6 +31,7 @@ l2fwd_event_usage(const char *prgname)
 	       "    - <rxq> : Rx queue on which TC is to be mapped.\n"
 	       "    - <tc> : Traffic class which is mapped with rxq and used in PFC frame if threshold reaches.\n"
 	       "    - <pause quanta> : Pause quanta which is mapped with rxq and used in PFC frame if threshold reaches.\n"
+	       "  --short-pool: Enable use of short mbuf pool (disabled by default)\n"
 	       "  --mode: Packet transfer mode for I/O, poll or eventdev\n"
 	       "          Default mode = eventdev\n"
 	       "  --eventq-sched: Event queue schedule type, ordered, atomic or parallel.\n"
@@ -331,6 +332,7 @@ static const char short_options[] =
 #define CMD_LINE_OPT_RXQ "rxq"
 #define CMD_LINE_OPT_TXQ "txq"
 #define CMD_LINE_OPT_PFC "pfc"
+#define CMD_LINE_OPT_SHORT_POOL "short-pool"
 #define CMD_LINE_OPT_EVENTQ_SCHED "eventq-sched"
 #define CMD_LINE_OPT_PORT_PAIR_CONF "config"
 #define CMD_LINE_OPT_ENABLE_VECTOR "event-vector"
@@ -348,6 +350,7 @@ enum {
 	CMD_LINE_OPT_RXQ_NUM,
 	CMD_LINE_OPT_TXQ_NUM,
 	CMD_LINE_OPT_PFC_NUM,
+	CMD_LINE_OPT_PFC_SHORT_POOL_NUM,
 	CMD_LINE_OPT_EVENTQ_SCHED_NUM,
 	CMD_LINE_OPT_PORT_PAIR_CONF_NUM,
 	CMD_LINE_OPT_ENABLE_VECTOR_NUM,
@@ -367,6 +370,7 @@ l2fwd_event_parse_args(int argc, char **argv, struct l2fwd_resources *rsrc)
 		{ CMD_LINE_OPT_RXQ, required_argument, NULL, CMD_LINE_OPT_RXQ_NUM},
 		{ CMD_LINE_OPT_TXQ, required_argument, NULL, CMD_LINE_OPT_TXQ_NUM},
 		{ CMD_LINE_OPT_PFC, required_argument, NULL, CMD_LINE_OPT_PFC_NUM},
+		{ CMD_LINE_OPT_SHORT_POOL, no_argument, NULL, CMD_LINE_OPT_PFC_SHORT_POOL_NUM},
 		{ CMD_LINE_OPT_EVENTQ_SCHED, required_argument, NULL,
 						CMD_LINE_OPT_EVENTQ_SCHED_NUM},
 		{ CMD_LINE_OPT_PORT_PAIR_CONF, required_argument, NULL,
@@ -458,6 +462,10 @@ l2fwd_event_parse_args(int argc, char **argv, struct l2fwd_resources *rsrc)
 				l2fwd_event_usage(prgname);
 				return -1;
 			}
+			break;
+
+		case CMD_LINE_OPT_PFC_SHORT_POOL_NUM:
+			rsrc->use_short_pool = 1;
 			break;
 
 		case CMD_LINE_OPT_EVENTQ_SCHED_NUM:
@@ -818,6 +826,7 @@ main(int argc, char **argv)
 	/* >8 End of init EAL. */
 
 	printf("MAC updating %s\n", rsrc->mac_updating ? "enabled" : "disabled");
+	printf("Use short pool %s\n", rsrc->use_short_pool ? "enabled" : "disabled");
 
 	nb_ports = rte_eth_dev_count_avail();
 	if (nb_ports == 0)
@@ -871,6 +880,15 @@ main(int argc, char **argv)
 					rte_socket_id());
 			if (rsrc->pktmbuf_pool[port_id][i] == NULL)
 				rte_panic("Cannot init mbuf pool\n");
+
+			if (rsrc->use_short_pool) {
+				snprintf(name, 32, "port%d_rxq%d_spool", port_id, i);
+				rsrc->pktmbuf_short_pool[port_id][i] = rte_pktmbuf_pool_create(name,
+						nb_mbufs, MEMPOOL_CACHE_SIZE, 0, 256,
+						rte_socket_id());
+				if (rsrc->pktmbuf_short_pool[port_id][i] == NULL)
+					rte_panic("Cannot init mbuf short pool\n");
+				}
 		}
 		/* >8 End of creation of mbuf pool. */
 	}

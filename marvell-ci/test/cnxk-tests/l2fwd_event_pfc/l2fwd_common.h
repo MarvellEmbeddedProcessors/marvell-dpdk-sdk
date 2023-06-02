@@ -89,6 +89,7 @@ struct l2fwd_resources {
 	uint8_t event_mode;
 	uint8_t sched_type;
 	uint8_t mac_updating;
+	uint8_t use_short_pool;
 	uint8_t rx_queue_per_lcore;
 	uint8_t num_rxq;
 	uint8_t num_txq;
@@ -100,6 +101,7 @@ struct l2fwd_resources {
 	uint32_t enabled_port_mask;
 	uint64_t timer_period;
 	struct rte_mempool *pktmbuf_pool[RTE_MAX_ETHPORTS][MAX_RX_QUEUE_PER_PORT];
+	struct rte_mempool *pktmbuf_short_pool[RTE_MAX_ETHPORTS][MAX_RX_QUEUE_PER_PORT];
 	struct rte_mempool *evt_vec_pool;
 	uint32_t dst_ports[RTE_MAX_ETHPORTS];
 	struct rte_ether_addr eth_addr[RTE_MAX_ETHPORTS];

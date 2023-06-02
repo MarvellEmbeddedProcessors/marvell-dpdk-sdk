@@ -7,6 +7,7 @@
 int
 l2fwd_event_init_ports(struct l2fwd_resources *rsrc)
 {
+	struct rte_mempool *rx_mempool[MAX_RX_QUEUE_PER_PORT] = {0};
 	uint16_t nb_rxd = RX_DESC_DEFAULT;
 	uint16_t nb_txd = TX_DESC_DEFAULT;
 	struct rte_eth_conf port_conf = {
@@ -78,12 +79,21 @@ l2fwd_event_init_ports(struct l2fwd_resources *rsrc)
 		fflush(stdout);
 		rxq_conf = dev_info.default_rxconf;
 		rxq_conf.offloads = local_port_conf.rxmode.offloads;
+		if (rsrc->use_short_pool)
+			rxq_conf.rx_nmempool = 2;
+
 		/* Using lcore to poll one or several ports. 8< */
 
 		for (i = 0; i < rsrc->num_rxq; i++) {
+			rx_mempool[0] = rsrc->pktmbuf_pool[port_id][i];
+			if (rsrc->use_short_pool) {
+				rx_mempool[1] = rsrc->pktmbuf_short_pool[port_id][i];
+				rxq_conf.rx_mempools = rx_mempool;
+			}
+
 			ret = rte_eth_rx_queue_setup(port_id, i, nb_rxd,
 						     rte_eth_dev_socket_id(port_id), &rxq_conf,
-						     rsrc->pktmbuf_pool[port_id][i]);
+						     rsrc->use_short_pool ? NULL : rx_mempool[0]);
 			if (ret < 0)
 				rte_panic("rte_eth_rx_queue_setup:err=%d, port=%u\n",
 					  ret, port_id);
