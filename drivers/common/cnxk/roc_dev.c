@@ -537,7 +537,7 @@ mbox_up_handler_mcs_intr_notify(struct dev *dev, struct mcs_intr_info *info, str
 		     dev_get_vf(dev->pf_func), info->hdr.id, mbox_id2name(info->hdr.id),
 		     dev_get_pf(info->hdr.pcifunc), dev_get_vf(info->hdr.pcifunc));
 
-	mcs = roc_mcs_dev_get(info->mcs_id);
+	mcs = roc_idev_mcs_get(info->mcs_id);
 	if (!mcs)
 		goto exit;
 

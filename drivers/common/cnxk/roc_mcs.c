@@ -17,10 +17,6 @@ TAILQ_HEAD(mcs_event_cb_list, mcs_event_cb);
 
 PLT_STATIC_ASSERT(ROC_MCS_MEM_SZ >= (sizeof(struct mcs_priv) + sizeof(struct mcs_event_cb_list)));
 
-TAILQ_HEAD(roc_mcs_head, roc_mcs);
-/* Local mcs tailq list */
-static struct roc_mcs_head roc_mcs_head = TAILQ_HEAD_INITIALIZER(roc_mcs_head);
-
 int
 roc_mcs_hw_info_get(struct roc_mcs_hw_info *hw_info)
 {
@@ -805,56 +801,36 @@ exit:
 }
 
 struct roc_mcs *
-roc_mcs_dev_get(uint8_t mcs_idx)
-{
-	struct roc_mcs *mcs = NULL;
-
-	TAILQ_FOREACH(mcs, &roc_mcs_head, next) {
-		if (mcs->idx == mcs_idx)
-			break;
-	}
-
-	return mcs;
-}
-
-struct roc_mcs *
 roc_mcs_dev_init(uint8_t mcs_idx)
 {
 	struct mcs_event_cb_list *cb_list;
 	struct roc_mcs *mcs;
 	struct npa_lf *npa;
 
-	if (roc_model_is_cn10kb()) {
-		mcs = roc_idev_mcs_get();
-		if (mcs) {
-			plt_info("Skipping device, mcs device already probed");
-			mcs->refcount++;
-			return mcs;
-		}
+	if (!(roc_feature_bphy_has_macsec() || roc_feature_nix_has_macsec()))
+		return NULL;
+
+	mcs = roc_idev_mcs_get(mcs_idx);
+	if (mcs) {
+		plt_info("Skipping device, mcs device already probed");
+		mcs->refcount++;
+		return mcs;
 	}
 
 	mcs = plt_zmalloc(sizeof(struct roc_mcs), PLT_CACHE_LINE_SIZE);
 	if (!mcs)
 		return NULL;
 
-	if (roc_model_is_cnf10kb() || roc_model_is_cn10kb()) {
-		npa = idev_npa_obj_get();
-		if (!npa)
-			goto exit;
+	npa = idev_npa_obj_get();
+	if (!npa)
+		goto exit;
 
-		mcs->mbox = npa->mbox;
-	} else {
-		/* Retrieve mbox handler for other roc models */
-		;
-	}
-
+	mcs->mbox = npa->mbox;
 	mcs->idx = mcs_idx;
 
 	/* Add any per mcsv initialization */
 	if (mcs_alloc_rsrc_bmap(mcs))
 		goto exit;
-
-	TAILQ_INSERT_TAIL(&roc_mcs_head, mcs, next);
 
 	cb_list = (struct mcs_event_cb_list *)roc_mcs_to_mcs_cb_list(mcs);
 	TAILQ_INIT(cb_list);
@@ -880,8 +856,6 @@ roc_mcs_dev_fini(struct roc_mcs *mcs)
 
 	priv = roc_mcs_to_mcs_priv(mcs);
 
-	TAILQ_REMOVE(&roc_mcs_head, mcs, next);
-
 	rsrc_bmap_free(&priv->dev_rsrc);
 
 	for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
@@ -891,7 +865,7 @@ roc_mcs_dev_fini(struct roc_mcs *mcs)
 
 	plt_free(priv->port_rsrc);
 
-	plt_free(mcs);
+	roc_idev_mcs_free(mcs);
 
-	roc_idev_mcs_set(NULL);
+	plt_free(mcs);
 }

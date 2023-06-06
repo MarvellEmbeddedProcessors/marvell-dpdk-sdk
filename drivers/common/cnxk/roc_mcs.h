@@ -494,6 +494,8 @@ struct roc_mcs {
 	uint8_t reserved[ROC_MCS_MEM_SZ] __plt_cache_aligned;
 } __plt_cache_aligned;
 
+TAILQ_HEAD(roc_mcs_head, roc_mcs);
+
 /* Initialization */
 __roc_api struct roc_mcs *roc_mcs_dev_init(uint8_t mcs_idx);
 __roc_api void roc_mcs_dev_fini(struct roc_mcs *mcs);
