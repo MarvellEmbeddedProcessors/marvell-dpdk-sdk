@@ -266,13 +266,6 @@ cn10k_flow_destroy(struct rte_eth_dev *eth_dev, struct rte_flow *rte_flow,
 		}
 	}
 
-	rc = cnxk_mcs_flow_destroy(dev, (void *)flow);
-	if (rc < 0) {
-		rte_flow_error_set(error, rc, RTE_FLOW_ERROR_TYPE_UNSPECIFIED, NULL,
-					   "Failed to free mcs flow");
-		return rc;
-	}
-
 	vtag_actions = roc_npc_vtag_actions_get(npc);
 	if (vtag_actions) {
 		if (flow->nix_intf == ROC_NPC_INTF_RX) {
@@ -283,6 +276,14 @@ cn10k_flow_destroy(struct rte_eth_dev *eth_dev, struct rte_flow *rte_flow,
 				cn10k_eth_set_rx_function(eth_dev);
 			}
 		}
+	}
+
+	if (cnxk_eth_macsec_sess_get_by_sess(dev, (void *)flow) != NULL) {
+		rc = cnxk_mcs_flow_destroy(dev, (void *)flow);
+		if (rc < 0)
+			rte_flow_error_set(error, rc, RTE_FLOW_ERROR_TYPE_UNSPECIFIED,
+					NULL, "Failed to free mcs flow");
+		return rc;
 	}
 
 	mtr_id = flow->mtr_id;

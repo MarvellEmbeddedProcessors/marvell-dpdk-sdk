@@ -512,9 +512,9 @@ cnxk_mcs_flow_destroy(struct cnxk_eth_dev *dev, void *flow)
 
 	ret = roc_mcs_free_rsrc(mcs_dev->mdev, &req);
 	if (ret)
-		plt_err("Failed to free SC id.");
+		plt_err("Failed to free flow_id: %d.", s->flow_id);
 
-	return (ret == 0) ? 1 : ret;
+	return ret;
 }
 
 int
