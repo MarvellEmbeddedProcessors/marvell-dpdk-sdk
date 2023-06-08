@@ -150,7 +150,7 @@ function run_all_tests()
 		run_test $tst
 		res=$?
 		if [[ $res -ne 0 ]] && [[ $res -ne 77 ]] ; then
-			if [[ -n $PERF_STAGE ]]; then
+			if [[ -n $CONTINUE_ON_FAILURE ]]; then
 				echo "FAILURE: Test $tst failed"
 				failed_tests="$failed_tests $tst"
 			else
