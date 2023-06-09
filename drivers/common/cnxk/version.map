@@ -108,8 +108,8 @@ INTERNAL {
 	roc_se_ciph_key_set;
 	roc_se_ctx_init;
 	roc_mcs_active_lmac_set;
-	roc_mcs_alloc_ctrl_pkt_rule;
-	roc_mcs_alloc_rsrc;
+	roc_mcs_ctrl_pkt_rule_alloc;
+	roc_mcs_ctrl_pkt_rule_free;
 	roc_mcs_ctrl_pkt_rule_write;
 	roc_mcs_custom_tag_cfg_get;
 	roc_mcs_dev_init;
@@ -121,8 +121,6 @@ INTERNAL {
 	roc_mcs_flowid_entry_read;
 	roc_mcs_flowid_entry_write;
 	roc_mcs_flowid_stats_get;
-	roc_mcs_free_ctrl_pkt_rule;
-	roc_mcs_free_rsrc;
 	roc_mcs_hw_info_get;
 	roc_mcs_intr_configure;
 	roc_mcs_lmac_mode_set;
@@ -134,6 +132,8 @@ INTERNAL {
 	roc_mcs_port_recovery;
 	roc_mcs_port_reset;
 	roc_mcs_port_stats_get;
+	roc_mcs_rsrc_alloc;
+	roc_mcs_rsrc_free;
 	roc_mcs_rx_sc_cam_enable;
 	roc_mcs_rx_sc_cam_read;
 	roc_mcs_rx_sc_cam_write;

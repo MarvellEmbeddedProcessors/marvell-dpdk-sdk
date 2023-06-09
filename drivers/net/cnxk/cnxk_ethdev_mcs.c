@@ -11,14 +11,16 @@ mcs_resource_alloc(struct cnxk_mcs_dev *mcs_dev, enum mcs_direction dir, uint8_t
 		   uint8_t rsrc_cnt, enum cnxk_mcs_rsrc_type type)
 {
 	struct roc_mcs_alloc_rsrc_req req = {0};
-	struct roc_mcs_alloc_rsrc_rsp rsp = {0};
+	struct roc_mcs_alloc_rsrc_rsp rsp;
 	int i;
 
 	req.rsrc_type = type;
 	req.rsrc_cnt = rsrc_cnt;
 	req.dir = dir;
 
-	if (roc_mcs_alloc_rsrc(mcs_dev->mdev, &req, &rsp)) {
+	memset(&rsp, 0, sizeof(struct roc_mcs_alloc_rsrc_rsp));
+
+	if (roc_mcs_rsrc_alloc(mcs_dev->mdev, &req, &rsp)) {
 		plt_err("Cannot allocate mcs resource.");
 		return -1;
 	}
@@ -55,7 +57,7 @@ cnxk_eth_macsec_sa_create(void *device, struct rte_security_macsec_sa *conf)
 	uint8_t hash_key_rev[CNXK_MACSEC_HASH_KEY] = {0};
 	uint8_t hash_key[CNXK_MACSEC_HASH_KEY] = {0};
 	struct cnxk_mcs_dev *mcs_dev = dev->mcs_dev;
-	struct roc_mcs_sa_plcy_write_req req = {0};
+	struct roc_mcs_sa_plcy_write_req req;
 	uint8_t ciph_key[32] = {0};
 	enum mcs_direction dir;
 	uint8_t sa_id = 0;
@@ -70,6 +72,7 @@ cnxk_eth_macsec_sa_create(void *device, struct rte_security_macsec_sa *conf)
 		plt_err("Failed to allocate SA id.");
 		return -ENOMEM;
 	}
+	memset(&req, 0, sizeof(struct roc_mcs_sa_plcy_write_req));
 	req.sa_index[0] = sa_id;
 	req.sa_cnt = 1;
 	req.dir = dir;
@@ -139,7 +142,7 @@ cnxk_eth_macsec_sa_destroy(void *device, uint16_t sa_id, enum rte_security_macse
 	req.dir = (dir == RTE_SECURITY_MACSEC_DIR_TX) ? MCS_TX : MCS_RX;
 	req.rsrc_type = CNXK_MCS_RSRC_TYPE_SA;
 
-	ret = roc_mcs_free_rsrc(mcs_dev->mdev, &req);
+	ret = roc_mcs_rsrc_free(mcs_dev->mdev, &req);
 	if (ret)
 		plt_err("Failed to free SA id %u, dir %u.", sa_id, dir);
 
@@ -249,7 +252,7 @@ cnxk_eth_macsec_sc_destroy(void *device, uint16_t sc_id, enum rte_security_macse
 	req.dir = (dir == RTE_SECURITY_MACSEC_DIR_TX) ? MCS_TX : MCS_RX;
 	req.rsrc_type = CNXK_MCS_RSRC_TYPE_SC;
 
-	ret = roc_mcs_free_rsrc(mcs_dev->mdev, &req);
+	ret = roc_mcs_rsrc_free(mcs_dev->mdev, &req);
 	if (ret)
 		plt_err("Failed to free SC id.");
 
@@ -380,7 +383,7 @@ cnxk_eth_macsec_session_destroy(struct cnxk_eth_dev *dev, struct rte_security_se
 	req.dir = s->dir;
 	req.rsrc_type = CNXK_MCS_RSRC_TYPE_SECY;
 
-	ret = roc_mcs_free_rsrc(mcs_dev->mdev, &req);
+	ret = roc_mcs_rsrc_free(mcs_dev->mdev, &req);
 	if (ret)
 		plt_err("Failed to free SC id.");
 
@@ -396,9 +399,9 @@ cnxk_mcs_flow_configure(struct rte_eth_dev *eth_dev, const struct rte_flow_attr 
 			 struct rte_flow_error *error __rte_unused, void **mcs_flow)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-	struct roc_mcs_flowid_entry_write_req req = {0};
 	const struct rte_flow_item_eth *eth_item = NULL;
 	struct cnxk_mcs_dev *mcs_dev = dev->mcs_dev;
+	struct roc_mcs_flowid_entry_write_req req;
 	struct cnxk_mcs_flow_opts opts = {0};
 	struct cnxk_macsec_sess *sess;
 	struct rte_ether_addr src;
@@ -420,6 +423,7 @@ cnxk_mcs_flow_configure(struct rte_eth_dev *eth_dev, const struct rte_flow_attr 
 		plt_err("Failed to allocate FLow id.");
 		return -ENOMEM;
 	}
+	memset(&req, 0, sizeof(struct roc_mcs_flowid_entry_write_req));
 	req.sci = sess->sci;
 	req.flow_id = sess->flow_id;
 	req.secy_id = sess->secy_id;
@@ -510,7 +514,7 @@ cnxk_mcs_flow_destroy(struct cnxk_eth_dev *dev, void *flow)
 	req.dir = s->dir;
 	req.rsrc_type = CNXK_MCS_RSRC_TYPE_FLOWID;
 
-	ret = roc_mcs_free_rsrc(mcs_dev->mdev, &req);
+	ret = roc_mcs_rsrc_free(mcs_dev->mdev, &req);
 	if (ret)
 		plt_err("Failed to free flow_id: %d.", s->flow_id);
 
@@ -563,16 +567,16 @@ cnxk_eth_macsec_session_stats_get(struct cnxk_eth_dev *dev, struct cnxk_macsec_s
 	req.dir = sess->dir;
 	roc_mcs_flowid_stats_get(mcs_dev->mdev, &req, &flow_stats);
 	plt_nix_dbg("\n******* FLOW_ID IDX[%u] STATS dir: %u********\n", sess->flow_id, sess->dir);
-	plt_nix_dbg("TX: tcam_hit_cnt: 0x%lx\n", flow_stats.tcam_hit_cnt);
+	plt_nix_dbg("TX: tcam_hit_cnt: 0x%" PRIx64 "\n", flow_stats.tcam_hit_cnt);
 
 	req.id = mcs_dev->port_id;
 	req.dir = sess->dir;
 	roc_mcs_port_stats_get(mcs_dev->mdev, &req, &port_stats);
 	plt_nix_dbg("\n********** PORT[0] STATS ****************\n");
-	plt_nix_dbg("RX tcam_miss_cnt: 0x%lx\n", port_stats.tcam_miss_cnt);
-	plt_nix_dbg("RX parser_err_cnt: 0x%lx\n", port_stats.parser_err_cnt);
-	plt_nix_dbg("RX preempt_err_cnt: 0x%lx\n", port_stats.preempt_err_cnt);
-	plt_nix_dbg("RX sectag_insert_err_cnt: 0x%lx\n", port_stats.sectag_insert_err_cnt);
+	plt_nix_dbg("RX tcam_miss_cnt: 0x%" PRIx64 "\n", port_stats.tcam_miss_cnt);
+	plt_nix_dbg("RX parser_err_cnt: 0x%" PRIx64 "\n", port_stats.parser_err_cnt);
+	plt_nix_dbg("RX preempt_err_cnt: 0x%" PRIx64 "\n", port_stats.preempt_err_cnt);
+	plt_nix_dbg("RX sectag_insert_err_cnt: 0x%" PRIx64 "\n", port_stats.sectag_insert_err_cnt);
 
 	req.id = sess->secy_id;
 	req.dir = sess->dir;

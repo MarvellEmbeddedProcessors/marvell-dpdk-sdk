@@ -317,7 +317,7 @@ create_default_flow(const struct mcs_test_vector *td, uint16_t portid,
 	struct rte_flow_attr attr = {0};
 	struct rte_flow_error err;
 	struct rte_flow *flow;
-	struct rte_flow_item_eth eth = {0};
+	struct rte_flow_item_eth eth = { .hdr.ether_type = 0, };
 	static const struct rte_flow_item_eth eth_mask = {
 		.hdr.dst_addr.addr_bytes = "\x00\x00\x00\x00\x00\x00",
 		.hdr.src_addr.addr_bytes = "\x00\x00\x00\x00\x00\x00",
@@ -890,14 +890,14 @@ test_macsec_sec_caps_verify(const struct mcs_test_opts *opts,
 static int
 test_macsec(const struct mcs_test_vector *td[], enum mcs_op op, const struct mcs_test_opts *opts)
 {
-	uint16_t rx_sa_id[MCS_MAX_FLOWS][RTE_SECURITY_MACSEC_NUM_AN] = {0};
+	uint16_t rx_sa_id[MCS_MAX_FLOWS][RTE_SECURITY_MACSEC_NUM_AN] = {{0}};
 	struct rte_security_capability_idx sec_cap_idx;
 	const struct rte_security_capability *sec_cap;
-	uint16_t tx_sa_id[MCS_MAX_FLOWS][2] = {0};
+	uint16_t tx_sa_id[MCS_MAX_FLOWS][2] = {{0}};
 	uint16_t rx_sc_id[MCS_MAX_FLOWS] = {0};
 	uint16_t tx_sc_id[MCS_MAX_FLOWS] = {0};
-	void *rx_sess[MCS_MAX_FLOWS];
-	void *tx_sess[MCS_MAX_FLOWS];
+	void *rx_sess[MCS_MAX_FLOWS] = {0};
+	void *tx_sess[MCS_MAX_FLOWS] = {0};
 	struct rte_security_session_conf sess_conf = {0};
 	struct rte_security_macsec_sa sa_conf = {0};
 	struct rte_security_macsec_sc sc_conf = {0};

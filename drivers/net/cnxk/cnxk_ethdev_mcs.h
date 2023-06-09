@@ -2,6 +2,9 @@
  * Copyright(C) 2023 Marvell.
  */
 
+#ifndef CNXK_ETHDEV_MCS_H
+#define CNXK_ETHDEV_MCS_H
+
 #include <cnxk_ethdev.h>
 
 #define CNXK_MACSEC_HASH_KEY 16
@@ -109,3 +112,5 @@ int cnxk_eth_macsec_session_stats_get(struct cnxk_eth_dev *dev, struct cnxk_macs
 int cnxk_eth_macsec_session_create(struct cnxk_eth_dev *dev, struct rte_security_session_conf *conf,
 				   struct rte_security_session *sess);
 int cnxk_eth_macsec_session_destroy(struct cnxk_eth_dev *dev, struct rte_security_session *sess);
+
+#endif /* CNXK_ETHDEV_MCS_H */

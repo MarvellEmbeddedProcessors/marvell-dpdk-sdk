@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(C) 2022 Marvell.
+ * Copyright(C) 2023 Marvell.
  */
 
 #include "roc_api.h"

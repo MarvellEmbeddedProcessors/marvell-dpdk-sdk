@@ -886,7 +886,7 @@ struct mcs_set_active_lmac {
 	struct mbox_msghdr hdr;
 	uint32_t __io lmac_bmap; /* bitmap of active lmac per mcs block */
 	uint8_t __io mcs_id;
-	uint16_t channel_base; /* MCS channel base */
+	uint16_t __io channel_base; /* MCS channel base */
 	uint64_t __io rsvd;
 };
 

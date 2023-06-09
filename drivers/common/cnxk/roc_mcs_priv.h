@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(C) 2022 Marvell.
+ * Copyright(C) 2023 Marvell.
  */
 
 #ifndef _ROC_MCS_PRIV_H_
@@ -15,7 +15,7 @@ enum mcs_error_status {
 
 #define MCS_SUPPORT_CHECK                                                                          \
 	do {                                                                                       \
-		if (!(roc_model_is_cnf10kb() || roc_model_is_cn10kb_a0()))                         \
+		if (!(roc_feature_bphy_has_macsec() || roc_feature_nix_has_macsec()))              \
 			return MCS_ERR_HW_NOTSUP;                                                  \
 	} while (0)
 

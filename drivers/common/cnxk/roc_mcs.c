@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(C) 2022 Marvell.
+ * Copyright(C) 2023 Marvell.
  */
 
 #include "roc_api.h"
@@ -141,7 +141,7 @@ roc_mcs_pn_threshold_set(struct roc_mcs *mcs, struct roc_mcs_set_pn_threshold *p
 }
 
 int
-roc_mcs_alloc_ctrl_pkt_rule(struct roc_mcs *mcs, struct roc_mcs_alloc_ctrl_pkt_rule_req *req,
+roc_mcs_ctrl_pkt_rule_alloc(struct roc_mcs *mcs, struct roc_mcs_alloc_ctrl_pkt_rule_req *req,
 			    struct roc_mcs_alloc_ctrl_pkt_rule_rsp *rsp)
 {
 	struct mcs_alloc_ctrl_pkt_rule_req *rule_req;
@@ -173,7 +173,7 @@ roc_mcs_alloc_ctrl_pkt_rule(struct roc_mcs *mcs, struct roc_mcs_alloc_ctrl_pkt_r
 }
 
 int
-roc_mcs_free_ctrl_pkt_rule(struct roc_mcs *mcs, struct roc_mcs_free_ctrl_pkt_rule_req *req)
+roc_mcs_ctrl_pkt_rule_free(struct roc_mcs *mcs, struct roc_mcs_free_ctrl_pkt_rule_req *req)
 {
 	struct mcs_free_ctrl_pkt_rule_req *rule_req;
 	struct msg_rsp *rsp;
@@ -617,7 +617,7 @@ roc_mcs_event_cb_register(struct roc_mcs *mcs, enum roc_mcs_event_type event,
 
 	MCS_SUPPORT_CHECK;
 
-	TAILQ_FOREACH (cb, cb_list, next) {
+	TAILQ_FOREACH(cb, cb_list, next) {
 		if (cb->cb_fn == cb_fn && cb->cb_arg == cb_arg && cb->event == event)
 			break;
 	}
@@ -670,7 +670,7 @@ mcs_event_cb_process(struct roc_mcs *mcs, struct roc_mcs_event_desc *desc)
 	struct mcs_event_cb *cb;
 	int rc = 0;
 
-	TAILQ_FOREACH (cb, cb_list, next) {
+	TAILQ_FOREACH(cb, cb_list, next) {
 		if (cb->cb_fn == NULL || cb->event != desc->type)
 			continue;
 

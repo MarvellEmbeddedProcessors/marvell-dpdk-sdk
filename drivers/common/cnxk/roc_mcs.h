@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright(C) 2022 Marvell.
+ * Copyright(C) 2023 Marvell.
  */
 
-#ifndef _ROC_MCS_H_
-#define _ROC_MCS_H_
+#ifndef ROC_MCS_H
+#define ROC_MCS_H
 
 #define MCS_AES_GCM_256_KEYLEN 32
 
@@ -522,19 +522,21 @@ __roc_api int roc_mcs_custom_tag_cfg_get(struct roc_mcs *mcs,
 					 struct roc_mcs_custom_tag_cfg_get_rsp *rsp);
 
 /* Resource allocation and free */
-__roc_api int roc_mcs_alloc_rsrc(struct roc_mcs *mcs, struct roc_mcs_alloc_rsrc_req *req,
+__roc_api int roc_mcs_rsrc_alloc(struct roc_mcs *mcs, struct roc_mcs_alloc_rsrc_req *req,
 				 struct roc_mcs_alloc_rsrc_rsp *rsp);
-__roc_api int roc_mcs_free_rsrc(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *req);
+__roc_api int roc_mcs_rsrc_free(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *req);
 /* SA policy read and write */
 __roc_api int roc_mcs_sa_policy_write(struct roc_mcs *mcs,
 				      struct roc_mcs_sa_plcy_write_req *sa_plcy);
 __roc_api int roc_mcs_sa_policy_read(struct roc_mcs *mcs,
 				     struct roc_mcs_sa_plcy_write_req *sa_plcy);
+
 /* PN Table read and write */
 __roc_api int roc_mcs_pn_table_write(struct roc_mcs *mcs,
 				     struct roc_mcs_pn_table_write_req *pn_table);
 __roc_api int roc_mcs_pn_table_read(struct roc_mcs *mcs,
 				    struct roc_mcs_pn_table_write_req *pn_table);
+
 /* RX SC read, write and enable */
 __roc_api int roc_mcs_rx_sc_cam_write(struct roc_mcs *mcs,
 				      struct roc_mcs_rx_sc_cam_write_req *rx_sc_cam);
@@ -557,6 +559,7 @@ __roc_api int roc_mcs_tx_sc_sa_map_write(struct roc_mcs *mcs,
 					 struct roc_mcs_tx_sc_sa_map *tx_sc_sa_map);
 __roc_api int roc_mcs_tx_sc_sa_map_read(struct roc_mcs *mcs,
 					struct roc_mcs_tx_sc_sa_map *tx_sc_sa_map);
+
 /* Flow entry read, write and enable */
 __roc_api int roc_mcs_flowid_entry_write(struct roc_mcs *mcs,
 					 struct roc_mcs_flowid_entry_write_req *flowid_req);
@@ -566,10 +569,10 @@ __roc_api int roc_mcs_flowid_entry_enable(struct roc_mcs *mcs,
 					  struct roc_mcs_flowid_ena_dis_entry *entry);
 
 /* Control packet rule alloc, free and write */
-__roc_api int roc_mcs_alloc_ctrl_pkt_rule(struct roc_mcs *mcs,
+__roc_api int roc_mcs_ctrl_pkt_rule_alloc(struct roc_mcs *mcs,
 					  struct roc_mcs_alloc_ctrl_pkt_rule_req *req,
 					  struct roc_mcs_alloc_ctrl_pkt_rule_rsp *rsp);
-__roc_api int roc_mcs_free_ctrl_pkt_rule(struct roc_mcs *mcs,
+__roc_api int roc_mcs_ctrl_pkt_rule_free(struct roc_mcs *mcs,
 					 struct roc_mcs_free_ctrl_pkt_rule_req *req);
 __roc_api int roc_mcs_ctrl_pkt_rule_write(struct roc_mcs *mcs,
 					  struct roc_mcs_ctrl_pkt_rule_write_req *req);
@@ -621,4 +624,4 @@ __roc_api int roc_mcs_fips_start(struct roc_mcs *mcs, struct roc_mcs_fips_req *r
 /* FIPS result */
 __roc_api int roc_mcs_fips_result_get(struct roc_mcs *mcs, struct roc_mcs_fips_req *req,
 				      struct roc_mcs_fips_result_rsp *rsp);
-#endif /* _ROC_MCS_H_ */
+#endif /* ROC_MCS_H */

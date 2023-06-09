@@ -6,7 +6,7 @@
 #include "roc_priv.h"
 
 int
-roc_mcs_alloc_rsrc(struct roc_mcs *mcs, struct roc_mcs_alloc_rsrc_req *req,
+roc_mcs_rsrc_alloc(struct roc_mcs *mcs, struct roc_mcs_alloc_rsrc_req *req,
 		   struct roc_mcs_alloc_rsrc_rsp *rsp)
 {
 	struct mcs_priv *priv = roc_mcs_to_mcs_priv(mcs);
@@ -93,13 +93,13 @@ roc_mcs_alloc_rsrc(struct roc_mcs *mcs, struct roc_mcs_alloc_rsrc_req *req,
 }
 
 int
-roc_mcs_free_rsrc(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *free_req)
+roc_mcs_rsrc_free(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *free_req)
 {
 	struct mcs_priv *priv = roc_mcs_to_mcs_priv(mcs);
 	struct mcs_free_rsrc_req *req;
 	struct msg_rsp *rsp;
 	uint32_t pos;
-	int rc;
+	int i, rc;
 
 	MCS_SUPPORT_CHECK;
 
@@ -124,7 +124,7 @@ roc_mcs_free_rsrc(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *free_req)
 	case MCS_RSRC_TYPE_FLOWID:
 		pos = free_req->rsrc_id + ((req->dir == MCS_TX) ? priv->tcam_entries : 0);
 		plt_bitmap_clear(priv->dev_rsrc.tcam_bmap, pos);
-		for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+		for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 			uint32_t set = plt_bitmap_get(priv->port_rsrc[i].tcam_bmap, pos);
 
 			if (set) {
@@ -136,7 +136,7 @@ roc_mcs_free_rsrc(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *free_req)
 	case MCS_RSRC_TYPE_SECY:
 		pos = free_req->rsrc_id + ((req->dir == MCS_TX) ? priv->secy_entries : 0);
 		plt_bitmap_clear(priv->dev_rsrc.secy_bmap, pos);
-		for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+		for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 			uint32_t set = plt_bitmap_get(priv->port_rsrc[i].secy_bmap, pos);
 
 			if (set) {
@@ -148,7 +148,7 @@ roc_mcs_free_rsrc(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *free_req)
 	case MCS_RSRC_TYPE_SC:
 		pos = free_req->rsrc_id + ((req->dir == MCS_TX) ? priv->sc_entries : 0);
 		plt_bitmap_clear(priv->dev_rsrc.sc_bmap, pos);
-		for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+		for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 			uint32_t set = plt_bitmap_get(priv->port_rsrc[i].sc_bmap, pos);
 
 			if (set) {
@@ -160,7 +160,7 @@ roc_mcs_free_rsrc(struct roc_mcs *mcs, struct roc_mcs_free_rsrc_req *free_req)
 	case MCS_RSRC_TYPE_SA:
 		pos = free_req->rsrc_id + ((req->dir == MCS_TX) ? priv->sa_entries : 0);
 		plt_bitmap_clear(priv->dev_rsrc.sa_bmap, pos);
-		for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+		for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 			uint32_t set = plt_bitmap_get(priv->port_rsrc[i].sa_bmap, pos);
 
 			if (set) {
@@ -248,7 +248,7 @@ roc_mcs_rx_sc_cam_write(struct roc_mcs *mcs, struct roc_mcs_rx_sc_cam_write_req 
 	struct mcs_priv *priv = roc_mcs_to_mcs_priv(mcs);
 	struct mcs_rx_sc_cam_write_req *rx_sc;
 	struct msg_rsp *rsp;
-	int rc;
+	int i, rc;
 
 	MCS_SUPPORT_CHECK;
 
@@ -268,7 +268,7 @@ roc_mcs_rx_sc_cam_write(struct roc_mcs *mcs, struct roc_mcs_rx_sc_cam_write_req 
 	if (rc)
 		return rc;
 
-	for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+	for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 		uint32_t set = plt_bitmap_get(priv->port_rsrc[i].secy_bmap, rx_sc_cam->secy_id);
 
 		if (set) {
@@ -337,7 +337,7 @@ roc_mcs_rx_sc_sa_map_write(struct roc_mcs *mcs, struct roc_mcs_rx_sc_sa_map *rx_
 	struct mcs_rx_sc_sa_map *sa_map;
 	struct msg_rsp *rsp;
 	uint16_t sc_id;
-	int rc;
+	int i, rc;
 
 	MCS_SUPPORT_CHECK;
 
@@ -359,7 +359,7 @@ roc_mcs_rx_sc_sa_map_write(struct roc_mcs *mcs, struct roc_mcs_rx_sc_sa_map *rx_
 	if (rc)
 		return rc;
 
-	for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+	for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 		uint32_t set = plt_bitmap_get(priv->port_rsrc[i].sc_bmap, sc_id);
 
 		if (set) {
@@ -389,7 +389,7 @@ roc_mcs_tx_sc_sa_map_write(struct roc_mcs *mcs, struct roc_mcs_tx_sc_sa_map *tx_
 	struct mcs_tx_sc_sa_map *sa_map;
 	struct msg_rsp *rsp;
 	uint16_t sc_id;
-	int rc;
+	int i, rc;
 
 	MCS_SUPPORT_CHECK;
 
@@ -415,7 +415,7 @@ roc_mcs_tx_sc_sa_map_write(struct roc_mcs *mcs, struct roc_mcs_tx_sc_sa_map *tx_
 		return rc;
 
 	sc_id = tx_sc_sa_map->sc_id;
-	for (int i = 0; i < MAX_PORTS_PER_MCS; i++) {
+	for (i = 0; i < MAX_PORTS_PER_MCS; i++) {
 		uint32_t set = plt_bitmap_get(priv->port_rsrc[i].sc_bmap, sc_id + priv->sc_entries);
 
 		if (set) {
