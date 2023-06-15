@@ -5,7 +5,7 @@
 #include "cn9k_ethdev.h"
 #include "cn9k_rx.h"
 
-static inline void
+static __rte_used void
 pick_rx_func(struct rte_eth_dev *eth_dev,
 	     const eth_rx_burst_t rx_burst[NIX_RX_OFFLOAD_MAX])
 {

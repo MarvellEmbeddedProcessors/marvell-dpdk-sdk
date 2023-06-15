@@ -442,7 +442,7 @@ nix_rx_chan_multi_bpid_cfg(struct roc_nix *roc_nix, uint8_t chan, uint16_t bpid,
 		return -EINVAL;
 
 	/* Find associated NIX RX channel if Aura BPID is of that of a NIX. */
-	TAILQ_FOREACH (roc_nix_tmp, nix_list, next) {
+	TAILQ_FOREACH(roc_nix_tmp, nix_list, next) {
 		struct nix *nix = roc_nix_to_nix_priv(roc_nix_tmp);
 		int i;
 
