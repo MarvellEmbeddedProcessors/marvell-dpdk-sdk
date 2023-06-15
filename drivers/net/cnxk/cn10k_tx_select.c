@@ -5,7 +5,7 @@
 #include "cn10k_ethdev.h"
 #include "cn10k_tx.h"
 
-static inline void
+static __rte_used inline void
 pick_tx_func(struct rte_eth_dev *eth_dev,
 	     const eth_tx_burst_t tx_burst[NIX_TX_OFFLOAD_MAX])
 {
