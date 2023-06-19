@@ -199,8 +199,10 @@ npa_aura_pool_fini(struct mbox *m_box, uint32_t aura_id, uint64_t aura_handle)
 	off = mbox->rx_start + pool_rsp->hdr.next_msgoff;
 	aura_rsp = (struct npa_aq_enq_rsp *)((uintptr_t)mdev->mbase + off);
 
-	if (aura_rsp->hdr.rc != 0 || pool_rsp->hdr.rc != 0)
-		return NPA_ERR_AURA_POOL_FINI;
+	if (aura_rsp->hdr.rc != 0 || pool_rsp->hdr.rc != 0) {
+		rc = NPA_ERR_AURA_POOL_FINI;
+		goto exit;
+	}
 
 	/* Sync NDC-NPA for LF */
 	ndc_req = mbox_alloc_msg_ndc_sync_op(mbox);
@@ -247,8 +249,10 @@ npa_aura_fini(struct mbox *m_box, uint32_t aura_id)
 	if (rc < 0)
 		goto exit;
 
-	if (aura_rsp->hdr.rc != 0)
-		return NPA_ERR_AURA_POOL_FINI;
+	if (aura_rsp->hdr.rc != 0) {
+		rc = NPA_ERR_AURA_POOL_FINI;
+		goto exit;
+	}
 
 	/* Sync NDC-NPA for LF */
 	ndc_req = mbox_alloc_msg_ndc_sync_op(mbox);
