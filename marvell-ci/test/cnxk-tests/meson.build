@@ -81,6 +81,7 @@ test_subdirs = [
         'multi_mempool',
         'ipsec_msns',
         'hwpool',
+        'cpt_t106_mode',
 ]
 
 foreach dir:test_subdirs
