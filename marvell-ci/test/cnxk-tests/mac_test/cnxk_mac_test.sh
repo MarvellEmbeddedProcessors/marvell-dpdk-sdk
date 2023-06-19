@@ -93,6 +93,7 @@ function macfltr_cleanup()
 {
 	testpmd_quit $PRFX
 	testpmd_cleanup $PRFX
+	sleep 2
 }
 
 function macfltr_launch()
