@@ -161,6 +161,8 @@ struct roc_cpt_inline_ipsec_inb_cfg {
 	uint16_t bpid;
 	uint32_t credit_th;
 	uint8_t egrp;
+	uint8_t ctx_ilen_valid : 1;
+	uint8_t ctx_ilen : 7;
 };
 
 
