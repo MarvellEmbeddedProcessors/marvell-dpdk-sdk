@@ -114,7 +114,7 @@ function macfltr_launch()
 
 	testpmd_launch $PRFX \
 		"-c $coremask -a $port --vdev eth_pcap0,rx_pcap=$pcapin,tx_pcap=out.pcap" \
-		"--port-topology=paired --portlist=0,1 --no-flush-rx --max-pkt-len=9200"
+		"--port-topology=paired --portlist=0,1 --no-flush-rx --max-pkt-len=9200 --mbuf-size=4096"
 }
 
 function macfltr_pkt_test_verify()
