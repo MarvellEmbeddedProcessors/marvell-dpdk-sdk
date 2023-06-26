@@ -484,7 +484,7 @@ otx_ep_ring_doorbell(struct otx_ep_device *otx_ep __rte_unused,
 static inline int
 post_iqcmd(struct otx_ep_instr_queue *iq, uint8_t *iqcmd)
 {
-	uint8_t *iqptr, cmdsize;
+	uint8_t *iqptr;
 
 	/* This ensures that the read index does not wrap around to
 	 * the same position if queue gets full before OCTEON 9 could
@@ -494,10 +494,8 @@ post_iqcmd(struct otx_ep_instr_queue *iq, uint8_t *iqcmd)
 		return OTX_EP_IQ_SEND_FAILED;
 
 	/* Copy cmd into iq */
-	cmdsize = 64;
-	iqptr   = iq->base_addr + (iq->host_write_index << 6);
-
-	rte_memcpy(iqptr, iqcmd, cmdsize);
+	iqptr = iq->base_addr + (iq->host_write_index * iq->desc_size);
+	rte_memcpy(iqptr, iqcmd, iq->desc_size);
 
 	/* Increment the host write index */
 	iq->host_write_index =
