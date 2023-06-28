@@ -32,7 +32,7 @@
  * to BAD_PORT value.
  */
 static __rte_always_inline void
-rfc1812_process(struct rte_ipv4_hdr *ipv4_hdr, uint16_t *dp, uint32_t ptype, uint32_t csum_mask)
+rfc1812_process(struct rte_ipv4_hdr *ipv4_hdr, uint16_t *dp, uint32_t ptype)
 {
 	uint8_t ihl;
 
@@ -42,17 +42,16 @@ rfc1812_process(struct rte_ipv4_hdr *ipv4_hdr, uint16_t *dp, uint32_t ptype, uin
 		ipv4_hdr->time_to_live--;
 		ipv4_hdr->hdr_checksum++;
 
-		if ((csum_mask == RTE_MBUF_F_RX_IP_CKSUM_BAD) ||
-				((ihl > IPV4_MAX_VER_IHL_DIFF) ||
+		if (ihl > IPV4_MAX_VER_IHL_DIFF ||
 				((uint8_t)ipv4_hdr->total_length == 0 &&
-				ipv4_hdr->total_length < IPV4_MIN_LEN_BE)))
+				ipv4_hdr->total_length < IPV4_MIN_LEN_BE))
 			dp[0] = BAD_PORT;
 
 	}
 }
 
 #else
-#define	rfc1812_process(mb, dp, ptype, csum)	do { } while (0)
+#define	rfc1812_process(mb, dp, ptype)	do { } while (0)
 #endif /* DO_RFC_1812_CHECKS */
 
 static __rte_always_inline void

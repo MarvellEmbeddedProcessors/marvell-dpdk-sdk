@@ -85,8 +85,7 @@ process_packet(struct rte_mbuf *pkt, uint16_t *hop)
 		(struct rte_ipv4_hdr *)(rte_pktmbuf_mtod(
 						pkt, struct rte_ether_hdr *) +
 					1),
-		hop, pkt->packet_type,
-		pkt->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
+		hop, pkt->packet_type);
 #endif
 
 	/* Set MAC addresses. */

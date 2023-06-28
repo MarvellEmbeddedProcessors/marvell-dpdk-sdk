@@ -51,20 +51,16 @@ processx4_step3(struct rte_mbuf *pkt[FWDSTEP], uint16_t dst_port[FWDSTEP])
 
 	rfc1812_process((struct rte_ipv4_hdr *)
 			((struct rte_ether_hdr *)p[0] + 1),
-			&dst_port[0], pkt[0]->packet_type,
-			pkt[0]->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
+			&dst_port[0], pkt[0]->packet_type);
 	rfc1812_process((struct rte_ipv4_hdr *)
 			((struct rte_ether_hdr *)p[1] + 1),
-			&dst_port[1], pkt[1]->packet_type,
-			pkt[1]->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
+			&dst_port[1], pkt[1]->packet_type);
 	rfc1812_process((struct rte_ipv4_hdr *)
 			((struct rte_ether_hdr *)p[2] + 1),
-			&dst_port[2], pkt[2]->packet_type,
-			pkt[2]->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
+			&dst_port[2], pkt[2]->packet_type);
 	rfc1812_process((struct rte_ipv4_hdr *)
 			((struct rte_ether_hdr *)p[3] + 1),
-			&dst_port[3], pkt[3]->packet_type,
-			pkt[3]->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
+			&dst_port[3], pkt[3]->packet_type);
 }
 
 /**
@@ -84,8 +80,7 @@ process_packet(struct rte_mbuf *pkt, uint16_t *dst_port)
 	ve = val_eth[dst_port[0]];
 
 	rfc1812_process((struct rte_ipv4_hdr *)(eth_hdr + 1), dst_port,
-			pkt->packet_type,
-			pkt->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK);
+			pkt->packet_type);
 
 	te =  _mm_blend_epi16(te, ve, MASK_ETH);
 	_mm_storeu_si128((__m128i *)eth_hdr, te);
