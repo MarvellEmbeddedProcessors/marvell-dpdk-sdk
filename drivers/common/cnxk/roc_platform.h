@@ -19,6 +19,7 @@
 #include <rte_malloc.h>
 #include <rte_memzone.h>
 #include <rte_pci.h>
+#include <rte_rwlock.h>
 #include <rte_spinlock.h>
 #include <rte_string_fns.h>
 #include <rte_tailq.h>
@@ -127,6 +128,13 @@
 #define plt_spinlock_lock    rte_spinlock_lock
 #define plt_spinlock_unlock  rte_spinlock_unlock
 #define plt_spinlock_trylock rte_spinlock_trylock
+
+#define plt_rwlock_t		rte_rwlock_t
+#define plt_rwlock_init		rte_rwlock_init
+#define plt_rwlock_read_lock	rte_rwlock_read_lock
+#define plt_rwlock_read_unlock	rte_rwlock_read_unlock
+#define plt_rwlock_write_lock	rte_rwlock_write_lock
+#define plt_rwlock_write_unlock	rte_rwlock_write_unlock
 
 #define plt_intr_callback_register   rte_intr_callback_register
 #define plt_intr_callback_unregister rte_intr_callback_unregister
