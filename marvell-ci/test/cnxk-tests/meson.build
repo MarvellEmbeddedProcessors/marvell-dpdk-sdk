@@ -53,6 +53,7 @@ test_subdirs = [
         'port_ctrl',
         'crypto_autotest',
         'inline_ipsec_autotest',
+        'inline_macsec_autotest',
         'tm_test',
         'flow_perf',
         'txrx_stats',
