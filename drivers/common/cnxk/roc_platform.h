@@ -20,6 +20,7 @@
 #include <rte_malloc.h>
 #include <rte_memzone.h>
 #include <rte_pci.h>
+#include <rte_seqcount.h>
 #include <rte_spinlock.h>
 #include <rte_string_fns.h>
 #include <rte_tailq.h>
@@ -129,6 +130,13 @@
 #define plt_spinlock_lock    rte_spinlock_lock
 #define plt_spinlock_unlock  rte_spinlock_unlock
 #define plt_spinlock_trylock rte_spinlock_trylock
+
+#define plt_seqcount_t			rte_seqcount_t
+#define plt_seqcount_init		rte_seqcount_init
+#define plt_seqcount_read_begin		rte_seqcount_read_begin
+#define plt_seqcount_read_retry		rte_seqcount_read_retry
+#define plt_seqcount_write_begin	rte_seqcount_write_begin
+#define plt_seqcount_write_end		rte_seqcount_write_end
 
 #define plt_intr_callback_register   rte_intr_callback_register
 #define plt_intr_callback_unregister rte_intr_callback_unregister
