@@ -48,7 +48,13 @@ function get_cpu_string() {
 	elif [[ $cpu_impl == 0x43 ]] && [[ $cpu_pn == 0x0b4 ]]; then
 		cpu_str="95xx"
 	elif [[ $cpu_impl == 0x41 ]] && [[ $cpu_pn == 0xd49 ]]; then
-		cpu_str="106xx"
+		cpu_str="cn10ka"
+		compatible=`cat /proc/device-tree/compatible`
+		IFS=',' read -ra list <<< "$compatible"
+		if [[ "${list[0]}" = "marvell" ]]
+		then
+			cpu_str=${list[1]}
+		fi
 	else
 		echo "Invalid CPU (Implementer=$cpu_impl Part Number=$cpu_pn"
 		exit 1
@@ -75,8 +81,8 @@ function setup_hp() {
 function setup_devices() {
 	local npa_pf
 	local sso_pf
-	local cpt_pf
-	local cpt_vf
+	local cpt_pf=""
+	local cpt_vf=""
 	local inl_pf
 	local devs
 	local nix_lbk_vfs
@@ -85,10 +91,10 @@ function setup_devices() {
 	nix_lbk_vfs="0002:01:00.1 0002:01:00.2 0002:01:00.3"
 	devs=${DEVS:-$nix_lbk_vfs}
 
-	if [[ $CPU == "106xx" ]]; then
+	if [[ $CPU == "cn10ka" ]]; then
 		cpt_pf="0002:20:00.0"
 		cpt_vf="0002:20:00.1"
-	else
+	elif [[ $IS_CN9K -eq 1 ]]; then
 		cpt_pf="0002:10:00.0"
 		cpt_vf="0002:10:00.1"
 	fi
@@ -110,7 +116,7 @@ function setup_devices() {
 	devs+=" $sso_pf"
 	devs+=" $npa_pf"
 
-	if [[ $CPU == "106xx" ]]; then
+	if [[ $CPU == "cn10ka" ]]; then
 		inl_pf=${INL_DEV:-$(lspci -d :a0f0 | tail -1 | awk -e '{ print $1 }')}
 		devs+=" $inl_pf"
 	fi
@@ -125,7 +131,7 @@ function setup_devices() {
 		$VFIO_DEVBIND -b vfio-pci $d || exit 1
 	done
 
-	if [[ $CPU == "106xx" ]]; then
+	if [[ $IS_CN9K -eq 0 ]]; then
 		echo "Skipping limits configuration on 106xx"
 		return
 	fi
@@ -166,7 +172,7 @@ function setup_tm() {
 	local count
 	local per_pf
 
-	if [[ -z $TM_SETUP ]] || [[ $CPU == "106xx" ]]; then
+	if [[ -z $TM_SETUP ]] || [[ $IS_CN9K -eq 0 ]]; then
 		echo "Skipping TM setup"
 		return
 	fi
@@ -247,6 +253,11 @@ fi
 
 # Get CPU
 CPU=$(get_cpu_string)
+IS_CN9K=0
+if [[ "$CPU" == "98xx" ]] || [[ "$CPU" == "96xx" ]] || [[ "$CPU" == "cnf10ka" ]]
+then
+	IS_CN9K=1
+fi
 
 mount_hugetlbfs
 setup_hp
