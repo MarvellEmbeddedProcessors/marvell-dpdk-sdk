@@ -86,12 +86,13 @@ function setup_devices() {
 	local inl_pf
 	local devs
 	local nix_lbk_vfs
+	local nix_pfs
 	local pcid
 
 	nix_lbk_vfs="0002:01:00.1 0002:01:00.2 0002:01:00.3"
 	devs=${DEVS:-$nix_lbk_vfs}
 
-	if [[ $CPU == "cn10ka" ]]; then
+	if [[ $CPU == "cn10ka" ]] || [[ $CPU == "cn10kb" ]]; then
 		cpt_pf="0002:20:00.0"
 		cpt_vf="0002:20:00.1"
 	elif [[ $IS_CN9K -eq 1 ]]; then
@@ -100,7 +101,11 @@ function setup_devices() {
 	fi
 
 	# Set KVF Limits
-	echo 24 > /sys/bus/pci/devices/$cpt_pf/kvf_limits
+	if [[ $CPU == "cn10kb" ]]; then
+		echo 8 > /sys/bus/pci/devices/$cpt_pf/kvf_limits
+	else
+		echo 24 > /sys/bus/pci/devices/$cpt_pf/kvf_limits
+	fi
 
 	# Disable existing VFs and enable CPT VFs
 	if [[ -e /sys/bus/pci/devices/$cpt_pf/sriov_numvfs ]]; then
@@ -119,6 +124,11 @@ function setup_devices() {
 	if [[ $CPU == "cn10ka" ]]; then
 		inl_pf=${INL_DEV:-$(lspci -d :a0f0 | tail -1 | awk -e '{ print $1 }')}
 		devs+=" $inl_pf"
+	fi
+
+	if [[ $CPU == "cn10kb" ]]; then
+		nix_pfs=${ETH_DEV:-$(lspci -d :a063 | tail -1 | awk -e '{ print $1 }')}
+		devs+=" $nix_pfs"
 	fi
 
 	# Unbind all SSO devices first
