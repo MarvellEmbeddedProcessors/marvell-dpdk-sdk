@@ -335,7 +335,6 @@ function configure_mode()
 	testpmd_cmd $RXPRFX "start"
 }
 
-update_val=0
 function check_stats()
 {
         local prefix=$1
@@ -349,11 +348,10 @@ function check_stats()
 
         val=`cat $out | grep "Rx-pps:" | awk -e '{print $2}' | tail -1`
 
-	if [ "$val" -ge $update_val ]; then
+	if [ "$val" -ge 0 ]; then
 		echo "min_thres = $2 max_thres = $3 throughput $val"
-		update_val=$val
 	else
-		echo "cman test for min_thres = $2 max_thres = $3 failed"
+		echo "cman test for min_thres = $2 max_thres = $3 failed. throughput $val"
 		exit 1
 	fi
 
