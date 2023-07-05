@@ -78,6 +78,7 @@ test_subdirs = [
         'multi_mempool',
         'event_inline_ipsec_autotest',
         'hwpool',
+        'flow_aging',
 ]
 
 foreach dir:test_subdirs
