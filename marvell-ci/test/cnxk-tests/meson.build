@@ -83,6 +83,7 @@ test_subdirs = [
         'hwpool',
         'cpt_t106_mode',
         'policer_test',
+        'flow_aging',
 ]
 
 foreach dir:test_subdirs
