@@ -13,6 +13,9 @@ test_args = ''
 # Test directory name relative to build directory.
 test_dir = meson.current_build_dir()
 
+# Copy the required scripts to build directory.
+run_command(copy_data, test_script)
+
 # Add the meson test
 test(
     test_name,

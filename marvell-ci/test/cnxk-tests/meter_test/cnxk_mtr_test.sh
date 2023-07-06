@@ -130,6 +130,9 @@ function check_meter_rq_config()
 
 	debug_dir="/sys/kernel/debug/cn10k"
 	rq_ctx="$debug_dir/nix/rq_ctx"
+	rsrc_alloc="$debug_dir/rsrc_alloc"
+	nix_lf=$(echo "`$SUDO cat $rsrc_alloc`" | grep "PF1" | awk '{print $3}' | head -1)
+	$SUDO echo "$nix_lf 0" > $rq_ctx
 
 	if $SUDO test -f "$rq_ctx"; then
 		is_policer_ena=$(echo "`$SUDO cat $rq_ctx`" | grep policer_ena | awk '{print $3}')

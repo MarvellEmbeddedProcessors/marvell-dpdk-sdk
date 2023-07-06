@@ -171,25 +171,31 @@ function run_testpmd()
         	"--no-flush-rx --nb-cores=4 --forward-mode=rxonly --txq=4 --rxq=4"
 }
 
+function stop_testpmd()
+{
+        testpmd_quit $PRFX
+        sleep 1
+        testpmd_cleanup $PRFX
+        sleep 3
+        testpmd_quit $CAP_PRFX
+        sleep 1
+        testpmd_cleanup $CAP_PRFX
+        sleep 1
+}
+
 echo "Ingress policer with 4 leaf nodes 2 mid nodes 1 root node"
 run_testpmd
 sleep 1
 ingress_policer_test level_3
 
-testpmd_cmd $PRFX "quit"
-sleep 1
-testpmd_cmd $CAP_PRFX "quit"
-sleep 1
+stop_testpmd
 
 echo "Ingress policer with single node"
 run_testpmd
 sleep 1
 ingress_policer_test level_1
 
-testpmd_cmd $PRFX "quit"
-sleep 1
-testpmd_cmd $CAP_PRFX "quit"
-sleep 2
+stop_testpmd
 
 echo "Configure RED to meter"
 run_testpmd

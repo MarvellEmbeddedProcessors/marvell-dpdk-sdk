@@ -82,6 +82,7 @@ test_subdirs = [
         'ipsec_msns',
         'hwpool',
         'cpt_t106_mode',
+        'policer_test',
 ]
 
 foreach dir:test_subdirs
