@@ -51,6 +51,8 @@ else
 	fi
 fi
 
+! $(cat /proc/device-tree/compatible | grep -q "cn10k")
+IS_CN10K=$?
 function sig_handler()
 {
 	local status=$?
@@ -202,6 +204,7 @@ function macfltr_pkt_test()
 	testpmd_cmd_refresh $PRFX "port stop $1"
 	testpmd_cmd_refresh $PRFX "port config $1 loopback 1"
 	testpmd_cmd_refresh $PRFX "port start $1"
+	check_port_status $1
 
 	if [[ $3 == "mcast" ]]
 	then
@@ -219,9 +222,14 @@ function macfltr_pkt_test()
 
 function macfltr_dmac_filt_pkts()
 {
-	testpmd_log_off $PRFX $1 |\
-		grep -a "cgx_rx_dmac_filt_pkts: "|\
-		cut --complement -f 1 -d ":"
+	if [[ $IS_CN10K -ne 0 ]]; then
+		cat /sys/kernel/debug/cn10k/rpm/rpm0/lmac0/mac_filter |\
+			 grep -a "DMAC filter drop count" | cut --complement -f 1 -d ":"
+	else
+		testpmd_log_off $PRFX $1 |\
+			grep -a "cgx_rx_dmac_filt_pkts: "|\
+			cut --complement -f 1 -d ":"
+	fi
 }
 
 function macfltr_mac_cnt()
@@ -243,6 +251,7 @@ function xmit_pkts()
 	testpmd_cmd_refresh $PRFX "port stop $1"
 	testpmd_cmd_refresh $PRFX "port config $1 loopback 1"
 	testpmd_cmd_refresh $PRFX "port start $1"
+	check_port_status $1
 	testpmd_cmd_refresh $PRFX "clear port stats all"
 	testpmd_cmd_refresh $PRFX "start"
 }
@@ -479,9 +488,8 @@ macfltr_cleanup
 #Test-9: verify MTU configuration lesser than minimum.
 echo "Test-9: MTU lesser than min for port=$MACFLTR_PORT, coremask=$COREMASK"
 macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_64B_PCAP
-check_port_status $MACFLTR_PORT_INDEX
 OFF=`testpmd_log_sz $PRFX`
-testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 30"
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 10"
 sleep 1
 
 STRING=`testpmd_log_off $PRFX $OFF | grep "mtu cannot be less than 64"`
@@ -584,7 +592,7 @@ macfltr_cleanup
 echo "Test-13: MTU more than max for port=$MACFLTR_PORT, coremask=$COREMASK"
 macfltr_launch -c $COREMASK -p $MACFLTR_PORT -i $MTU_1518B_PCAP
 OFF=`testpmd_log_sz $PRFX`
-testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 15000"
+testpmd_cmd $PRFX "port config mtu $MACFLTR_PORT_INDEX 20000"
 sleep 1
 
 STRING=`testpmd_log_off $PRFX $OFF | grep "Set MTU failed" | cut -f 1 -d "."`
