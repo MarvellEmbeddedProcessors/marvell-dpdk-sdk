@@ -59,9 +59,9 @@ cn10k_process_vwqe(uintptr_t vwqe, uint16_t port_id, const uint32_t flags, struc
 	uint16_t lmt_id, d_off;
 	struct rte_mbuf **wqe;
 	struct rte_mbuf *mbuf;
+	uint64_t sa_base = 0;
 	uintptr_t cpth = 0;
 	uint8_t loff = 0;
-	uint64_t sa_base;
 	int i;
 
 	mbuf_init |= ((uint64_t)port_id) << 48;
