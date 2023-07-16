@@ -482,7 +482,7 @@ roc_nix_fc_npa_bp_cfg(struct roc_nix *roc_nix, uint64_t pool_id, uint8_t ena, ui
 	uint32_t aura_id = roc_npa_aura_handle_to_aura(pool_id);
 	struct nix *nix = roc_nix_to_nix_priv(roc_nix);
 	struct npa_lf *lf = idev_npa_obj_get();
-	struct npa_aura_attr *aura_attr = &lf->aura_attr[aura_id];
+	struct npa_aura_attr *aura_attr;
 	uint8_t bp_thresh, bp_intf;
 	uint16_t bpid;
 	int i;
@@ -492,6 +492,8 @@ roc_nix_fc_npa_bp_cfg(struct roc_nix *roc_nix, uint64_t pool_id, uint8_t ena, ui
 
 	if (!lf)
 		return;
+
+	aura_attr = &lf->aura_attr[aura_id];
 
 	bp_intf = 1 << nix->is_nix1;
 	bp_thresh = NIX_RQ_AURA_THRESH(drop_percent, aura_attr->limit >> aura_attr->shift);
