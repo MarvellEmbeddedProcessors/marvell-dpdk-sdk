@@ -5,10 +5,6 @@ if not get_option('tests')
     subdir_done()
 endif
 
-if not host_machine.cpu_family().startswith('aarch')
-    subdir_done()
-endif
-
 subdir('common')
 
 # The developer is expected to add new scripts in subdirectories and add it to
@@ -38,7 +34,7 @@ subdir('common')
 # These will be skipped when run without the exe_wrapper.
 
 # Add cnxk test script subdirectories to the below list.
-test_subdirs = [
+test_subdirs_arm = [
         'ptp_test',
         'fwd_perf',
         'crypto_perf',
@@ -80,6 +76,18 @@ test_subdirs = [
         'hwpool',
         'flow_aging',
 ]
+
+test_subdirs_x86 = [
+        'ep_test',
+]
+
+if host_machine.cpu_family().startswith('aarch')
+    test_subdirs = test_subdirs_arm
+elif host_machine.cpu_family().startswith('x86')
+    test_subdirs = test_subdirs_x86
+else
+    subdir_done()
+endif
 
 foreach dir:test_subdirs
     subdir(dir)
