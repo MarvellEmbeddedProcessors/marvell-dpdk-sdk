@@ -107,10 +107,8 @@ run_test_case(struct test_configure *case_cfg)
 
 	switch (case_cfg->test_type) {
 	case TEST_TYPE_DMA_MEM_COPY:
-		ret = mem_copy_benchmark(case_cfg, true);
-		break;
 	case TEST_TYPE_CPU_MEM_COPY:
-		ret = mem_copy_benchmark(case_cfg, false);
+		ret = mem_copy_benchmark(case_cfg);
 		break;
 	default:
 		printf("Unknown test type. %s\n", case_cfg->test_type_str);
@@ -340,7 +338,8 @@ load_configs(const char *path)
 	const char *case_type;
 	const char *transfer_dir;
 	const char *lcore_dma;
-	const char *mem_size_str, *buf_size_str, *ring_size_str, *kick_batch_str;
+	const char *mem_size_str, *buf_size_str, *ring_size_str, *kick_batch_str,
+		*src_ptrs_str, *dst_ptrs_str;
 	const char *skip;
 	const char *raddr, *scoreid, *dcoreid, *vfid, *pfid;
 	int args_nr, nb_vp;
@@ -455,6 +454,7 @@ load_configs(const char *path)
 			test_case->dcoreid = (uint8_t)atoi(dcoreid);
 		}
 
+		test_case->is_dma = is_dma;
 		test_case->src_numa_node = (int)atoi(rte_cfgfile_get_entry(cfgfile,
 								section_name, "src_numa_node"));
 		test_case->dst_numa_node = (int)atoi(rte_cfgfile_get_entry(cfgfile,
@@ -488,6 +488,32 @@ load_configs(const char *path)
 				continue;
 			} else if (args_nr == 4)
 				nb_vp++;
+
+			src_ptrs_str = rte_cfgfile_get_entry(cfgfile, section_name,
+								"dma_ptrs_src");
+			if (src_ptrs_str != NULL) {
+				test_case->src_ptrs = (int)atoi(rte_cfgfile_get_entry(cfgfile,
+								section_name, "dma_ptrs_src"));
+			}
+
+			dst_ptrs_str = rte_cfgfile_get_entry(cfgfile, section_name,
+								"dma_ptrs_dst");
+			if (dst_ptrs_str != NULL) {
+				test_case->dst_ptrs = (int)atoi(rte_cfgfile_get_entry(cfgfile,
+								section_name, "dma_ptrs_dst"));
+			}
+
+			if ((src_ptrs_str != NULL && dst_ptrs_str == NULL) ||
+			    (src_ptrs_str == NULL && dst_ptrs_str != NULL)) {
+				printf("parse dma_ptrs_src, dma_ptrs_dst error in case %d.\n",
+					i + 1);
+				test_case->is_valid = false;
+				continue;
+			} else if (src_ptrs_str != NULL && dst_ptrs_str != NULL) {
+				test_case->is_sg = true;
+			} else {
+				test_case->is_sg = false;
+			}
 
 			kick_batch_str = rte_cfgfile_get_entry(cfgfile, section_name, "kick_batch");
 			args_nr = parse_entry(kick_batch_str, &test_case->kick_batch);
