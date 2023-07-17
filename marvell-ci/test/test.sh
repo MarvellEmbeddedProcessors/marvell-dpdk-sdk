@@ -21,6 +21,7 @@ function help() {
 	echo ""
 	echo "Optional Arguments"
 	echo "==================="
+	echo "--ep-build-root | -e         : Endpoint build root directory"
 	echo "--run-dir | -d               : Run directory [Default=Build Root]"
 	echo "--project-root | -p          : DPDK Project root [Default: PWD]"
 	echo "--run-only                   : Only run the tests "
@@ -31,8 +32,8 @@ function help() {
 
 SCRIPT_NAME="$(basename "$0")"
 if ! OPTS=$(getopt \
-	-o "r:d:t:p:h" \
-	-l "build-root:,run-dir:,test-env:,project-root:,run-only,list-only,help" \
+	-o "r:e:d:t:p:h" \
+	-l "build-root:,ep-build-root:,run-dir:,test-env:,project-root:,run-only,list-only,help" \
 	-n "$SCRIPT_NAME" \
 	-- "$@"); then
 	help
@@ -40,6 +41,7 @@ if ! OPTS=$(getopt \
 fi
 
 BUILD_ROOT=
+EP_BUILD_ROOT=
 TEST_ENV_CONF=
 EXTRA_ARGS=
 PROJECT_ROOT="$PWD"
@@ -51,6 +53,7 @@ unset OPTS
 while [[ $# -gt 1 ]]; do
 	case $1 in
 		-r|--build-root) shift; BUILD_ROOT=$1;;
+		-e|--ep-build-root) shift; EP_BUILD_ROOT=$1;;
 		-d|--run-dir) shift; RUN_DIR=$1;;
 		-t|--test-env) shift; TEST_ENV_CONF=$(realpath $1);;
 		-p|--project-root) shift; PROJECT_ROOT=$1;;
@@ -72,6 +75,7 @@ export PROJECT_ROOT=$(realpath $PROJECT_ROOT)
 mkdir -p $BUILD_ROOT
 export BUILD_ROOT=$(realpath $BUILD_ROOT)
 export BUILD_DIR=$BUILD_ROOT/build
+export EP_BUILD_DIR=$EP_BUILD_ROOT/build
 export RUN_DIR=${RUN_DIR:-$BUILD_DIR}
 mkdir -p $RUN_DIR
 

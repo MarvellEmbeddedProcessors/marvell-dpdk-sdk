@@ -34,3 +34,4 @@ dpdk_test_deps = test_dep_objs + ext_deps
 subdir('scapy')
 subdir('pcap')
 subdir('testpmd')
+subdir('remote')
