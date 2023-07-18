@@ -66,6 +66,6 @@ struct test_configure {
 	uintptr_t raddr;
 };
 
-void mem_copy_benchmark(struct test_configure *cfg, bool is_dma);
+int mem_copy_benchmark(struct test_configure *cfg, bool is_dma);
 
 #endif /* _MAIN_H_ */
