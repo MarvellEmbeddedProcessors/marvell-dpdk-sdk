@@ -38,7 +38,7 @@
 #define OTX_EP_NORESP_OHSM_SEND     (4)
 #define OTX_EP_NORESP_LAST          (4)
 #define OTX_EP_PCI_RING_ALIGN   65536
-#define OTX_EP_MAX_SG_LISTS 4
+#define OTX_EP_MAX_SG_LISTS 6
 #define OTX_EP_NUM_SG_PTRS 4
 #define SDP_PKIND 40
 #define SDP_OTX2_PKIND 57
@@ -237,6 +237,8 @@ struct otx_ep_instr_queue {
 
 	/* This keeps track of the instructions pending in this queue. */
 	uint64_t instr_pending;
+
+	uint64_t partial_ih;
 
 	/* Pointer to the Virtual Base addr of the input ring. */
 	uint8_t *base_addr;
