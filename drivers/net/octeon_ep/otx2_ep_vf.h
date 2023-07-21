@@ -152,6 +152,17 @@ struct otx2_ep_instr_64B {
 	uint64_t exhdr[4];
 };
 
+struct otx2_ep_instr_32B {
+	/* Pointer where the input data is available. */
+	uint64_t dptr;
+
+	/* OTX_EP Instruction Header. */
+	union otx_ep_instr_ih ih;
+
+	/* Misc data bytes that can be passed as front data */
+	uint64_t rsvd[2];
+};
+
 #define OTX2_EP_IQ_ISM_OFFSET(queue)   (RTE_CACHE_LINE_SIZE * (queue) + 4)
 #define OTX2_EP_OQ_ISM_OFFSET(queue)   (RTE_CACHE_LINE_SIZE * (queue))
 #define OTX2_EP_ISM_EN                 (0x1)
