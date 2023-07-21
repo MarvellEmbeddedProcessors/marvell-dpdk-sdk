@@ -43,6 +43,7 @@ struct test_configure {
 	bool is_valid;
 	bool is_skip;
 	uint8_t test_type;
+	uint8_t transfer_dir;
 	const char *test_type_str;
 	uint16_t src_numa_node;
 	uint16_t dst_numa_node;
@@ -58,6 +59,11 @@ struct test_configure {
 	uint16_t test_secs;
 	const char *eal_args;
 	uint8_t scenario_id;
+	uint8_t scoreid;
+	uint8_t dcoreid;
+	uint8_t pfid;
+	uint16_t vfid;
+	uint64_t raddr;
 };
 
 void mem_copy_benchmark(struct test_configure *cfg, bool is_dma);

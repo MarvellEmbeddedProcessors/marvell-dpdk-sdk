@@ -16,6 +16,7 @@
 #include <rte_cfgfile.h>
 #include <rte_string_fns.h>
 #include <rte_lcore.h>
+#include <rte_dmadev.h>
 
 #include "main.h"
 
@@ -318,9 +319,11 @@ load_configs(const char *path)
 	struct test_configure *test_case;
 	char section_name[CFG_NAME_LEN];
 	const char *case_type;
+	const char *transfer_dir;
 	const char *lcore_dma;
 	const char *mem_size_str, *buf_size_str, *ring_size_str, *kick_batch_str;
 	const char *skip;
+	const char *raddr, *scoreid, *dcoreid, *vfid, *pfid;
 	int args_nr, nb_vp;
 	bool is_dma;
 
@@ -358,6 +361,20 @@ load_configs(const char *path)
 		if (strcmp(case_type, DMA_MEM_COPY) == 0) {
 			test_case->test_type = TEST_TYPE_DMA_MEM_COPY;
 			test_case->test_type_str = DMA_MEM_COPY;
+
+			transfer_dir = rte_cfgfile_get_entry(cfgfile, section_name, "direction");
+			if (transfer_dir == NULL) {
+				printf("Transfer direction not configured."
+					" Defaulting it to MEM to MEM transfer.\n");
+				test_case->transfer_dir = RTE_DMA_DIR_MEM_TO_MEM;
+			} else
+				test_case->transfer_dir = (uint8_t)atoi(transfer_dir);
+
+			if (test_case->transfer_dir >= RTE_DMA_DIR_DEV_TO_DEV) {
+				printf("Error: Invalid transfer direction configured.\n");
+				test_case->is_valid = false;
+				continue;
+			}
 			is_dma = true;
 		} else if (strcmp(case_type, CPU_MEM_COPY) == 0) {
 			test_case->test_type = TEST_TYPE_CPU_MEM_COPY;
@@ -367,6 +384,56 @@ load_configs(const char *path)
 			printf("Error: Wrong test case type %s in case%d.\n", case_type, i + 1);
 			test_case->is_valid = false;
 			continue;
+		}
+
+		if (test_case->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV ||
+			test_case->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM) {
+			char *endptr;
+
+			raddr = rte_cfgfile_get_entry(cfgfile, section_name, "raddr");
+			if (raddr == NULL) {
+				printf("Error: No raddr configured for case%d.\n", i + 1);
+				test_case->is_valid = false;
+				continue;
+			}
+			test_case->raddr = strtoull(raddr, &endptr, 16);
+
+			vfid = rte_cfgfile_get_entry(cfgfile, section_name, "vfid");
+			if (vfid == NULL) {
+				printf("Error: No vfid configured for case%d.\n", i + 1);
+				test_case->is_valid = false;
+				continue;
+			}
+			test_case->vfid = (uint16_t)atoi(vfid);
+
+			pfid = rte_cfgfile_get_entry(cfgfile, section_name, "pfid");
+			if (pfid == NULL) {
+				printf("Error: No pfid configured for case%d.\n", i + 1);
+				test_case->is_valid = false;
+				continue;
+			}
+			test_case->pfid = (uint8_t)atoi(pfid);
+
+		}
+
+		if (test_case->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM) {
+			scoreid = rte_cfgfile_get_entry(cfgfile, section_name, "scoreid");
+			if (scoreid == NULL) {
+				printf("Error: No scoreid configured for case%d.\n", i + 1);
+				test_case->is_valid = false;
+				continue;
+			}
+			test_case->scoreid = (uint8_t)atoi(scoreid);
+		}
+
+		if (test_case->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV) {
+			dcoreid = rte_cfgfile_get_entry(cfgfile, section_name, "dcoreid");
+			if (dcoreid == NULL) {
+				printf("Error: No dcoreid configured for case%d.\n", i + 1);
+				test_case->is_valid = false;
+				continue;
+			}
+			test_case->dcoreid = (uint8_t)atoi(dcoreid);
 		}
 
 		test_case->src_numa_node = (int)atoi(rte_cfgfile_get_entry(cfgfile,
