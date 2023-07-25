@@ -320,6 +320,7 @@ load_configs(const char *path)
 	const char *case_type;
 	const char *lcore_dma;
 	const char *mem_size_str, *buf_size_str, *ring_size_str, *kick_batch_str;
+	const char *skip;
 	int args_nr, nb_vp;
 	bool is_dma;
 
@@ -339,6 +340,13 @@ load_configs(const char *path)
 	for (i = 0; i < nb_sections; i++) {
 		snprintf(section_name, CFG_NAME_LEN, "case%d", i + 1);
 		test_case = &test_cases[i];
+
+		skip = rte_cfgfile_get_entry(cfgfile, section_name, "skip");
+		if (skip && (atoi(skip) == 1)) {
+			test_case->is_skip = true;
+			continue;
+		}
+
 		case_type = rte_cfgfile_get_entry(cfgfile, section_name, "type");
 		if (case_type == NULL) {
 			printf("Error: No case type in case %d, the test will be finished here.\n",
@@ -523,6 +531,21 @@ main(int argc, char *argv[])
 
 	printf("Running cases...\n");
 	for (i = 0; i < case_nb; i++) {
+		if (test_cases[i].is_skip) {
+			printf("Test case %d configured to be skipped.\n\n", i + 1);
+			snprintf(output_str[0], MAX_OUTPUT_STR_LEN, "Skip the test-case %d\n",
+				 i + 1);
+
+			fd = fopen(rst_path_ptr, "a");
+			if (!fd) {
+				printf("Open output CSV file error.\n");
+				return 0;
+			}
+			output_csv(true);
+			fclose(fd);
+			continue;
+		}
+
 		if (!test_cases[i].is_valid) {
 			printf("Invalid test case %d.\n\n", i + 1);
 			snprintf(output_str[0], MAX_OUTPUT_STR_LEN, "Invalid case %d\n", i + 1);
