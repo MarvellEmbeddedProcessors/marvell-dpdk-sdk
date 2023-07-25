@@ -41,6 +41,8 @@ get_test_args()
 	local num_cores=$2
 	local sched_mode=$3
 
+	local tx_cnt=$((num_cores * 50))
+
 	case $test_name in
 		L2FWD_EVENT)
 			echo "-l 0-$num_cores -n 4 -a $IF0 -a $SSO_DEV -- -p 1" \
@@ -59,31 +61,31 @@ get_test_args()
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}"\
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first $tx_cnt"
 			;;
 		GW_MODE_NO_PREF)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=0 -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first $tx_cnt"
 			;;
 		GW_MODE_PREF)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=1 -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first $tx_cnt"
 			;;
 		GW_MODE_WFE_PREF)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=2 -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first $tx_cnt"
 			;;
 		VECTOR_MODE)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256" \
+				"--wlcores=1-$num_cores --tx_first 2048" \
 				"--enable_vector --nb_eth_queues 2 --vector_size 128"
 			;;
 		CRYPTO_ADAPTER_FWD)

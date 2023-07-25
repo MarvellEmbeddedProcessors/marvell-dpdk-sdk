@@ -23,11 +23,9 @@ launch_testpmd()
 {
 	local fwd_cores=$(($(grep -c ^processor /proc/cpuinfo) - 1))
 
-	# Limit the number forwarding cores on cn10k.
+	# Limit the number forwarding cores on cn9/10k.
 	# Tx rate peaks (99 MPPS) after 10 cores and drop after 18.
-	if [[ $PLAT == "cn10k" ]]; then
-		fwd_cores=$(( fwd_cores < 12 ? fwd_cores : 12 ))
-	fi
+	fwd_cores=$(( fwd_cores < 12 ? fwd_cores : 12 ))
 
 	testpmd_launch $PRFX \
 		"-l 0-$fwd_cores -a $IF0" \
