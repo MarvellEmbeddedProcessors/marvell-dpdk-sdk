@@ -17,6 +17,8 @@
 
 #include <cnxk_dmadev.h>
 
+static int cnxk_stats_reset(struct rte_dma_dev *dev, uint16_t vchan);
+
 static int
 cnxk_dmadev_info_get(const struct rte_dma_dev *dev, struct rte_dma_info *dev_info, uint32_t size)
 {
@@ -175,11 +177,6 @@ cnxk_dmadev_vchan_setup(struct rte_dma_dev *dev, uint16_t vchan,
 	}
 
 	dpi_conf->c_desc.max_cnt = (max_desc - 1);
-	dpi_conf->c_desc.head = 0;
-	dpi_conf->c_desc.tail = 0;
-	dpi_conf->pnum_words = 0;
-	dpi_conf->pending = 0;
-	dpi_conf->desc_idx = 0;
 
 	return 0;
 }
@@ -265,11 +262,6 @@ cn10k_dmadev_vchan_setup(struct rte_dma_dev *dev, uint16_t vchan,
 	}
 
 	dpi_conf->c_desc.max_cnt = (max_desc - 1);
-	dpi_conf->c_desc.head = 0;
-	dpi_conf->c_desc.tail = 0;
-	dpi_conf->pnum_words = 0;
-	dpi_conf->pending = 0;
-	dpi_conf->desc_idx = 0;
 
 	return 0;
 }
@@ -284,8 +276,6 @@ cnxk_dmadev_start(struct rte_dma_dev *dev)
 	if (dpivf->flag & CNXK_DPI_DEV_START)
 		return 0;
 
-	roc_dpi_enable(&dpivf->rdpi);
-
 	for (i = 0; i < dpivf->num_vchans; i++) {
 		dpi_conf = &dpivf->conf[i];
 		dpi_conf->c_desc.head = 0;
@@ -297,7 +287,11 @@ cnxk_dmadev_start(struct rte_dma_dev *dev)
 			if (dpi_conf->c_desc.compl_ptr[j])
 				dpi_conf->c_desc.compl_ptr[j]->cdata = DPI_REQ_CDATA;
 		}
+
+		cnxk_stats_reset(dev, i);
 	}
+
+	roc_dpi_enable(&dpivf->rdpi);
 
 	dpivf->flag |= CNXK_DPI_DEV_START;
 
