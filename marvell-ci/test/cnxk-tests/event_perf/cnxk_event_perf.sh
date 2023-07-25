@@ -59,31 +59,31 @@ get_test_args()
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}"\
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first 2048"
 			;;
 		GW_MODE_NO_PREF)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=0 -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first 2048"
 			;;
 		GW_MODE_PREF)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=1 -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first 2048"
 			;;
 		GW_MODE_WFE_PREF)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV,gw_mode=2 -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256"
+				"--wlcores=1-$num_cores --tx_first 2048"
 			;;
 		VECTOR_MODE)
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 256" \
+				"--wlcores=1-$num_cores --tx_first 2048" \
 				"--enable_vector --nb_eth_queues 2 --vector_size 128"
 			;;
 		CRYPTO_ADAPTER_FWD)
