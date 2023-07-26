@@ -37,15 +37,25 @@ cnxk_dmadev_info_get(const struct rte_dma_dev *dev, struct rte_dma_info *dev_inf
 }
 
 static int
-cnxk_dmadev_vchan_free(struct cnxk_dpi_vf_s *dpivf)
+cnxk_dmadev_vchan_free(struct cnxk_dpi_vf_s *dpivf, uint16_t vchan)
 {
 	struct cnxk_dpi_conf *dpi_conf;
 	uint16_t num_vchans;
 	uint16_t max_desc;
 	int i, j;
 
-	num_vchans = dpivf->num_vchans;
-	for (i = 0; i < num_vchans; i++) {
+	if (vchan == RTE_DMA_ALL_VCHAN) {
+		num_vchans = dpivf->num_vchans;
+		i = 0;
+	} else {
+		if (vchan >= MAX_VCHANS_PER_QUEUE)
+			return -EINVAL;
+
+		num_vchans = vchan + 1;
+		i = vchan;
+	}
+
+	for (; i < num_vchans; i++) {
 		dpi_conf = &dpivf->conf[i];
 		max_desc = dpi_conf->c_desc.max_cnt;
 		if (dpi_conf->c_desc.compl_ptr) {
@@ -75,7 +85,7 @@ cnxk_dmadev_configure(struct rte_dma_dev *dev, const struct rte_dma_conf *conf, 
 		/* After config function, vchan setup function has to be called.
 		 * Free up vchan memory if any, before configuring num_vchans.
 		 */
-		cnxk_dmadev_vchan_free(dpivf);
+		cnxk_dmadev_vchan_free(dpivf, RTE_DMA_ALL_VCHAN);
 		dpivf->num_vchans = conf->nb_vchans;
 	}
 
@@ -147,7 +157,7 @@ cnxk_dmadev_vchan_setup(struct rte_dma_dev *dev, uint16_t vchan,
 	};
 
 	/* Free up descriptor memory before allocating. */
-	cnxk_dmadev_vchan_free(dpivf);
+	cnxk_dmadev_vchan_free(dpivf, vchan);
 
 	max_desc = conf->nb_desc;
 	if (!rte_is_power_of_2(max_desc))
@@ -233,7 +243,7 @@ cn10k_dmadev_vchan_setup(struct rte_dma_dev *dev, uint16_t vchan,
 	};
 
 	/* Free up descriptor memory before allocating. */
-	cnxk_dmadev_vchan_free(dpivf);
+	cnxk_dmadev_vchan_free(dpivf, vchan);
 
 	max_desc = conf->nb_desc;
 	if (!rte_is_power_of_2(max_desc))
@@ -314,7 +324,7 @@ cnxk_dmadev_close(struct rte_dma_dev *dev)
 	struct cnxk_dpi_vf_s *dpivf = dev->fp_obj->dev_private;
 
 	roc_dpi_disable(&dpivf->rdpi);
-	cnxk_dmadev_vchan_free(dpivf);
+	cnxk_dmadev_vchan_free(dpivf, RTE_DMA_ALL_VCHAN);
 	roc_dpi_dev_fini(&dpivf->rdpi);
 
 	/* Clear all flags as we close the device. */
