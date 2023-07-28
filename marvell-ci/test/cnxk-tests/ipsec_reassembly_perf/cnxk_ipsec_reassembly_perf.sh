@@ -220,7 +220,12 @@ function pmd_tx_launch_for_inb()
 	local pcap1=$CNXKTESTPATH/pcap/enc_$1_reas_$2_1.pcap
 	local pcap2=$CNXKTESTPATH/pcap/enc_$1_reas_$2_2.pcap
 	local pcap3=$CNXKTESTPATH/pcap/enc_$1_reas_$2_3.pcap
-	if [[ $Y -gt 2 ]]; then
+	local pcap4=$CNXKTESTPATH/pcap/enc_$1_reas_$2_4.pcap
+	if [[ $Y -gt 2 && $2 -eq 64 ]]; then
+		testpmd_launch "$TPMD_TX_PREFIX" \
+		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,rx_pcap=$pcap4,infinite_rx=1 -a $LIF1" \
+		"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx"
+	elif [[ $Y -gt 2 ]]; then
 		testpmd_launch "$TPMD_TX_PREFIX" \
 		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,infinite_rx=1 -a $LIF1" \
 		"--nb-cores=4 --txq=3 --rxq=3 --no-flush-rx"
