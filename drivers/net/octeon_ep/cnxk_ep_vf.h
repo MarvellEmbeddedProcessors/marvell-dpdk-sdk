@@ -5,7 +5,7 @@
 #define _CNXK_EP_VF_H_
 
 #include <rte_io.h>
-#include "otx_ep_common.h"
+
 #define CNXK_CONFIG_XPANSION_BAR             0x38
 #define CNXK_CONFIG_PCIE_CAP                 0x70
 #define CNXK_CONFIG_PCIE_DEVCAP              0x74
@@ -56,9 +56,8 @@
 #define CNXK_EP_R_IN_BYTE_CNT(ring)            \
 	(CNXK_EP_R_IN_BYTE_CNT_START +  ((ring) * CNXK_EP_RING_OFFSET))
 
-#define CNXK_EP_R_IN_CNTS_ISM(ring)               \
+#define CNXK_EP_R_IN_CNTS_ISM(ring)            \
 	(CNXK_EP_R_IN_CNTS_ISM_START + ((ring) * CNXK_EP_RING_OFFSET))
-
 
 /** Rings per Virtual Function **/
 #define CNXK_EP_R_IN_CTL_RPVF_MASK	(0xF)
@@ -93,6 +92,10 @@
 #define CNXK_EP_R_OUT_BYTE_CNT_START       0x10190
 #define CNXK_EP_R_OUT_CNTS_ISM_START       0x10510
 
+#define CNXK_EP_R_MBOX_PF_VF_DATA_START    0x10210
+#define CNXK_EP_R_MBOX_VF_PF_DATA_START    0x10230
+#define CNXK_EP_R_MBOX_PF_VF_INT_START     0x10220
+
 #define CNXK_EP_R_OUT_CNTS(ring)                \
 	(CNXK_EP_R_OUT_CNTS_START + ((ring) * CNXK_EP_RING_OFFSET))
 
@@ -123,14 +126,14 @@
 #define CNXK_EP_R_OUT_BYTE_CNT(ring)             \
 	(CNXK_EP_R_OUT_BYTE_CNT_START + ((ring) * CNXK_EP_RING_OFFSET))
 
-#define CNXK_EP_R_OUT_CNTS_ISM(ring)              \
+#define CNXK_EP_R_OUT_CNTS_ISM(ring)             \
 	(CNXK_EP_R_OUT_CNTS_ISM_START + ((ring) * CNXK_EP_RING_OFFSET))
 
-#define CNXK_EP_R_MBOX_PF_VF_DATA_START      0x10210
-#define CNXK_EP_R_MBOX_VF_PF_DATA_START      0x10230
-
-#define CNXK_EP_R_MBOX_VF_PF_DATA(ring)           \
+#define CNXK_EP_R_MBOX_VF_PF_DATA(ring)          \
 	(CNXK_EP_R_MBOX_VF_PF_DATA_START + ((ring) * CNXK_EP_RING_OFFSET))
+
+#define CNXK_EP_R_MBOX_PF_VF_INT(ring)           \
+	(CNXK_EP_R_MBOX_PF_VF_INT_START + ((ring) * CNXK_EP_RING_OFFSET))
 
 /*------------------ R_OUT Masks ----------------*/
 #define CNXK_EP_R_OUT_INT_LEVELS_BMODE       (1ULL << 63)
@@ -147,7 +150,6 @@
 #define CNXK_EP_R_OUT_CTL_NSR_P              (1ULL << 25)
 #define CNXK_EP_R_OUT_CTL_ROR_P              (1ULL << 24)
 #define CNXK_EP_R_OUT_CTL_IMODE              (1ULL << 23)
-#define CNXK_EP_R_IN_CNTS_OUT_INT            (1ULL << 62)
 
 #define PCI_DEVID_CN10KA_EP_NET_VF		0xB903
 #define PCI_DEVID_CNF10KA_EP_NET_VF		0xBA03
@@ -175,14 +177,10 @@ struct cnxk_ep_instr_64B {
 	/* Additional headers available in a 64-byte instruction. */
 	uint64_t exhdr[4];
 };
+
 #define CNXK_EP_IQ_ISM_OFFSET(queue)    (RTE_CACHE_LINE_SIZE * (queue) + 4)
 #define CNXK_EP_OQ_ISM_OFFSET(queue)    (RTE_CACHE_LINE_SIZE * (queue))
 #define CNXK_EP_ISM_EN                  (0x1)
 #define CNXK_EP_ISM_MSIX_DIS            (0x2)
-#define CNXK_EP_MAX_RX_PKT_LEN          (16384)
-#define OTX_EP_R_MBOX_PF_VF_INT_START        (0x10220)
-#define OTX_EP_RING_OFFSET                   (0x1ull << 17)
-#define OTX_EP_R_MBOX_PF_VF_INT(ring) \
-	(OTX_EP_R_MBOX_PF_VF_INT_START + ((ring) * OTX_EP_RING_OFFSET))
 
 #endif /*_CNXK_EP_VF_H_ */

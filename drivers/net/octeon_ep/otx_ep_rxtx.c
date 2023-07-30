@@ -9,7 +9,6 @@
 #include <rte_mbuf.h>
 #include <rte_io.h>
 #include <rte_net.h>
-#include <rte_cycles.h>
 #include <ethdev_pci.h>
 
 #include "otx_ep_common.h"
@@ -18,9 +17,10 @@
 #include "otx_ep_rxtx.h"
 
 /* SDP_LENGTH_S specifies packet length and is of 8-byte size */
-#define INFO_SIZE 8
+#define OTX_EP_INFO_SIZE 8
+#define OTX_EP_FSZ_FS0 0
 #define DROQ_REFILL_THRESHOLD 16
-#define OTX2_SDP_REQUEST_ISM	(0x1ULL << 63)
+#define OTX2_SDP_REQUEST_ISM   (0x1ULL << 63)
 
 static void
 otx_ep_dmazone_free(const struct rte_memzone *mz)
@@ -543,7 +543,7 @@ set_sg_size(struct otx_ep_sg_entry *sg_entry, uint16_t size, uint32_t pos)
 #if RTE_BYTE_ORDER == RTE_BIG_ENDIAN
 	sg_entry->u.size[pos] = size;
 #elif RTE_BYTE_ORDER == RTE_LITTLE_ENDIAN
-	sg_entry->u.size[3 - pos] = size;
+	sg_entry->u.size[(OTX_EP_NUM_SG_PTRS - 1) - pos] = size;
 #endif
 }
 
@@ -551,14 +551,14 @@ static inline int
 prepare_xmit_gather_list(struct otx_ep_instr_queue *iq, struct rte_mbuf *m, uint64_t *dptr,
 			 union otx_ep_instr_ih *ih)
 {
+	uint16_t j = 0, frags, num_sg, mask = OTX_EP_NUM_SG_PTRS - 1;
 	struct otx_ep_buf_free_info *finfo;
-	uint16_t j = 0, frags, num_sg;
 	uint32_t pkt_len;
 	int rc = -1;
 
 	pkt_len = rte_pktmbuf_pkt_len(m);
 	frags = m->nb_segs;
-	num_sg = (frags + 3) / 4;
+	num_sg = (frags + mask) / OTX_EP_NUM_SG_PTRS;
 
 	if (unlikely(pkt_len > OTX_EP_MAX_PKT_SZ && num_sg > OTX_EP_MAX_SG_LISTS)) {
 		otx_ep_err("Failed to xmit the pkt, pkt_len is higher or pkt has more segments\n");
@@ -572,8 +572,8 @@ prepare_xmit_gather_list(struct otx_ep_instr_queue *iq, struct rte_mbuf *m, uint
 	ih->s.gather = 1;
 
 	while (frags--) {
-		finfo->g.sg[(j >> 2)].ptr[(j & 3)] = rte_mbuf_data_iova(m);
-		set_sg_size(&finfo->g.sg[(j >> 2)], m->data_len, (j & 3));
+		finfo->g.sg[(j >> 2)].ptr[(j & mask)] = rte_mbuf_data_iova(m);
+		set_sg_size(&finfo->g.sg[(j >> 2)], m->data_len, (j & mask));
 		j++;
 		m = m->next;
 	}
@@ -604,7 +604,7 @@ otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 
 	/* ih invars */
 	iqcmd.ih.s.fsz = OTX_EP_FSZ;
-	iqcmd.ih.s.pkind = otx_ep->fw_info.pkind;
+	iqcmd.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
 
 	/* pki ih3 invars */
 	iqcmd.pki_ih3.s.w = 1;
@@ -691,9 +691,9 @@ otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 	iqcmd2.irh.u64 = 0;
 
 	/* ih invars */
-	iqcmd2.ih.s.fsz = otx_ep->fw_info.fsz;
-	iqcmd2.ih.s.pkind = otx_ep->fw_info.pkind;
-	/* irh invars, ignored in LOOP mode */
+	iqcmd2.ih.s.fsz = OTX_EP_FSZ_FS0;
+	iqcmd2.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
+	/* irh invars */
 	iqcmd2.irh.s.opcode = OTX_EP_NW_PKT_OP;
 
 	for (i = 0; i < nb_pkts; i++) {
@@ -804,9 +804,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	uint64_t total_pkt_len;
 	uint32_t pkt_len = 0;
 	int next_idx;
-	int info_size;
 
-	info_size = INFO_SIZE + otx_ep->rh_ext_size;
 	droq_pkt  = droq->recv_buf_list[droq->read_idx];
 	droq_pkt2  = droq->recv_buf_list[droq->read_idx];
 	info = rte_pktmbuf_mtod(droq_pkt, struct otx_ep_droq_info *);
@@ -826,6 +824,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		if (!retry && !info->length) {
 			otx_ep_err("OCTEON DROQ[%d]: read_idx: %d; Retry failed !!\n",
 				   droq->q_no, droq->read_idx);
+			/* May be zero length packet; drop it */
 			assert(0);
 		}
 	}
@@ -838,12 +837,11 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 
 	info->length = rte_bswap64(info->length);
 	/* Deduce the actual data size */
-	total_pkt_len = info->length + INFO_SIZE;
+	total_pkt_len = info->length + OTX_EP_INFO_SIZE;
 	if (total_pkt_len <= droq->buffer_size) {
-		info->length -=  otx_ep->rh_ext_size;
 		droq_pkt  = droq->recv_buf_list[droq->read_idx];
 		if (likely(droq_pkt != NULL)) {
-			droq_pkt->data_off += info_size;
+			droq_pkt->data_off += OTX_EP_INFO_SIZE;
 			/* otx_ep_dbg("OQ: pkt_len[%ld], buffer_size %d\n",
 			 * (long)info->length, droq->buffer_size);
 			 */
@@ -860,9 +858,10 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		struct rte_mbuf *first_buf = NULL;
 		struct rte_mbuf *last_buf = NULL;
 
-		/* initiating a csr read helps to flush pending dma */
+		/* csr read helps to flush pending dma */
 		droq->sent_reg_val = rte_read32(droq->pkts_sent_reg);
 		rte_rmb();
+
 		while (pkt_len < total_pkt_len) {
 			int cpy_len = 0;
 
@@ -883,11 +882,11 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 				droq_pkt->port = otx_ep->port_id;
 				if (!pkt_len) {
 					droq_pkt->data_off +=
-						info_size;
+						OTX_EP_INFO_SIZE;
 					droq_pkt->pkt_len =
-						cpy_len - info_size;
+						cpy_len - OTX_EP_INFO_SIZE;
 					droq_pkt->data_len =
-						cpy_len - info_size;
+						cpy_len - OTX_EP_INFO_SIZE;
 				} else {
 					droq_pkt->pkt_len = cpy_len;
 					droq_pkt->data_len = cpy_len;
@@ -903,7 +902,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 
 				last_buf = droq_pkt;
 			} else {
-				otx_ep_err("no recvbuf in jumbo processing\n");
+				otx_ep_err("no buf\n");
 				assert(0);
 			}
 
@@ -948,8 +947,8 @@ otx_ep_check_droq_pkts(struct otx_ep_droq *droq)
 		droq->pkts_sent_ism_prev = 0;
 	}
 	rte_write64(OTX2_SDP_REQUEST_ISM, droq->pkts_sent_reg);
-
 	droq->pkts_pending += new_pkts;
+
 	return new_pkts;
 }
 
