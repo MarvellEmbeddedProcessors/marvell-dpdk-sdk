@@ -4,6 +4,7 @@
 #ifndef _OTX_EP_COMMON_H_
 #define _OTX_EP_COMMON_H_
 
+#include <rte_spinlock.h>
 
 #define OTX_EP_NW_PKT_OP               0x1220
 #define OTX_EP_NW_CMD_OP               0x1221
@@ -36,21 +37,11 @@
 #define OTX_EP_NORESP_OHSM_SEND     (4)
 #define OTX_EP_NORESP_LAST          (4)
 #define OTX_EP_PCI_RING_ALIGN   65536
+#define OTX_EP_MAX_SG_LISTS 4
+#define OTX_EP_NUM_SG_PTRS 4
 #define SDP_PKIND 40
-#define SDP_OTX2_PKIND_FS24 57	/* Front size 24, NIC mode */
-/* Use LBK PKIND */
-#define SDP_OTX2_PKIND_FS0  0	/* Front size 0, LOOP packet mode */
-
-/*
- * Values for SDP packet mode
- * NIC: Has 24 byte header Host-> Octeon, 8 byte header Octeon->Host,
- *      application must handle these
- * LOOP: No headers, standard DPDK apps work on both ends.
- * The mode is selected by a parameter provided to the HOST DPDK driver
- */
-#define SDP_PACKET_MODE_PARAM	"sdp_packet_mode"
-#define SDP_PACKET_MODE_NIC	0x0
-#define SDP_PACKET_MODE_LOOP	0x1
+#define SDP_OTX2_PKIND 57
+#define SDP_OTX2_PKIND_FS0 0
 
 #define      ORDERED_TAG 0
 #define      ATOMIC_TAG  1
@@ -80,6 +71,8 @@
 #define oct_ep_read64(addr) rte_read64_relaxed((void *)(addr))
 #define oct_ep_write64(val, addr) rte_write64_relaxed((val), (void *)(addr))
 
+/* Mailbox maximum data size */
+#define MBOX_MAX_DATA_BUF_SIZE 320
 
 /* Input Request Header format */
 union otx_ep_instr_irh {
@@ -144,9 +137,40 @@ typedef union otx_ep_instr_ih {
 	} s;
 } otx_ep_instr_ih_t;
 
+struct otx_ep_sg_entry {
+	/** The first 64 bit gives the size of data in each dptr. */
+	union {
+		uint16_t size[OTX_EP_NUM_SG_PTRS];
+		uint64_t size64;
+	} u;
+
+	/** The 4 dptr pointers for this entry. */
+	uint64_t ptr[OTX_EP_NUM_SG_PTRS];
+};
+
+#define OTX_EP_SG_ENTRY_SIZE	(sizeof(struct otx_ep_sg_entry))
+
+/** Structure of a node in list of gather components maintained by
+ *  driver for each network device.
+ */
+struct otx_ep_gather {
+	/** number of gather entries. */
+	int num_sg;
+
+	/** Gather component that can accommodate max sized fragment list
+	 *  received from the IP layer.
+	 */
+	struct otx_ep_sg_entry *sg;
+};
+
+struct otx_ep_buf_free_info {
+	struct rte_mbuf *mbuf;
+	struct otx_ep_gather g;
+};
+
 /* OTX_EP IQ request list */
 struct otx_ep_instr_list {
-	void *buf;
+	struct otx_ep_buf_free_info finfo;
 	uint32_t reqtype;
 };
 #define OTX_EP_IQREQ_LIST_SIZE	(sizeof(struct otx_ep_instr_list))
@@ -174,7 +198,7 @@ struct otx_ep_iq_config {
 
 /** The instruction (input) queue.
  *  The input queue is used to post raw (instruction) mode data or packet data
- *  to OCTEON TX2 device from the host. Each IQ of a OTX_EP EP VF device has one
+ *  to OCTEON 9 device from the host. Each IQ of a OTX_EP EP VF device has one
  *  such structure to represent it.
  */
 struct otx_ep_instr_queue {
@@ -194,15 +218,16 @@ struct otx_ep_instr_queue {
 	/* Input ring index, where the driver should write the next packet */
 	uint32_t host_write_index;
 
-	/* Input ring index, where the OCTEON TX2 should read the next packet */
+	/* Input ring index, where the OCTEON 9 should read the next packet */
 	uint32_t otx_read_index;
 
 	uint32_t reset_instr_cnt;
 
-	/** This index aids in finding the window in the queue where OCTEON TX2
+	/** This index aids in finding the window in the queue where OCTEON 9
 	 *  has read the commands.
 	 */
 	uint32_t flush_index;
+
 	/* Free-running/wrapping instruction counter for IQ. */
 	uint32_t inst_cnt;
 
@@ -221,7 +246,7 @@ struct otx_ep_instr_queue {
 	/* OTX_EP instruction count register for this ring. */
 	void *inst_cnt_reg;
 
-	/* Number of instructions pending to be posted to OCTEON TX2. */
+	/* Number of instructions pending to be posted to OCTEON 9. */
 	uint32_t fill_cnt;
 
 	/* Statistics for this input queue. */
@@ -235,6 +260,7 @@ struct otx_ep_instr_queue {
 
 	/* Location in memory updated by SDP ISM */
 	uint32_t *inst_cnt_ism;
+
 	/* track inst count locally to consolidate HW counter updates */
 	uint32_t inst_cnt_ism_prev;
 };
@@ -255,21 +281,14 @@ struct otx_ep_droq_desc {
 };
 #define OTX_EP_DROQ_DESC_SIZE	(sizeof(struct otx_ep_droq_desc))
 
-/* Receive Header, only present in NIC mode. */
-struct otx_ep_rh {
-	/* Reserved. */
-	uint64_t rsvd:48;
-
-	/* rx offload flags */
-	uint64_t rx_ol_flags:16;
+/* Receive Header */
+union otx_ep_rh {
+	uint64_t rh64;
 };
+#define OTX_EP_RH_SIZE (sizeof(union otx_ep_rh))
 
-#define OTX_EP_RH_SIZE_NIC (sizeof(struct otx_ep_rh))
-#define OTX_EP_RH_EXT_SIZE (sizeof(struct otx_ep_rh))
-#define OTX_EP_RH_SIZE_LOOP 0  /* Nothing in LOOP mode */
-
-/** Information about packet DMA'ed by OCTEON TX2.
- *  The format of the information available at Info Pointer after OCTEON TX2
+/** Information about packet DMA'ed by OCTEON 9.
+ *  The format of the information available at Info Pointer after OCTEON 9
  *  has posted a packet. Not all descriptors have valid information. Only
  *  the Info field of the first descriptor for a packet has information
  *  about the packet.
@@ -278,11 +297,10 @@ struct otx_ep_droq_info {
 	/* The Length of the packet. */
 	uint64_t length;
 
-	/* The Output Receive Header, only present in NIC mode */
-	struct otx_ep_rh rh;
+	/* The Output Receive Header. */
+	union otx_ep_rh rh;
 };
-
-#define OTX_EP_DROQ_INFO_SIZE_NIC	(sizeof(struct otx_ep_droq_info))
+#define OTX_EP_DROQ_INFO_SIZE	(sizeof(struct otx_ep_droq_info))
 
 /* DROQ statistics. Each output queue has four stats fields. */
 struct otx_ep_droq_stats {
@@ -334,7 +352,7 @@ struct otx_ep_droq {
 	/* Driver should read the next packet at this index */
 	uint32_t read_idx;
 
-	/* OCTEON TX2 will write the next packet at this index */
+	/* OCTEON 9 will write the next packet at this index */
 	uint32_t write_idx;
 
 	/* At this index, the driver will refill the descriptor's buffer */
@@ -365,7 +383,7 @@ struct otx_ep_droq {
 	 */
 	void *pkts_credit_reg;
 
-	/** Pointer to the mapped packet sent register. OCTEON TX2 writes the
+	/** Pointer to the mapped packet sent register. OCTEON 9 writes the
 	 *  number of packets DMA'ed to host memory in this register.
 	 */
 	void *pkts_sent_reg;
@@ -428,7 +446,6 @@ struct otx_ep_config {
 	/* OQ buffer size */
 	uint32_t oqdef_buf_size;
 };
-#define MBOX_MAX_DATA_BUF_SIZE 320
 
 /* SRIOV information */
 struct otx_ep_sriov_info {
@@ -455,6 +472,7 @@ struct otx_ep_fn_list {
 
 	int (*enable_oq)(struct otx_ep_device *otx_ep, uint32_t q_no);
 	void (*disable_oq)(struct otx_ep_device *otx_ep, uint32_t q_no);
+
 	int (*enable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
 	int (*disable_rxq_intr)(struct otx_ep_device *otx_epvf, uint16_t q_no);
 };
@@ -476,8 +494,8 @@ struct otx_ep_device {
 	struct rte_pci_device *pdev;
 
 	uint16_t chip_id;
-	uint16_t pf_num;
-	uint16_t vf_num;
+
+	uint32_t pkind;
 
 	struct rte_eth_dev *eth_dev;
 
@@ -513,36 +531,30 @@ struct otx_ep_device {
 	/* Device configuration */
 	const struct otx_ep_config *conf;
 
-	rte_spinlock_t mbox_lock;
-
-	int mbox_cmd_id;
-
-	uint8_t mbox_data_buf[MBOX_MAX_DATA_BUF_SIZE];
-
-	int32_t mbox_data_index;
-
-	int32_t mbox_rcv_message_len;
-
 	uint64_t rx_offloads;
 
 	uint64_t tx_offloads;
 
-	/* Packet mode (LOOP vs NIC), set by parameter */
-	uint8_t sdp_packet_mode;
-
 	/* DMA buffer for SDP ISM messages */
 	const struct rte_memzone *ism_buffer_mz;
+
+	/* Mailbox lock */
+	rte_spinlock_t mbox_lock;
+
+	/* Mailbox data */
+	uint8_t mbox_data_buf[MBOX_MAX_DATA_BUF_SIZE];
+
+	/* Mailbox data index */
+	int32_t mbox_data_index;
+
+	/* Mailbox receive message length */
+	int32_t mbox_rcv_message_len;
 
 	/* Negotiated Mbox version */
 	uint32_t mbox_neg_ver;
 
 	/* firmware info */
 	struct otx_ep_fw_info fw_info;
-
-	/* Extended Response Header in packet data received from Hardware.
-	 * Includes metadata like checksum status.
-	 */
-	uint32_t rh_ext_size;
 };
 
 int otx_ep_setup_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no,
@@ -553,37 +565,6 @@ int otx_ep_setup_oqs(struct otx_ep_device *otx_ep, int oq_no, int num_descs,
 		     int desc_size, struct rte_mempool *mpool,
 		     unsigned int socket_id);
 int otx_ep_delete_oqs(struct otx_ep_device *otx_ep, uint32_t oq_no);
-
-struct otx_ep_sg_entry {
-	/** The first 64 bit gives the size of data in each dptr. */
-	union {
-		uint16_t size[4];
-		uint64_t size64;
-	} u;
-
-	/** The 4 dptr pointers for this entry. */
-	uint64_t ptr[4];
-};
-
-#define OTX_EP_SG_ENTRY_SIZE	(sizeof(struct otx_ep_sg_entry))
-
-/** Structure of a node in list of gather components maintained by
- *  driver for each network device.
- */
-struct otx_ep_gather {
-	/** number of gather entries. */
-	int num_sg;
-
-	/** Gather component that can accommodate max sized fragment list
-	 *  received from the IP layer.
-	 */
-	struct otx_ep_sg_entry *sg;
-};
-
-struct otx_ep_buf_free_info {
-	struct rte_mbuf *mbuf;
-	struct otx_ep_gather g;
-};
 
 #define OTX_EP_MAX_PKT_SZ 65498U
 #define OTX_EP_MAX_MAC_ADDRS 1
@@ -600,11 +581,11 @@ struct otx_ep_buf_free_info {
  * - Ethernet hdr
  * - CRC
  * - nested VLANs
- * - octeon rx info for NIC mode
+ * - octeon rx info
  */
 #define OTX_EP_ETH_OVERHEAD \
 	(RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN + \
-	 (2 * RTE_VLAN_HLEN) + OTX_EP_DROQ_INFO_SIZE_NIC)
+	 (2 * RTE_VLAN_HLEN) + OTX_EP_DROQ_INFO_SIZE)
 
 /* PCI IDs */
 #define PCI_VENDOR_ID_CAVIUM			0x177D

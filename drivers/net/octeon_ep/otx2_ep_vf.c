@@ -2,18 +2,13 @@
  * Copyright(C) 2021 Marvell.
  */
 
+#include <errno.h>
+
 #include <rte_common.h>
 #include <rte_cycles.h>
-#include <rte_spinlock.h>
-#include <rte_interrupts.h>
-
+#include <rte_memzone.h>
 #include "otx_ep_common.h"
-#include "common/cnxk/roc_api.h"
 #include "otx2_ep_vf.h"
-
-#define MAX_INTR_VEC_ID RTE_MAX_RXTX_INTR_VEC_ID
-#define MSIX_IRQ_SET_BUF_LEN (sizeof(struct vfio_irq_set) + \
-			      sizeof(int) * (MAX_INTR_VEC_ID))
 
 static int otx2_vf_enable_rxq_intr(struct otx_ep_device *otx_epvf,
 				   uint16_t q_no);
@@ -64,7 +59,6 @@ otx2_vf_reset_iq(struct otx_ep_device *otx_ep, int q_no)
 
 	return 0;
 }
-
 
 static int
 otx2_vf_reset_oq(struct otx_ep_device *otx_ep, int q_no)
@@ -209,7 +203,6 @@ otx2_vf_setup_global_input_regs(struct otx_ep_device *otx_ep)
 
 	for (q_no = 0; q_no < (otx_ep->sriov_info.rings_per_vf); q_no++)
 		otx2_vf_setup_global_iq_reg(otx_ep, q_no);
-
 	return ret;
 }
 
@@ -217,15 +210,13 @@ static int
 otx2_vf_setup_global_output_regs(struct otx_ep_device *otx_ep)
 {
 	uint32_t q_no;
-	int ret;
+	int ret = 0;
 
 	ret = otx2_vf_reset_output_queues(otx_ep);
 	if (ret)
 		return ret;
-
 	for (q_no = 0; q_no < (otx_ep->sriov_info.rings_per_vf); q_no++)
 		otx2_vf_setup_global_oq_reg(otx_ep, q_no);
-
 	return ret;
 }
 
@@ -238,7 +229,6 @@ otx2_vf_setup_device_regs(struct otx_ep_device *otx_ep)
 	if (ret)
 		return ret;
 	ret = otx2_vf_setup_global_output_regs(otx_ep);
-
 	return ret;
 }
 
@@ -257,43 +247,43 @@ otx2_vf_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 	 */
 	if (!(reg_val & SDP_VF_R_IN_CTL_IDLE)) {
 		do {
-			reg_val = oct_ep_read64(otx_ep->hw_addr +
-					      SDP_VF_R_IN_CONTROL(iq_no));
-		} while (!(reg_val & SDP_VF_R_IN_CTL_IDLE)  && loop--);
-		if (loop < 0)
-			return -EIO;
+			reg_val = oct_ep_read64(otx_ep->hw_addr + SDP_VF_R_IN_CONTROL(iq_no));
+		} while ((!(reg_val & SDP_VF_R_IN_CTL_IDLE)) && loop--);
+	}
+
+	if (loop < 0) {
+		otx_ep_err("IDLE bit is not set\n");
+		return -EIO;
 	}
 
 	/* Write the start of the input queue's ring and its size  */
-	oct_ep_write64(iq->base_addr_dma, otx_ep->hw_addr +
-			SDP_VF_R_IN_INSTR_BADDR(iq_no));
-	oct_ep_write64(iq->nb_desc, otx_ep->hw_addr +
-			SDP_VF_R_IN_INSTR_RSIZE(iq_no));
+	oct_ep_write64(iq->base_addr_dma, otx_ep->hw_addr + SDP_VF_R_IN_INSTR_BADDR(iq_no));
+	oct_ep_write64(iq->nb_desc, otx_ep->hw_addr + SDP_VF_R_IN_INSTR_RSIZE(iq_no));
 
 	/* Remember the doorbell & instruction count register addr
 	 * for this queue
 	 */
-	iq->doorbell_reg = (uint8_t *)otx_ep->hw_addr +
-			   SDP_VF_R_IN_INSTR_DBELL(iq_no);
-	iq->inst_cnt_reg = (uint8_t *)otx_ep->hw_addr +
-			   SDP_VF_R_IN_CNTS(iq_no);
+	iq->doorbell_reg = (uint8_t *)otx_ep->hw_addr + SDP_VF_R_IN_INSTR_DBELL(iq_no);
+	iq->inst_cnt_reg = (uint8_t *)otx_ep->hw_addr + SDP_VF_R_IN_CNTS(iq_no);
 
-	otx_ep_dbg("InstQ[%d]:dbell reg @ 0x%p instcnt_reg @ 0x%p",
+	otx_ep_dbg("InstQ[%d]:dbell reg @ 0x%p inst_cnt_reg @ 0x%p",
 		   iq_no, iq->doorbell_reg, iq->inst_cnt_reg);
-
 	loop = SDP_VF_BUSY_LOOP_COUNT;
 	do {
 		reg_val = rte_read32(iq->inst_cnt_reg);
 		rte_write32(reg_val, iq->inst_cnt_reg);
 	} while (reg_val != 0 && loop--);
-	if (loop < 0)
+
+	if (loop < 0) {
+		otx_ep_err("INST CNT REGISTER is not zero\n");
 		return -EIO;
+	}
 
 	/* IN INTR_THRESHOLD is set to max(FFFFFFFF) which disable the IN INTR
 	 * to raise
 	 */
 	oct_ep_write64(OTX_EP_CLEAR_SDP_IN_INT_LVLS,
-		     otx_ep->hw_addr + SDP_VF_R_IN_INT_LEVELS(iq_no));
+		       otx_ep->hw_addr + SDP_VF_R_IN_INT_LEVELS(iq_no));
 
 	/* Set up IQ ISM registers and structures */
 	ism_addr = (otx_ep->ism_buffer_mz->iova | OTX2_EP_ISM_EN
@@ -318,26 +308,27 @@ otx2_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 {
 	volatile uint64_t reg_val = 0ull;
 	uint64_t oq_ctl = 0ull;
-	struct otx_ep_droq *droq = otx_ep->droq[oq_no];
 	uint64_t ism_addr;
-	int loop = SDP_VF_BUSY_LOOP_COUNT;
+	int loop = OTX_EP_BUSY_LOOP_COUNT;
+	struct otx_ep_droq *droq = otx_ep->droq[oq_no];
 
 	/* Wait on IDLE to set to 1, supposed to configure BADDR
-	 * as log as IDLE is 0
+	 * as long as IDLE is 0
 	 */
 	reg_val = oct_ep_read64(otx_ep->hw_addr + SDP_VF_R_OUT_CONTROL(oq_no));
 
-	while (!(reg_val & SDP_VF_R_OUT_CTL_IDLE) && loop--) {
-		reg_val = oct_ep_read64(otx_ep->hw_addr +
-				      SDP_VF_R_OUT_CONTROL(oq_no));
+	while ((!(reg_val & SDP_VF_R_OUT_CTL_IDLE)) && loop--) {
+		reg_val = oct_ep_read64(otx_ep->hw_addr + SDP_VF_R_OUT_CONTROL(oq_no));
+		rte_delay_ms(1);
 	}
-	if (loop < 0)
-		return -EIO;
 
-	oct_ep_write64(droq->desc_ring_dma, otx_ep->hw_addr +
-		     SDP_VF_R_OUT_SLIST_BADDR(oq_no));
-	oct_ep_write64(droq->nb_desc, otx_ep->hw_addr +
-		     SDP_VF_R_OUT_SLIST_RSIZE(oq_no));
+	if (loop < 0) {
+		otx_ep_err("OUT CNT REGISTER value is zero\n");
+		return -EIO;
+	}
+
+	oct_ep_write64(droq->desc_ring_dma, otx_ep->hw_addr + SDP_VF_R_OUT_SLIST_BADDR(oq_no));
+	oct_ep_write64(droq->nb_desc, otx_ep->hw_addr + SDP_VF_R_OUT_SLIST_RSIZE(oq_no));
 
 	oq_ctl = oct_ep_read64(otx_ep->hw_addr + SDP_VF_R_OUT_CONTROL(oq_no));
 
@@ -347,39 +338,37 @@ otx2_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 	/* Populate the BSIZE (15-0) */
 	oq_ctl |= (droq->buffer_size & OTX_EP_DROQ_BUFSZ_MASK);
 
-	otx2_write64(oq_ctl, otx_ep->hw_addr + SDP_VF_R_OUT_CONTROL(oq_no));
+	oct_ep_write64(oq_ctl, otx_ep->hw_addr + SDP_VF_R_OUT_CONTROL(oq_no));
 
 	/* Mapped address of the pkt_sent and pkts_credit regs */
-	droq->pkts_sent_reg = (uint8_t *)otx_ep->hw_addr +
-			      SDP_VF_R_OUT_CNTS(oq_no);
-	droq->pkts_credit_reg = (uint8_t *)otx_ep->hw_addr +
-				SDP_VF_R_OUT_SLIST_DBELL(oq_no);
+	droq->pkts_sent_reg = (uint8_t *)otx_ep->hw_addr + SDP_VF_R_OUT_CNTS(oq_no);
+	droq->pkts_credit_reg = (uint8_t *)otx_ep->hw_addr + SDP_VF_R_OUT_SLIST_DBELL(oq_no);
 
-	rte_write64(OTX_EP_CLEAR_OUT_INT_LVLS,
-		    otx_ep->hw_addr + SDP_VF_R_OUT_INT_LEVELS(oq_no));
+	rte_write64(OTX_EP_CLEAR_OUT_INT_LVLS, otx_ep->hw_addr + SDP_VF_R_OUT_INT_LEVELS(oq_no));
 
 	/* Clear PKT_CNT register */
 	rte_write64(OTX_EP_CLEAR_SDP_OUT_PKT_CNT, (uint8_t *)otx_ep->hw_addr +
 		    SDP_VF_R_OUT_PKT_CNT(oq_no));
 
 	/* Clear the OQ doorbell  */
-	loop = SDP_VF_BUSY_LOOP_COUNT;
+	loop = OTX_EP_BUSY_LOOP_COUNT;
 	rte_write32(OTX_EP_CLEAR_SLIST_DBELL, droq->pkts_credit_reg);
 	while ((rte_read32(droq->pkts_credit_reg) != 0ull) && loop--) {
 		rte_write32(OTX_EP_CLEAR_SLIST_DBELL, droq->pkts_credit_reg);
 		rte_delay_ms(1);
 	}
-	if (loop < 0)
+
+	if (loop < 0) {
+		otx_ep_err("Packets credit register value is not cleared\n");
 		return -EIO;
-	otx_ep_dbg("SDP_R[%d]_credit:%x", oq_no,
-		   rte_read32(droq->pkts_credit_reg));
+	}
+	otx_ep_dbg("SDP_R[%d]_credit:%x", oq_no, rte_read32(droq->pkts_credit_reg));
 
 	/* Clear the OQ_OUT_CNTS doorbell  */
 	reg_val = rte_read32(droq->pkts_sent_reg);
 	rte_write32((uint32_t)reg_val, droq->pkts_sent_reg);
 
-	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no,
-		   rte_read32(droq->pkts_sent_reg));
+	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no, rte_read32(droq->pkts_sent_reg));
 
 	/* Set up ISM registers and structures */
 	ism_addr = (otx_ep->ism_buffer_mz->iova | OTX2_EP_ISM_EN
@@ -405,7 +394,7 @@ otx2_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 	if (loop < 0)
 		return -EIO;
 	otx_ep_dbg("SDP_R[%d]_sent: %x", oq_no,
-		   rte_read32(droq->pkts_sent_reg));
+		    rte_read32(droq->pkts_sent_reg));
 
 	return 0;
 }
@@ -413,14 +402,13 @@ otx2_vf_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 static int
 otx2_vf_enable_iq(struct otx_ep_device *otx_ep, uint32_t q_no)
 {
-	volatile uint64_t reg_val = 0ull;
 	int loop = SDP_VF_BUSY_LOOP_COUNT;
+	uint64_t reg_val = 0ull;
 
 	/* Resetting doorbells during IQ enabling also to handle abrupt
 	 * guest reboot. IQ reset does not clear the doorbells.
 	 */
-	oct_ep_write64(0xFFFFFFFF, otx_ep->hw_addr +
-		     SDP_VF_R_IN_INSTR_DBELL(q_no));
+	oct_ep_write64(0xFFFFFFFF, otx_ep->hw_addr + SDP_VF_R_IN_INSTR_DBELL(q_no));
 
 	while (((oct_ep_read64(otx_ep->hw_addr +
 		 SDP_VF_R_IN_INSTR_DBELL(q_no))) != 0ull) && loop--) {
@@ -609,7 +597,9 @@ otx2_ep_vf_setup_device(struct otx_ep_device *otx_ep)
 
 	otx_ep->fn_list.enable_oq           = otx2_vf_enable_oq;
 	otx_ep->fn_list.disable_oq          = otx2_vf_disable_oq;
+
 	otx_ep->fn_list.enable_rxq_intr     = otx2_vf_enable_rxq_intr;
 	otx_ep->fn_list.disable_rxq_intr    = otx2_vf_disable_rxq_intr;
+
 	return 0;
 }

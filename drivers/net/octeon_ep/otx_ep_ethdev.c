@@ -2,20 +2,15 @@
  * Copyright(C) 2021 Marvell.
  */
 
+#include <inttypes.h>
 #include <ethdev_pci.h>
-#include <rte_ether.h>
-#include <rte_kvargs.h>
-#include <rte_spinlock.h>
-#include <eal_interrupts.h>
 
-#include "common/cnxk/roc_api.h"
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
 #include "otx2_ep_vf.h"
 #include "cnxk_ep_vf.h"
 #include "otx_ep_rxtx.h"
 #include "otx_ep_mbox.h"
-#include "otx_ep_irq.h"
 
 #define OTX_EP_DEV(_eth_dev) \
 	((struct otx_ep_device *)(_eth_dev)->data->dev_private)
@@ -31,84 +26,6 @@ static const struct rte_eth_desc_lim otx_ep_tx_desc_lim = {
 	.nb_min		= OTX_EP_MIN_IQ_DESCRIPTORS,
 	.nb_align	= OTX_EP_TXD_ALIGN,
 };
-
-static void
-otx_ep_interrupt_handler(void *param)
-{
-	struct otx_ep_device *otx_epvf = (struct otx_ep_device *)param;
-	union otx_ep_mbox_word *notif;
-	uint64_t reg_val;
-
-	if (otx_epvf) {
-		/* Clear Mbox interrupts */
-		reg_val = rte_read64((uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
-		rte_write64(reg_val, (uint8_t *)otx_epvf->hw_addr + OTX_EP_R_MBOX_PF_VF_INT(0));
-		reg_val = otx2_read64((uint8_t *)otx_epvf->hw_addr + SDP_VF_R_MBOX_PF_VF_DATA(0));
-
-		notif = (union otx_ep_mbox_word *)&reg_val;
-		switch (notif->s_link_status.opcode) {
-		case OTX_EP_MBOX_NOTIF_LINK_STATUS:
-			if (notif->s_link_status.status)
-				otx_ep_dbg("LINK UP\n");
-			else
-				otx_ep_dbg("LINK DOWN\n");
-			break;
-		default:
-			otx_ep_err("Received unsupported notif %d\n", notif->s_link_status.opcode);
-			break;
-		}
-	} else {
-		otx_ep_err("otx_epdev_interrupt_handler is called with dev NULL\n");
-	}
-}
-
-static int otx_ep_dev_stats_reset(struct rte_eth_dev *dev)
-{
-	struct otx_ep_device *otx_epvf = OTX_EP_DEV(dev);
-	uint32_t i;
-
-	for (i = 0; i < otx_epvf->nb_tx_queues; i++)
-		memset(&otx_epvf->instr_queue[i]->stats, 0,
-		       sizeof(struct otx_ep_iq_stats));
-
-	for (i = 0; i < otx_epvf->nb_rx_queues; i++)
-		memset(&otx_epvf->droq[i]->stats, 0,
-		       sizeof(struct otx_ep_droq_stats));
-
-	return 0;
-}
-
-static int otx_ep_dev_stats_get(struct rte_eth_dev *eth_dev,
-				struct rte_eth_stats *stats)
-{
-	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
-	struct otx_ep_iq_stats *ostats;
-	struct otx_ep_droq_stats *istats;
-	uint32_t i;
-
-	memset(stats, 0, sizeof(struct rte_eth_stats));
-
-	for (i = 0; i < otx_epvf->nb_tx_queues; i++) {
-		ostats = &otx_epvf->instr_queue[i]->stats;
-		stats->q_opackets[i] = ostats->tx_pkts;
-		stats->q_obytes[i] = ostats->tx_bytes;
-		stats->opackets += ostats->tx_pkts;
-		stats->obytes += ostats->tx_bytes;
-		stats->oerrors += ostats->instr_dropped;
-	}
-	for (i = 0; i < otx_epvf->nb_rx_queues; i++) {
-		istats = &otx_epvf->droq[i]->stats;
-		stats->q_ipackets[i] = istats->pkts_received;
-		stats->q_ibytes[i] = istats->bytes_received;
-		stats->q_errors[i] = istats->rx_err;
-		stats->ipackets += istats->pkts_received;
-		stats->ibytes += istats->bytes_received;
-		stats->imissed += istats->rx_alloc_failure;
-		stats->ierrors += istats->rx_err;
-		stats->rx_nombuf += istats->rx_alloc_failure;
-	}
-	return 0;
-}
 
 static int
 otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
@@ -133,8 +50,8 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 	devinfo->max_rx_pktlen = max_rx_pktlen;
 	devinfo->max_mtu = devinfo->max_rx_pktlen - OTX_EP_ETH_OVERHEAD;
 	devinfo->min_mtu = RTE_ETHER_MIN_LEN;
-	devinfo->rx_offload_capa = DEV_RX_OFFLOAD_SCATTER;
-	devinfo->tx_offload_capa = DEV_TX_OFFLOAD_MULTI_SEGS;
+	devinfo->rx_offload_capa = RTE_ETH_RX_OFFLOAD_SCATTER;
+	devinfo->tx_offload_capa = RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
 
 	devinfo->max_mac_addrs = OTX_EP_MAX_MAC_ADDRS;
 
@@ -148,18 +65,21 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 }
 
 static int
-otx_ep_dev_link_update(struct rte_eth_dev *eth_dev,
-		    int wait_to_complete __rte_unused)
+otx_ep_dev_link_update(struct rte_eth_dev *eth_dev, int wait_to_complete)
 {
-	int32_t ret = 0;
+	RTE_SET_USED(wait_to_complete);
+
+	if (!eth_dev->data->dev_started)
+		return 0;
 	struct rte_eth_link link;
+	int ret = 0;
 
 	memset(&link, 0, sizeof(link));
 	ret = otx_ep_mbox_get_link_info(eth_dev, &link);
 	if (ret)
 		return -EINVAL;
 	otx_ep_dbg("link status resp link %d duplex %d autoneg %d link_speed %d\n",
-		   link.link_status, link.link_duplex, link.link_autoneg, link.link_speed);
+		    link.link_status, link.link_duplex, link.link_autoneg, link.link_speed);
 	return rte_eth_linkstatus_set(eth_dev, &link);
 }
 
@@ -210,20 +130,6 @@ otx_ep_dev_set_default_mac_addr(struct rte_eth_dev *eth_dev,
 }
 
 static int
-otx_ep_dev_get_mac_addr(struct rte_eth_dev *eth_dev,
-			struct rte_ether_addr *mac_addr)
-{
-	int ret;
-
-	ret = otx_ep_mbox_get_mac_addr(eth_dev, mac_addr);
-	if (ret)
-		return -EINVAL;
-	otx_ep_dbg("Get MAC address " RTE_ETHER_ADDR_PRT_FMT "\n",
-		    RTE_ETHER_ADDR_BYTES(mac_addr));
-	return 0;
-}
-
-static int
 otx_ep_dev_start(struct rte_eth_dev *eth_dev)
 {
 	struct otx_ep_device *otx_epvf;
@@ -264,54 +170,11 @@ otx_ep_dev_stop(struct rte_eth_dev *eth_dev)
 	return 0;
 }
 
-/* Close device */
-static int
-otx_ep_dev_close(struct rte_eth_dev *eth_dev)
-{
-	struct otx_ep_device *otx_epvf;
-	uint32_t num_queues, q;
-
-	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
-		eth_dev->dev_ops = NULL;
-		eth_dev->rx_pkt_burst = NULL;
-		eth_dev->tx_pkt_burst = NULL;
-		return 0;
-	}
-
-	otx_epvf = OTX_EP_DEV(eth_dev);
-	otx_ep_mbox_send_dev_exit(eth_dev);
-	otx_ep_mbox_disable_interrupt(otx_epvf);
-	otx_epvf->fn_list.disable_io_queues(otx_epvf);
-
-	num_queues = otx_epvf->nb_rx_queues;
-	for (q = 0; q < num_queues; q++) {
-		if (otx_ep_delete_oqs(otx_epvf, q)) {
-			otx_ep_err("Failed to delete OQ:%d\n", q);
-			return -EINVAL;
-		}
-	}
-	otx_ep_info("Num OQs:%d freed\n", otx_epvf->nb_rx_queues);
-	num_queues = otx_epvf->nb_tx_queues;
-	for (q = 0; q < num_queues; q++) {
-		if (otx_ep_delete_iqs(otx_epvf, q)) {
-			otx_ep_err("Failed to delete IQ:%d\n", q);
-			return -EINVAL;
-		}
-	}
-	otx_ep_dbg("Num IQs:%d freed\n", otx_epvf->nb_tx_queues);
-
-	if (rte_eth_dma_zone_free(eth_dev, "ism", 0)) {
-		otx_ep_err("Failed to delete ISM buffer\n");
-		return -EINVAL;
-	}
-	return 0;
-}
-
 /*
  * We only need 2 uint32_t locations per IOQ, but separate these so
  * each IOQ has the variables on its own cache line.
  */
-#define OTX_EP_ISM_BUFFER_SIZE	(OTX_EP_MAX_IOQS_PER_VF * RTE_CACHE_LINE_SIZE)
+#define OTX_EP_ISM_BUFFER_SIZE (OTX_EP_MAX_IOQS_PER_VF * RTE_CACHE_LINE_SIZE)
 static int
 otx_ep_ism_setup(struct otx_ep_device *otx_epvf)
 {
@@ -326,12 +189,13 @@ otx_ep_ism_setup(struct otx_ep_device *otx_epvf)
 		otx_ep_err("Failed to allocate ISM buffer\n");
 		return(-1);
 	}
-	otx_ep_dbg("ISM: virt: 0x%p, dma: %p\n",
+	otx_ep_dbg("ISM: virt: 0x%p, dma: 0x%" PRIX64,
 		    (void *)otx_epvf->ism_buffer_mz->addr,
-		   (void *)otx_epvf->ism_buffer_mz->iova);
+		    otx_epvf->ism_buffer_mz->iova);
 
 	return 0;
 }
+
 static int
 otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 {
@@ -345,11 +209,11 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 		ret = otx_ep_vf_setup_device(otx_epvf);
 		otx_epvf->fn_list.disable_io_queues(otx_epvf);
 		break;
-	case PCI_DEVID_OCTEONTX2_EP_NET_VF:
-	case PCI_DEVID_CNF95XXN_EP_NET_VF:
-	case PCI_DEVID_CNF95XXO_EP_NET_VF:
+	case PCI_DEVID_CN9K_EP_NET_VF:
 	case PCI_DEVID_LIO3_EP_NET_VF:
 	case PCI_DEVID_CN98XX_EP_NET_VF:
+	case PCI_DEVID_CNF95N_EP_NET_VF:
+	case PCI_DEVID_CNF95O_EP_NET_VF:
 		otx_epvf->chip_id = dev_id;
 		ret = otx2_ep_vf_setup_device(otx_epvf);
 		otx_epvf->fn_list.disable_io_queues(otx_epvf);
@@ -383,7 +247,6 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 {
 	uint32_t ethdev_queues;
 	int ret = 0;
-	uint32_t vec = 0;
 
 	ret = otx_ep_chip_specific_setup(otx_epvf);
 	if (ret) {
@@ -396,7 +259,7 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 	otx_epvf->eth_dev->rx_pkt_burst = &otx_ep_recv_pkts;
 	if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF)
 		otx_epvf->eth_dev->tx_pkt_burst = &otx_ep_xmit_pkts;
-	else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX2_EP_NET_VF ||
+	else if (otx_epvf->chip_id == PCI_DEVID_CN9K_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
 		 otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF ||
@@ -413,10 +276,9 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 	ethdev_queues = (uint32_t)(otx_epvf->sriov_info.rings_per_vf);
 	otx_epvf->max_rx_queues = ethdev_queues;
 	otx_epvf->max_tx_queues = ethdev_queues;
-	otx_ep_register_irq(otx_epvf, otx_ep_interrupt_handler,
-						(void *)otx_epvf, vec);
-	otx_ep_mbox_enable_interrupt(otx_epvf);
+
 	otx_ep_info("OTX_EP Device is Ready\n");
+
 setup_fail:
 	return ret;
 }
@@ -487,12 +349,12 @@ otx_ep_rx_queue_setup(struct rte_eth_dev *eth_dev, uint16_t q_no,
 	}
 
 	if (num_rx_descs & (num_rx_descs - 1)) {
-		otx_ep_err("Invalid rx desc number(%u) This must be a power of 2\n",
+		otx_ep_err("Invalid rx desc number should be pow 2  %u\n",
 			   num_rx_descs);
 		return -EINVAL;
 	}
 	if (num_rx_descs < (SDP_GBL_WMARK * 8)) {
-		otx_ep_err("Invalid rx desc number(%u) should at least be greater than 8*wmark(%u)\n",
+		otx_ep_err("Invalid rx desc number(%u) should at least be greater than 8xwmark  %u\n",
 			   num_rx_descs, (SDP_GBL_WMARK * 8));
 		return -EINVAL;
 	}
@@ -571,7 +433,7 @@ otx_ep_tx_queue_setup(struct rte_eth_dev *eth_dev, uint16_t q_no,
 		return -EINVAL;
 	}
 	if (num_tx_descs & (num_tx_descs - 1)) {
-		otx_ep_err("Invalid tx desc number(%u) This must be a power of 2\n",
+		otx_ep_err("Invalid tx desc number should be pow 2  %u\n",
 			   num_tx_descs);
 		return -EINVAL;
 	}
@@ -613,12 +475,117 @@ otx_ep_tx_queue_release(struct rte_eth_dev *dev, uint16_t q_no)
 	otx_ep_delete_iqs(tq->otx_ep_dev, tq->q_no);
 }
 
+static int
+otx_ep_dev_stats_reset(struct rte_eth_dev *dev)
+{
+	struct otx_ep_device *otx_epvf = OTX_EP_DEV(dev);
+	uint32_t i;
+
+	for (i = 0; i < otx_epvf->nb_tx_queues; i++)
+		memset(&otx_epvf->instr_queue[i]->stats, 0,
+		       sizeof(struct otx_ep_iq_stats));
+
+	for (i = 0; i < otx_epvf->nb_rx_queues; i++)
+		memset(&otx_epvf->droq[i]->stats, 0,
+		       sizeof(struct otx_ep_droq_stats));
+
+	return 0;
+}
+
+static int
+otx_ep_dev_stats_get(struct rte_eth_dev *eth_dev,
+				struct rte_eth_stats *stats)
+{
+	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
+	struct otx_ep_iq_stats *ostats;
+	struct otx_ep_droq_stats *istats;
+	uint32_t i;
+
+	memset(stats, 0, sizeof(struct rte_eth_stats));
+
+	for (i = 0; i < otx_epvf->nb_tx_queues; i++) {
+		ostats = &otx_epvf->instr_queue[i]->stats;
+		stats->q_opackets[i] = ostats->tx_pkts;
+		stats->q_obytes[i] = ostats->tx_bytes;
+		stats->opackets += ostats->tx_pkts;
+		stats->obytes += ostats->tx_bytes;
+		stats->oerrors += ostats->instr_dropped;
+	}
+	for (i = 0; i < otx_epvf->nb_rx_queues; i++) {
+		istats = &otx_epvf->droq[i]->stats;
+		stats->q_ipackets[i] = istats->pkts_received;
+		stats->q_ibytes[i] = istats->bytes_received;
+		stats->q_errors[i] = istats->rx_err;
+		stats->ipackets += istats->pkts_received;
+		stats->ibytes += istats->bytes_received;
+		stats->imissed += istats->rx_alloc_failure;
+		stats->ierrors += istats->rx_err;
+		stats->rx_nombuf += istats->rx_alloc_failure;
+	}
+	return 0;
+}
+
+static int
+otx_ep_dev_close(struct rte_eth_dev *eth_dev)
+{
+	struct otx_ep_device *otx_epvf;
+	uint32_t num_queues, q_no;
+
+	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
+		eth_dev->dev_ops = NULL;
+		eth_dev->rx_pkt_burst = NULL;
+		eth_dev->tx_pkt_burst = NULL;
+		return 0;
+	}
+
+	otx_epvf = OTX_EP_DEV(eth_dev);
+	otx_ep_mbox_send_dev_exit(eth_dev);
+	otx_epvf->fn_list.disable_io_queues(otx_epvf);
+	num_queues = otx_epvf->nb_rx_queues;
+	for (q_no = 0; q_no < num_queues; q_no++) {
+		if (otx_ep_delete_oqs(otx_epvf, q_no)) {
+			otx_ep_err("Failed to delete OQ:%d\n", q_no);
+			return -EINVAL;
+		}
+	}
+	otx_ep_dbg("Num OQs:%d freed\n", otx_epvf->nb_rx_queues);
+
+	num_queues = otx_epvf->nb_tx_queues;
+	for (q_no = 0; q_no < num_queues; q_no++) {
+		if (otx_ep_delete_iqs(otx_epvf, q_no)) {
+			otx_ep_err("Failed to delete IQ:%d\n", q_no);
+			return -EINVAL;
+		}
+	}
+	otx_ep_dbg("Num IQs:%d freed\n", otx_epvf->nb_tx_queues);
+
+	if (rte_eth_dma_zone_free(eth_dev, "ism", 0)) {
+		otx_ep_err("Failed to delete ISM buffer\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int
+otx_ep_dev_get_mac_addr(struct rte_eth_dev *eth_dev,
+			struct rte_ether_addr *mac_addr)
+{
+	int ret;
+
+	ret = otx_ep_mbox_get_mac_addr(eth_dev, mac_addr);
+	if (ret)
+		return -EINVAL;
+	otx_ep_dbg("Get MAC address " RTE_ETHER_ADDR_PRT_FMT "\n",
+		    RTE_ETHER_ADDR_BYTES(mac_addr));
+	return 0;
+}
+
 /* Define our ethernet definitions */
 static const struct eth_dev_ops otx_ep_eth_dev_ops = {
 	.dev_configure		= otx_ep_dev_configure,
 	.dev_start		= otx_ep_dev_start,
 	.dev_stop		= otx_ep_dev_stop,
-	.dev_close		= otx_ep_dev_close,
 	.rx_queue_setup	        = otx_ep_rx_queue_setup,
 	.rx_queue_release	= otx_ep_rx_queue_release,
 	.tx_queue_setup	        = otx_ep_tx_queue_setup,
@@ -627,6 +594,7 @@ static const struct eth_dev_ops otx_ep_eth_dev_ops = {
 	.stats_get		= otx_ep_dev_stats_get,
 	.stats_reset		= otx_ep_dev_stats_reset,
 	.link_update		= otx_ep_dev_link_update,
+	.dev_close		= otx_ep_dev_close,
 	.mtu_set		= otx_ep_dev_mtu_set,
 	.mac_addr_set           = otx_ep_dev_set_default_mac_addr,
 };
@@ -647,7 +615,6 @@ otx_ep_eth_dev_uninit(struct rte_eth_dev *eth_dev)
 
 	return 0;
 }
-
 
 static int otx_ep_eth_dev_query_set_vf_mac(struct rte_eth_dev *eth_dev,
 					   struct rte_ether_addr *mac_addr)
@@ -695,13 +662,12 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 		return 0;
 	}
 
-	otx_epvf->sdp_packet_mode = SDP_PACKET_MODE_LOOP;
 	rte_eth_copy_pci_info(eth_dev, pdev);
-
 	otx_epvf->eth_dev = eth_dev;
 	otx_epvf->port_id = eth_dev->data->port_id;
 	eth_dev->dev_ops = &otx_ep_eth_dev_ops;
 	rte_spinlock_init(&otx_epvf->mbox_lock);
+
 	/*
 	 * Initialize negotiated Mbox version to base version of VF Mbox
 	 * This will address working legacy PF with latest VF.
@@ -713,19 +679,33 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 		eth_dev->dev_ops = NULL;
 		return -ENOMEM;
 	}
+	rte_eth_random_addr(vf_mac_addr.addr_bytes);
+	rte_ether_addr_copy(&vf_mac_addr, eth_dev->data->mac_addrs);
 	otx_epvf->hw_addr = pdev->mem_resource[0].addr;
 	otx_epvf->pdev = pdev;
 
 	if (otx_epdev_init(otx_epvf))
 		return -ENOMEM;
+	if (otx_epvf->chip_id == PCI_DEVID_CN9K_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CN10KA_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CN10KB_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CNF10KA_EP_NET_VF ||
+	    otx_epvf->chip_id == PCI_DEVID_CNF10KB_EP_NET_VF) {
+		otx_epvf->pkind = SDP_OTX2_PKIND_FS0;
+		otx_ep_info("using pkind %d\n", otx_epvf->pkind);
+	} else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF) {
+		otx_epvf->pkind = SDP_PKIND;
+		otx_ep_info("Using pkind %d.\n", otx_epvf->pkind);
+	} else {
+		otx_ep_err("Invalid chip id\n");
+		return -EINVAL;
+	}
 
 	if (otx_ep_mbox_version_check(eth_dev))
 		return -EINVAL;
-
-	if (otx_ep_mbox_get_fw_info(eth_dev))
-		return -EINVAL;
-	if (otx_epvf->fw_info.rx_ol_flags)
-		otx_epvf->rh_ext_size = OTX_EP_RH_EXT_SIZE;
 
 	if (otx_ep_eth_dev_query_set_vf_mac(eth_dev,
 				(struct rte_ether_addr *)&vf_mac_addr)) {
@@ -733,6 +713,7 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 		return -ENODEV;
 	}
 	rte_ether_addr_copy(&vf_mac_addr, eth_dev->data->mac_addrs);
+
 	return 0;
 }
 
@@ -755,13 +736,11 @@ otx_ep_eth_dev_pci_remove(struct rte_pci_device *pci_dev)
 /* Set of PCI devices this driver supports */
 static const struct rte_pci_id pci_id_otx_ep_map[] = {
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_OCTEONTX_EP_VF) },
-	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_OCTEONTX2_EP_NET_VF) },
-	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95XXN_EP_NET_VF) },
-	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95XXO_EP_NET_VF) },
-	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_LIO3_EP_NET_VF) },
+	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN9K_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN98XX_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95N_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF95O_EP_NET_VF) },
+	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_LIO3_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN10KA_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CN10KB_EP_NET_VF) },
 	{ RTE_PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, PCI_DEVID_CNF10KA_EP_NET_VF) },

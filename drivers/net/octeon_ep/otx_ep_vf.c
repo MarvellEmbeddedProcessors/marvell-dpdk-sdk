@@ -5,11 +5,12 @@
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_io.h>
-#include <rte_spinlock.h>
-#include <rte_interrupts.h>
+#include <ethdev_driver.h>
+#include <ethdev_pci.h>
 
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
+
 
 static int
 otx_ep_setup_global_iq_reg(struct otx_ep_device *otx_ep, int q_no)
@@ -74,7 +75,6 @@ otx_ep_setup_global_input_regs(struct otx_ep_device *otx_ep)
 		if (ret)
 			return ret;
 	}
-
 	return 0;
 }
 
@@ -91,11 +91,11 @@ static int
 otx_ep_setup_device_regs(struct otx_ep_device *otx_ep)
 {
 	int ret;
+
 	ret = otx_ep_setup_global_input_regs(otx_ep);
 	if (ret)
 		return ret;
 	otx_ep_setup_global_output_regs(otx_ep);
-
 	return 0;
 }
 
@@ -134,7 +134,7 @@ otx_ep_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 	iq->inst_cnt_reg = (uint8_t *)otx_ep->hw_addr +
 			   OTX_EP_R_IN_CNTS(iq_no);
 
-	otx_ep_dbg("InstQ[%d]:dbell reg @ 0x%p instcnt_reg @ 0x%p\n",
+	otx_ep_dbg("InstQ[%d]:dbell reg @ 0x%p inst_cnt_reg @ 0x%p\n",
 		     iq_no, iq->doorbell_reg, iq->inst_cnt_reg);
 
 	loop = OTX_EP_BUSY_LOOP_COUNT;
@@ -153,7 +153,6 @@ otx_ep_setup_iq_regs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 	 */
 	otx_ep_write64(OTX_EP_CLEAR_IN_INT_LVLS, otx_ep->hw_addr,
 		       OTX_EP_R_IN_INT_LEVELS(iq_no));
-
 	return 0;
 }
 
@@ -231,7 +230,6 @@ otx_ep_setup_oq_regs(struct otx_ep_device *otx_ep, uint32_t oq_no)
 	}
 	if (loop < 0)
 		return -EIO;
-
 	return 0;
 }
 
@@ -283,7 +281,6 @@ otx_ep_enable_oq(struct otx_ep_device *otx_ep, uint32_t q_no)
 		 OTX_EP_R_OUT_SLIST_DBELL(q_no))) != 0ull) && loop--) {
 		rte_delay_ms(1);
 	}
-
 	if (loop < 0) {
 		otx_ep_err("dbell reset failed\n");
 		return -EIO;
@@ -424,5 +421,7 @@ otx_ep_vf_setup_device(struct otx_ep_device *otx_ep)
 
 	otx_ep->fn_list.enable_oq           = otx_ep_enable_oq;
 	otx_ep->fn_list.disable_oq          = otx_ep_disable_oq;
+
+
 	return 0;
 }

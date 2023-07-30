@@ -16,20 +16,8 @@
 #define OTX_EP_MAX_DELAYED_PKT_RETRIES 10000
 
 #define OTX_EP_FSZ 28
-#define OTX2_EP_FSZ_LOOP 0
-#define OTX2_EP_FSZ_NIC 24
+#define OTX2_EP_FSZ 24
 #define OTX_EP_MAX_INSTR 16
-
-static inline void
-otx_ep_swap_8B_data(uint64_t *data, uint32_t blocks)
-{
-	/* Swap 8B blocks */
-	while (blocks) {
-		*data = rte_bswap64(*data);
-		blocks--;
-		data++;
-	}
-}
 
 static inline uint32_t
 otx_ep_incr_index(uint32_t index, uint32_t count, uint32_t max)

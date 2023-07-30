@@ -5,9 +5,7 @@
 #include <ethdev_pci.h>
 #include <rte_ether.h>
 #include <rte_kvargs.h>
-#include <rte_spinlock.h>
 
-#include "common/cnxk/roc_api.h"
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
 #include "otx2_ep_vf.h"
@@ -33,7 +31,7 @@ __otx_ep_send_mbox_cmd(struct otx_ep_device *otx_ep,
 	int count = 0;
 
 	cmd.s.type = OTX_EP_MBOX_TYPE_CMD;
-	otx2_write64(cmd.u64, otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+	otx2_write64(cmd.u64, otx_ep->hw_addr + CNXK_EP_R_MBOX_VF_PF_DATA(0));
 
 	/* No response for notification messages */
 	if (!rsp)
@@ -41,7 +39,7 @@ __otx_ep_send_mbox_cmd(struct otx_ep_device *otx_ep,
 
 	for (count = 0; count < OTX_EP_MBOX_TIMEOUT_MS; count++) {
 		rte_delay_ms(1);
-		reg_val = otx2_read64(otx_ep->hw_addr + SDP_VF_R_MBOX_VF_PF_DATA(0));
+		reg_val = otx2_read64(otx_ep->hw_addr + CNXK_EP_R_MBOX_VF_PF_DATA(0));
 		if (reg_val != cmd.u64) {
 			rsp->u64 = reg_val;
 			break;
@@ -103,7 +101,7 @@ otx_ep_mbox_bulk_read(struct otx_ep_device *otx_ep,
 	/*  PF sends the data length of requested CMD
 	 *  in  ACK
 	 */
-	data_len = *((int32_t *)rsp.s_data.data);
+	memcpy(&data_len, rsp.s_data.data, sizeof(data_len));
 	tmp_len = data_len;
 	cmd.u64 = 0;
 	rsp.u64 = 0;
@@ -249,10 +247,10 @@ int otx_ep_mbox_get_link_info(struct rte_eth_dev *eth_dev,
 		otx_ep_err("Get link info failed\n");
 		return ret;
 	}
-	link->link_status = ETH_LINK_UP;
-	link->link_duplex = ETH_LINK_FULL_DUPLEX;
+	link->link_status = RTE_ETH_LINK_UP;
+	link->link_duplex = RTE_ETH_LINK_FULL_DUPLEX;
 	link->link_autoneg = (link_info.autoneg ==
-			      OTX_EP_LINK_AUTONEG) ? ETH_LINK_AUTONEG : ETH_LINK_FIXED;
+			      OTX_EP_LINK_AUTONEG) ? RTE_ETH_LINK_AUTONEG : RTE_ETH_LINK_FIXED;
 
 	link->link_autoneg = link_info.autoneg;
 	link->link_speed = link_info.speed;
@@ -263,14 +261,14 @@ void
 otx_ep_mbox_enable_interrupt(struct otx_ep_device *otx_ep)
 {
 	rte_write64(0x2, (uint8_t *)otx_ep->hw_addr +
-		   OTX_EP_R_MBOX_PF_VF_INT(0));
+		   CNXK_EP_R_MBOX_PF_VF_INT(0));
 }
 
 void
 otx_ep_mbox_disable_interrupt(struct otx_ep_device *otx_ep)
 {
 	rte_write64(0x00, (uint8_t *)otx_ep->hw_addr +
-		   OTX_EP_R_MBOX_PF_VF_INT(0));
+		   CNXK_EP_R_MBOX_PF_VF_INT(0));
 }
 
 int
@@ -304,6 +302,7 @@ int otx_ep_mbox_version_check(struct rte_eth_dev *eth_dev)
 	cmd.s_version.opcode = OTX_EP_MBOX_CMD_VERSION;
 	cmd.s_version.version = OTX_EP_MBOX_VERSION_CURRENT;
 	ret = otx_ep_send_mbox_cmd(otx_ep, cmd, &rsp);
+
 	/*
 	 * VF receives NACK or version info as zero
 	 * only if PF driver running old version of Mailbox

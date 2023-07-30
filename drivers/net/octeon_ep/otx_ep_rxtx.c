@@ -9,9 +9,7 @@
 #include <rte_mbuf.h>
 #include <rte_io.h>
 #include <rte_net.h>
-#include <rte_cycles.h>
 #include <ethdev_pci.h>
-#include "common/cnxk/roc_api.h"
 
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
@@ -19,9 +17,10 @@
 #include "otx_ep_rxtx.h"
 
 /* SDP_LENGTH_S specifies packet length and is of 8-byte size */
-#define INFO_SIZE 8
+#define OTX_EP_INFO_SIZE 8
+#define OTX_EP_FSZ_FS0 0
 #define DROQ_REFILL_THRESHOLD 16
-#define OTX2_SDP_REQUEST_ISM	(0x1ULL << 63)
+#define OTX2_SDP_REQUEST_ISM   (0x1ULL << 63)
 
 static void
 otx_ep_dmazone_free(const struct rte_memzone *mz)
@@ -50,6 +49,7 @@ int
 otx_ep_delete_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 {
 	struct otx_ep_instr_queue *iq;
+	uint32_t i;
 
 	iq = otx_ep->instr_queue[iq_no];
 	if (iq == NULL) {
@@ -57,7 +57,12 @@ otx_ep_delete_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no)
 		return -EINVAL;
 	}
 
-	rte_free(iq->req_list);
+	if (iq->req_list) {
+		for (i = 0; i < iq->nb_desc; i++)
+			rte_free(iq->req_list[i].finfo.g.sg);
+		rte_free(iq->req_list);
+	}
+
 	iq->req_list = NULL;
 
 	if (iq->iq_mz) {
@@ -82,14 +87,15 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 {
 	const struct otx_ep_config *conf;
 	struct otx_ep_instr_queue *iq;
-	uint32_t q_size;
+	struct otx_ep_sg_entry *sg;
+	uint32_t i, q_size;
 	int ret;
 
 	conf = otx_ep->conf;
 	iq = otx_ep->instr_queue[iq_no];
 	q_size = conf->iq.instr_type * num_descs;
 
-	/* IQ memory creation for Instruction submission to OCTEON TX2 */
+	/* IQ memory creation for Instruction submission to OCTEON 9 */
 	iq->iq_mz = rte_eth_dma_zone_reserve(otx_ep->eth_dev,
 					     "instr_queue", iq_no, q_size,
 					     OTX_EP_PCI_RING_ALIGN,
@@ -110,8 +116,8 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 	iq->nb_desc = num_descs;
 
 	/* Create a IQ request list to hold requests that have been
-	 * posted to OCTEON TX2. This list will be used for freeing the IQ
-	 * data buffer(s) later once the OCTEON TX2 fetched the requests.
+	 * posted to OCTEON 9. This list will be used for freeing the IQ
+	 * data buffer(s) later once the OCTEON 9 fetched the requests.
 	 */
 	iq->req_list = rte_zmalloc_socket("request_list",
 			(iq->nb_desc * OTX_EP_IQREQ_LIST_SIZE),
@@ -120,6 +126,18 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 	if (iq->req_list == NULL) {
 		otx_ep_err("IQ[%d] req_list alloc failed\n", iq_no);
 		goto iq_init_fail;
+	}
+
+	for (i = 0; i < iq->nb_desc; i++) {
+		sg = rte_zmalloc_socket("sg_entry", (OTX_EP_MAX_SG_LISTS * OTX_EP_SG_ENTRY_SIZE),
+			OTX_EP_SG_ALIGN, rte_socket_id());
+		if (sg == NULL) {
+			otx_ep_err("IQ[%d] sg_entries alloc failed\n", iq_no);
+			goto iq_init_fail;
+		}
+
+		iq->req_list[i].finfo.g.num_sg = OTX_EP_MAX_SG_LISTS;
+		iq->req_list[i].finfo.g.sg = sg;
 	}
 
 	otx_ep_info("IQ[%d]: base: %p basedma: %lx count: %d\n",
@@ -372,25 +390,18 @@ delete_OQ:
 static inline void
 otx_ep_iqreq_delete(struct otx_ep_instr_queue *iq, uint32_t idx)
 {
+	struct rte_mbuf *mbuf;
 	uint32_t reqtype;
-	void *buf;
-	struct otx_ep_buf_free_info *finfo;
 
-	buf     = iq->req_list[idx].buf;
+	mbuf    = iq->req_list[idx].finfo.mbuf;
 	reqtype = iq->req_list[idx].reqtype;
 
 	switch (reqtype) {
 	case OTX_EP_REQTYPE_NORESP_NET:
-		rte_pktmbuf_free((struct rte_mbuf *)buf);
-		otx_ep_dbg("IQ buffer freed at idx[%d]\n", idx);
-		break;
-
 	case OTX_EP_REQTYPE_NORESP_GATHER:
-		finfo = (struct  otx_ep_buf_free_info *)buf;
 		/* This will take care of multiple segments also */
-		rte_pktmbuf_free(finfo->mbuf);
-		rte_free(finfo->g.sg);
-		rte_free(finfo);
+		rte_pktmbuf_free(mbuf);
+		otx_ep_dbg("IQ buffer freed at idx[%d]\n", idx);
 		break;
 
 	case OTX_EP_REQTYPE_NONE:
@@ -399,15 +410,15 @@ otx_ep_iqreq_delete(struct otx_ep_instr_queue *iq, uint32_t idx)
 	}
 
 	/* Reset the request list at this index */
-	iq->req_list[idx].buf = NULL;
+	iq->req_list[idx].finfo.mbuf = NULL;
 	iq->req_list[idx].reqtype = 0;
 }
 
 static inline void
-otx_ep_iqreq_add(struct otx_ep_instr_queue *iq, void *buf,
+otx_ep_iqreq_add(struct otx_ep_instr_queue *iq, struct rte_mbuf *mbuf,
 		uint32_t reqtype, int index)
 {
-	iq->req_list[index].buf = buf;
+	iq->req_list[index].finfo.mbuf = mbuf;
 	iq->req_list[index].reqtype = reqtype;
 }
 
@@ -476,7 +487,7 @@ post_iqcmd(struct otx_ep_instr_queue *iq, uint8_t *iqcmd)
 	uint8_t *iqptr, cmdsize;
 
 	/* This ensures that the read index does not wrap around to
-	 * the same position if queue gets full before OCTEON TX2 could
+	 * the same position if queue gets full before OCTEON 9 could
 	 * fetch any instr.
 	 */
 	if (iq->instr_pending > (iq->nb_desc - 1))
@@ -532,8 +543,45 @@ set_sg_size(struct otx_ep_sg_entry *sg_entry, uint16_t size, uint32_t pos)
 #if RTE_BYTE_ORDER == RTE_BIG_ENDIAN
 	sg_entry->u.size[pos] = size;
 #elif RTE_BYTE_ORDER == RTE_LITTLE_ENDIAN
-	sg_entry->u.size[3 - pos] = size;
+	sg_entry->u.size[(OTX_EP_NUM_SG_PTRS - 1) - pos] = size;
 #endif
+}
+
+static inline int
+prepare_xmit_gather_list(struct otx_ep_instr_queue *iq, struct rte_mbuf *m, uint64_t *dptr,
+			 union otx_ep_instr_ih *ih)
+{
+	uint16_t j = 0, frags, num_sg, mask = OTX_EP_NUM_SG_PTRS - 1;
+	struct otx_ep_buf_free_info *finfo;
+	uint32_t pkt_len;
+	int rc = -1;
+
+	pkt_len = rte_pktmbuf_pkt_len(m);
+	frags = m->nb_segs;
+	num_sg = (frags + mask) / OTX_EP_NUM_SG_PTRS;
+
+	if (unlikely(pkt_len > OTX_EP_MAX_PKT_SZ && num_sg > OTX_EP_MAX_SG_LISTS)) {
+		otx_ep_err("Failed to xmit the pkt, pkt_len is higher or pkt has more segments\n");
+		goto exit;
+	}
+
+	finfo = &iq->req_list[iq->host_write_index].finfo;
+	*dptr = rte_mem_virt2iova(finfo->g.sg);
+	ih->s.tlen = pkt_len + ih->s.fsz;
+	ih->s.gsz = frags;
+	ih->s.gather = 1;
+
+	while (frags--) {
+		finfo->g.sg[(j >> 2)].ptr[(j & mask)] = rte_mbuf_data_iova(m);
+		set_sg_size(&finfo->g.sg[(j >> 2)], m->data_len, (j & mask));
+		j++;
+		m = m->next;
+	}
+
+	return 0;
+
+exit:
+	return rc;
 }
 
 /* Enqueue requests/packets to OTX_EP IQ queue.
@@ -542,20 +590,13 @@ set_sg_size(struct otx_ep_sg_entry *sg_entry, uint16_t size, uint32_t pos)
 uint16_t
 otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 {
+	struct otx_ep_instr_queue *iq = (struct otx_ep_instr_queue *)tx_queue;
+	struct otx_ep_device *otx_ep = iq->otx_ep_dev;
 	struct otx_ep_instr_64B iqcmd;
-	struct otx_ep_instr_queue *iq;
-	struct otx_ep_device *otx_ep;
-	struct rte_mbuf *m;
-
-	uint32_t iqreq_type, sgbuf_sz;
 	int dbell, index, count = 0;
-	unsigned int pkt_len, i;
-	int gather, gsz;
-	void *iqreq_buf;
-	uint64_t dptr;
-
-	iq = (struct otx_ep_instr_queue *)tx_queue;
-	otx_ep = iq->otx_ep_dev;
+	uint32_t iqreq_type;
+	uint32_t pkt_len, i;
+	struct rte_mbuf *m;
 
 	iqcmd.ih.u64 = 0;
 	iqcmd.pki_ih3.u64 = 0;
@@ -563,7 +604,7 @@ otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 
 	/* ih invars */
 	iqcmd.ih.s.fsz = OTX_EP_FSZ;
-	iqcmd.ih.s.pkind = otx_ep->fw_info.pkind;
+	iqcmd.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
 
 	/* pki ih3 invars */
 	iqcmd.pki_ih3.s.w = 1;
@@ -578,72 +619,24 @@ otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 	for (i = 0; i < nb_pkts; i++) {
 		m = pkts[i];
 		if (m->nb_segs == 1) {
-			/* dptr */
-			dptr = rte_mbuf_data_iova(m);
 			pkt_len = rte_pktmbuf_data_len(m);
-			iqreq_buf = m;
+			iqcmd.ih.s.tlen = pkt_len + iqcmd.ih.s.fsz;
+			iqcmd.dptr = rte_mbuf_data_iova(m); /*dptr*/
+			iqcmd.ih.s.gather = 0;
+			iqcmd.ih.s.gsz = 0;
 			iqreq_type = OTX_EP_REQTYPE_NORESP_NET;
-			gather = 0;
-			gsz = 0;
 		} else {
-			struct otx_ep_buf_free_info *finfo;
-			int j, frags, num_sg;
-
 			if (!(otx_ep->tx_offloads & RTE_ETH_TX_OFFLOAD_MULTI_SEGS))
 				goto xmit_fail;
 
-			finfo = (struct otx_ep_buf_free_info *)rte_malloc(NULL,
-							sizeof(*finfo), 0);
-			if (finfo == NULL) {
-				otx_ep_err("free buffer alloc failed\n");
+			if (unlikely(prepare_xmit_gather_list(iq, m, &iqcmd.dptr, &iqcmd.ih) < 0))
 				goto xmit_fail;
-			}
-			num_sg = (m->nb_segs + 3) / 4;
-			sgbuf_sz = sizeof(struct otx_ep_sg_entry) * num_sg;
-			finfo->g.sg =
-				rte_zmalloc(NULL, sgbuf_sz, OTX_EP_SG_ALIGN);
-			if (finfo->g.sg == NULL) {
-				rte_free(finfo);
-				otx_ep_err("sg entry alloc failed\n");
-				goto xmit_fail;
-			}
-			gather = 1;
-			gsz = m->nb_segs;
-			finfo->g.num_sg = num_sg;
-			finfo->g.sg[0].ptr[0] = rte_mbuf_data_iova(m);
-			set_sg_size(&finfo->g.sg[0], m->data_len, 0);
-			pkt_len = m->data_len;
-			finfo->mbuf = m;
 
-			frags = m->nb_segs - 1;
-			j = 1;
-			m = m->next;
-			while (frags--) {
-				finfo->g.sg[(j >> 2)].ptr[(j & 3)] =
-						rte_mbuf_data_iova(m);
-				set_sg_size(&finfo->g.sg[(j >> 2)],
-						m->data_len, (j & 3));
-				pkt_len += m->data_len;
-				j++;
-				m = m->next;
-			}
-			dptr = rte_mem_virt2iova(finfo->g.sg);
-			iqreq_buf = finfo;
+			pkt_len = rte_pktmbuf_pkt_len(m);
 			iqreq_type = OTX_EP_REQTYPE_NORESP_GATHER;
-			if (pkt_len > OTX_EP_MAX_PKT_SZ) {
-				rte_free(finfo->g.sg);
-				rte_free(finfo);
-				otx_ep_err("failed\n");
-				goto xmit_fail;
-			}
 		}
-		/* ih vars */
-		iqcmd.ih.s.tlen = pkt_len + iqcmd.ih.s.fsz;
-		iqcmd.ih.s.gather = gather;
-		iqcmd.ih.s.gsz = gsz;
 
-		iqcmd.dptr = dptr;
-		otx_ep_swap_8B_data(&iqcmd.irh.u64, 1);
+		iqcmd.irh.u64 = rte_bswap64(iqcmd.irh.u64);
 
 #ifdef OTX_EP_IO_DEBUG
 		otx_ep_dbg("After swapping\n");
@@ -663,7 +656,7 @@ otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 		index = iq->host_write_index;
 		if (otx_ep_send_data(otx_ep, iq, &iqcmd, dbell))
 			goto xmit_fail;
-		otx_ep_iqreq_add(iq, iqreq_buf, iqreq_type, index);
+		otx_ep_iqreq_add(iq, m, iqreq_type, index);
 		iq->stats.tx_pkts++;
 		iq->stats.tx_bytes += pkt_len;
 		count++;
@@ -683,100 +676,47 @@ xmit_fail:
 uint16_t
 otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 {
+	struct otx_ep_instr_queue *iq = (struct otx_ep_instr_queue *)tx_queue;
+	struct otx_ep_device *otx_ep = iq->otx_ep_dev;
 	struct otx2_ep_instr_64B iqcmd2;
-	struct otx_ep_instr_queue *iq;
-	struct otx_ep_device *otx_ep;
-	uint64_t dptr;
-	int count = 0;
-	unsigned int i;
+	uint32_t iqreq_type;
 	struct rte_mbuf *m;
-	unsigned int pkt_len;
-	void *iqreq_buf;
-	uint32_t iqreq_type, sgbuf_sz;
-	int gather, gsz;
+	uint32_t pkt_len;
+	int count = 0;
+	uint16_t i;
 	int dbell;
 	int index;
-
-	iq = (struct otx_ep_instr_queue *)tx_queue;
-	otx_ep = iq->otx_ep_dev;
 
 	iqcmd2.ih.u64 = 0;
 	iqcmd2.irh.u64 = 0;
 
 	/* ih invars */
-	iqcmd2.ih.s.fsz = otx_ep->fw_info.fsz;
-	iqcmd2.ih.s.pkind = otx_ep->fw_info.pkind;
-	/* irh invars, ignored in LOOP mode */
+	iqcmd2.ih.s.fsz = OTX_EP_FSZ_FS0;
+	iqcmd2.ih.s.pkind = otx_ep->pkind; /* The SDK decided PKIND value */
+	/* irh invars */
 	iqcmd2.irh.s.opcode = OTX_EP_NW_PKT_OP;
 
 	for (i = 0; i < nb_pkts; i++) {
 		m = pkts[i];
 		if (m->nb_segs == 1) {
-			/* dptr */
-			dptr = rte_mbuf_data_iova(m);
 			pkt_len = rte_pktmbuf_data_len(m);
-			iqreq_buf = m;
+			iqcmd2.ih.s.tlen = pkt_len + iqcmd2.ih.s.fsz;
+			iqcmd2.dptr = rte_mbuf_data_iova(m); /*dptr*/
+			iqcmd2.ih.s.gather = 0;
+			iqcmd2.ih.s.gsz = 0;
 			iqreq_type = OTX_EP_REQTYPE_NORESP_NET;
-			gather = 0;
-			gsz = 0;
 		} else {
-			struct otx_ep_buf_free_info *finfo;
-			int j, frags, num_sg;
-
 			if (!(otx_ep->tx_offloads & RTE_ETH_TX_OFFLOAD_MULTI_SEGS))
 				goto xmit_fail;
 
-			finfo = (struct otx_ep_buf_free_info *)
-					rte_malloc(NULL, sizeof(*finfo), 0);
-			if (finfo == NULL) {
-				otx_ep_err("free buffer alloc failed\n");
+			if (unlikely(prepare_xmit_gather_list(iq, m, &iqcmd2.dptr, &iqcmd2.ih) < 0))
 				goto xmit_fail;
-			}
-			num_sg = (m->nb_segs + 3) / 4;
-			sgbuf_sz = sizeof(struct otx_ep_sg_entry) * num_sg;
-			finfo->g.sg =
-				rte_zmalloc(NULL, sgbuf_sz, OTX_EP_SG_ALIGN);
-			if (finfo->g.sg == NULL) {
-				rte_free(finfo);
-				otx_ep_err("sg entry alloc failed\n");
-				goto xmit_fail;
-			}
-			gather = 1;
-			gsz = m->nb_segs;
-			finfo->g.num_sg = num_sg;
-			finfo->g.sg[0].ptr[0] = rte_mbuf_data_iova(m);
-			set_sg_size(&finfo->g.sg[0], m->data_len, 0);
-			pkt_len = m->data_len;
-			finfo->mbuf = m;
 
-			frags = m->nb_segs - 1;
-			j = 1;
-			m = m->next;
-			while (frags--) {
-				finfo->g.sg[(j >> 2)].ptr[(j & 3)] =
-						rte_mbuf_data_iova(m);
-				set_sg_size(&finfo->g.sg[(j >> 2)],
-						m->data_len, (j & 3));
-				pkt_len += m->data_len;
-				j++;
-				m = m->next;
-			}
-			dptr = rte_mem_virt2iova(finfo->g.sg);
-			iqreq_buf = finfo;
+			pkt_len = rte_pktmbuf_pkt_len(m);
 			iqreq_type = OTX_EP_REQTYPE_NORESP_GATHER;
-			if (pkt_len > OTX_EP_MAX_PKT_SZ) {
-				rte_free(finfo->g.sg);
-				rte_free(finfo);
-				otx_ep_err("failed\n");
-				goto xmit_fail;
-			}
 		}
-		/* ih vars */
-		iqcmd2.ih.s.tlen = pkt_len + iqcmd2.ih.s.fsz;
-		iqcmd2.ih.s.gather = gather;
-		iqcmd2.ih.s.gsz = gsz;
-		iqcmd2.dptr = dptr;
-		otx_ep_swap_8B_data(&iqcmd2.irh.u64, 1);
+
+		iqcmd2.irh.u64 = rte_bswap64(iqcmd2.irh.u64);
 
 #ifdef OTX_EP_IO_DEBUG
 		otx_ep_dbg("After swapping\n");
@@ -795,7 +735,7 @@ otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 		dbell = (i == (unsigned int)(nb_pkts - 1)) ? 1 : 0;
 		if (otx_ep_send_data(otx_ep, iq, &iqcmd2, dbell))
 			goto xmit_fail;
-		otx_ep_iqreq_add(iq, iqreq_buf, iqreq_type, index);
+		otx_ep_iqreq_add(iq, m, iqreq_type, index);
 		iq->stats.tx_pkts++;
 		iq->stats.tx_bytes += pkt_len;
 		count++;
@@ -864,9 +804,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	uint64_t total_pkt_len;
 	uint32_t pkt_len = 0;
 	int next_idx;
-	int info_size;
 
-	info_size = INFO_SIZE + otx_ep->rh_ext_size;
 	droq_pkt  = droq->recv_buf_list[droq->read_idx];
 	droq_pkt2  = droq->recv_buf_list[droq->read_idx];
 	info = rte_pktmbuf_mtod(droq_pkt, struct otx_ep_droq_info *);
@@ -886,6 +824,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		if (!retry && !info->length) {
 			otx_ep_err("OCTEON DROQ[%d]: read_idx: %d; Retry failed !!\n",
 				   droq->q_no, droq->read_idx);
+			/* May be zero length packet; drop it */
 			assert(0);
 		}
 	}
@@ -898,12 +837,11 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 
 	info->length = rte_bswap64(info->length);
 	/* Deduce the actual data size */
-	total_pkt_len = info->length + INFO_SIZE;
+	total_pkt_len = info->length + OTX_EP_INFO_SIZE;
 	if (total_pkt_len <= droq->buffer_size) {
-		info->length -=  otx_ep->rh_ext_size;
 		droq_pkt  = droq->recv_buf_list[droq->read_idx];
 		if (likely(droq_pkt != NULL)) {
-			droq_pkt->data_off += info_size;
+			droq_pkt->data_off += OTX_EP_INFO_SIZE;
 			/* otx_ep_dbg("OQ: pkt_len[%ld], buffer_size %d\n",
 			 * (long)info->length, droq->buffer_size);
 			 */
@@ -920,9 +858,10 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 		struct rte_mbuf *first_buf = NULL;
 		struct rte_mbuf *last_buf = NULL;
 
-		/* initiating a csr read helps to flush pending dma */
+		/* csr read helps to flush pending dma */
 		droq->sent_reg_val = rte_read32(droq->pkts_sent_reg);
 		rte_rmb();
+
 		while (pkt_len < total_pkt_len) {
 			int cpy_len = 0;
 
@@ -943,11 +882,11 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 				droq_pkt->port = otx_ep->port_id;
 				if (!pkt_len) {
 					droq_pkt->data_off +=
-						info_size;
+						OTX_EP_INFO_SIZE;
 					droq_pkt->pkt_len =
-						cpy_len - info_size;
+						cpy_len - OTX_EP_INFO_SIZE;
 					droq_pkt->data_len =
-						cpy_len - info_size;
+						cpy_len - OTX_EP_INFO_SIZE;
 				} else {
 					droq_pkt->pkt_len = cpy_len;
 					droq_pkt->data_len = cpy_len;
@@ -963,7 +902,7 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 
 				last_buf = droq_pkt;
 			} else {
-				otx_ep_err("no recvbuf in jumbo processing\n");
+				otx_ep_err("no buf\n");
 				assert(0);
 			}
 
@@ -981,7 +920,6 @@ otx_ep_droq_read_packet(struct otx_ep_device *otx_ep,
 	droq_pkt->l4_len = hdr_lens.l4_len;
 
 	return droq_pkt;
-
 }
 
 static inline uint32_t
@@ -1009,12 +947,12 @@ otx_ep_check_droq_pkts(struct otx_ep_droq *droq)
 		droq->pkts_sent_ism_prev = 0;
 	}
 	rte_write64(OTX2_SDP_REQUEST_ISM, droq->pkts_sent_reg);
-
 	droq->pkts_pending += new_pkts;
+
 	return new_pkts;
 }
 
-/* Check for response arrival from OCTEON TX2
+/* Check for response arrival from OCTEON 9
  * returns number of requests completed
  */
 uint16_t
