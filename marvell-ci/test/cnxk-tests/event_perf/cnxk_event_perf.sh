@@ -149,9 +149,9 @@ record_pps()
 			printf "$(exec_testpmd_cmd rx_pps)\n" >> $out_file
 			;;
 		dpdk-test-eventdev)
-			sleep 20 # avg need more time to stabilize
-			pps=$(sed -n "0,/.\+ mpps avg \([0-9\.]\+\) mpps/s//\1/p" $test_log \
-				| sed "s/[^[:print:]].*//")
+			sleep 8 # avg need more time to stabilize
+			pps=$(sed -nE "s/.*[^0-9]([0-9]+\.[0-9]+ mpps avg)/\1/p" $test_log \
+				| awk -F' ' '{print $1}')
 			printf "$pps\n" >> $out_file
 			;;
 	esac
