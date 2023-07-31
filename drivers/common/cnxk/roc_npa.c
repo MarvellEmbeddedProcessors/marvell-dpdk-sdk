@@ -468,8 +468,8 @@ npa_aura_pool_pair_alloc(struct npa_lf *lf, const uint32_t block_size,
 	    block_size > ROC_NPA_MAX_BLOCK_SZ)
 		return NPA_ERR_INVALID_BLOCK_SZ;
 
-	roc_npa_dev_lock();
 	/* Get aura_id from resource bitmap */
+	roc_npa_dev_lock();
 	aura_id = find_free_aura(lf, flags);
 	if (aura_id < 0) {
 		roc_npa_dev_unlock();
@@ -478,7 +478,6 @@ npa_aura_pool_pair_alloc(struct npa_lf *lf, const uint32_t block_size,
 
 	/* Mark pool as reserved */
 	plt_bitmap_clear(lf->npa_bmp, aura_id);
-
 	roc_npa_dev_unlock();
 
 	/* Configuration based on each aura has separate pool(aura-pool pair) */
@@ -1003,6 +1002,8 @@ npa_get_msix_offset(struct mbox *m_box, uint16_t *npa_msixoff)
 	struct msix_offset_rsp *msix_rsp;
 	int rc;
 
+	/* Initialize msixoff */
+	*npa_msixoff = 0;
 	/* Get NPA MSIX vector offsets */
 	mbox_alloc_msg_msix_offset(mbox);
 	rc = mbox_process_msg(mbox, (void *)&msix_rsp);
