@@ -10,6 +10,7 @@ apps = [
         'test-cmdline',
         'test-compress-perf',
         'test-crypto-perf',
+        'test-dma-perf',
         'test-eventdev',
         'test-fib',
         'test-flow-perf',
