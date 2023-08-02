@@ -16,7 +16,8 @@
 #include "roc_errata.h"
 #include "roc_se.h"
 
-#define CNXK_CPT_MIN_HEADROOM_REQ	 32
+/* Space for ctrl_word(8B), IV(48B), passthrough alignment(8B) */
+#define CNXK_CPT_MIN_HEADROOM_REQ	 64
 #define CNXK_CPT_MIN_TAILROOM_REQ	 102
 #define CNXK_CPT_META_BUF_MAX_CACHE_SIZE 128
 
