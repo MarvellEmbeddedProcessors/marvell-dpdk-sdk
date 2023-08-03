@@ -11,6 +11,7 @@
 #include <rte_dmadev_pmd.h>
 #include <rte_eal.h>
 #include <rte_lcore.h>
+#include <rte_mbuf_pool_ops.h>
 #include <rte_mempool.h>
 #include <rte_pci.h>
 
@@ -71,9 +72,53 @@ cnxk_dmadev_vchan_free(struct cnxk_dpi_vf_s *dpivf, uint16_t vchan)
 }
 
 static int
+cnxk_dmadev_chunk_pool_create(struct rte_dma_dev *dev)
+{
+	char pool_name[RTE_MEMPOOL_NAMESIZE];
+	struct cnxk_dpi_vf_s *dpivf = NULL;
+	uint64_t nb_chunks;
+	int rc;
+
+	dpivf = dev->fp_obj->dev_private;
+	/* Create chunk pool. */
+	snprintf(pool_name, sizeof(pool_name), "cnxk_dma_chunk_pool%d", dev->data->dev_id);
+
+	nb_chunks = DPI_CMD_QUEUE_BUFS;
+	nb_chunks += (CNXK_DMA_POOL_MAX_CACHE_SZ * rte_lcore_count());
+	dpivf->chunk_pool =
+		rte_mempool_create_empty(pool_name, nb_chunks, DPI_CMD_QUEUE_BUF_SIZE,
+					 CNXK_DMA_POOL_MAX_CACHE_SZ, 0, rte_socket_id(), 0);
+
+	if (dpivf->chunk_pool == NULL) {
+		plt_err("Unable to create chunkpool.");
+		return -ENOMEM;
+	}
+
+	rc = rte_mempool_set_ops_byname(dpivf->chunk_pool, rte_mbuf_platform_mempool_ops(), NULL);
+	if (rc < 0) {
+		plt_err("Unable to set chunkpool ops");
+		goto free;
+	}
+
+	rc = rte_mempool_populate_default(dpivf->chunk_pool);
+	if (rc < 0) {
+		plt_err("Unable to set populate chunkpool.");
+		goto free;
+	}
+	dpivf->aura = roc_npa_aura_handle_to_aura(dpivf->chunk_pool->pool_id);
+
+	return 0;
+
+free:
+	rte_mempool_free(dpivf->chunk_pool);
+	return rc;
+}
+
+static int
 cnxk_dmadev_configure(struct rte_dma_dev *dev, const struct rte_dma_conf *conf, uint32_t conf_sz)
 {
 	struct cnxk_dpi_vf_s *dpivf = NULL;
+	void *chunk;
 	int rc = 0;
 
 	RTE_SET_USED(conf_sz);
@@ -92,12 +137,29 @@ cnxk_dmadev_configure(struct rte_dma_dev *dev, const struct rte_dma_conf *conf, 
 	if (dpivf->flag & CNXK_DPI_DEV_CONFIG)
 		return rc;
 
-	rc = roc_dpi_configure(&dpivf->rdpi);
+	rc = cnxk_dmadev_chunk_pool_create(dev);
 	if (rc < 0) {
-		plt_err("DMA configure failed err = %d", rc);
+		plt_err("DMA pool configure failed err = %d", rc);
 		goto done;
 	}
 
+	rc = rte_mempool_get(dpivf->chunk_pool, &chunk);
+	if (rc < 0) {
+		plt_err("DMA failed to get chunk pointer err = %d", rc);
+		rte_mempool_free(dpivf->chunk_pool);
+		goto done;
+	}
+
+	rc = roc_dpi_configure(&dpivf->rdpi, DPI_CMD_QUEUE_BUF_SIZE, dpivf->aura, (uint64_t)chunk);
+	if (rc < 0) {
+		plt_err("DMA configure failed err = %d", rc);
+		rte_mempool_free(dpivf->chunk_pool);
+		goto done;
+	}
+
+	dpivf->chunk_base = chunk;
+	dpivf->chunk_head = 0;
+	dpivf->chunk_size_m1 = (DPI_CMD_QUEUE_BUF_SIZE >> 3) - 2;
 	dpivf->flag |= CNXK_DPI_DEV_CONFIG;
 
 done:
@@ -335,7 +397,7 @@ cnxk_dmadev_close(struct rte_dma_dev *dev)
 }
 
 static inline int
-__dpi_queue_write(struct roc_dpi *dpi, uint64_t *cmds, int cmd_count)
+__dpi_queue_write(struct cnxk_dpi_vf_s *dpi, uint64_t *cmds, int cmd_count)
 {
 	uint64_t *ptr = dpi->chunk_base;
 
@@ -346,31 +408,25 @@ __dpi_queue_write(struct roc_dpi *dpi, uint64_t *cmds, int cmd_count)
 	 * Normally there is plenty of room in the current buffer for the
 	 * command
 	 */
-	if (dpi->chunk_head + cmd_count < dpi->pool_size_m1) {
+	if (dpi->chunk_head + cmd_count < dpi->chunk_size_m1) {
 		ptr += dpi->chunk_head;
 		dpi->chunk_head += cmd_count;
 		while (cmd_count--)
 			*ptr++ = *cmds++;
 	} else {
+		uint64_t *new_buff = NULL;
 		int count;
-		uint64_t *new_buff = dpi->chunk_next;
 
-		dpi->chunk_next = (void *)roc_npa_aura_op_alloc(dpi->aura_handle, 0);
-		if (!dpi->chunk_next) {
-			plt_dp_dbg("Failed to alloc next buffer from NPA");
-
-			/* NPA failed to allocate a buffer. Restoring chunk_next
-			 * to its original address.
-			 */
-			dpi->chunk_next = new_buff;
-			return -ENOSPC;
+		if (rte_mempool_get(dpi->chunk_pool, (void **)&new_buff) < 0) {
+			plt_dpi_dbg("Failed to alloc next buffer from NPA");
+			return -ENOMEM;
 		}
 
 		/*
 		 * Figure out how many cmd words will fit in this buffer.
 		 * One location will be needed for the next buffer pointer.
 		 */
-		count = dpi->pool_size_m1 - dpi->chunk_head;
+		count = dpi->chunk_size_m1 - dpi->chunk_head;
 		ptr += dpi->chunk_head;
 		cmd_count -= count;
 		while (count--)
@@ -395,19 +451,11 @@ __dpi_queue_write(struct roc_dpi *dpi, uint64_t *cmds, int cmd_count)
 			*ptr++ = *cmds++;
 
 		/* queue index may be greater than pool size */
-		if (dpi->chunk_head >= dpi->pool_size_m1) {
-			new_buff = dpi->chunk_next;
-			dpi->chunk_next = (void *)roc_npa_aura_op_alloc(dpi->aura_handle, 0);
-			if (!dpi->chunk_next) {
-				plt_dp_dbg("Failed to alloc next buffer from NPA");
-
-				/* NPA failed to allocate a buffer. Restoring chunk_next
-				 * to its original address.
-				 */
-				dpi->chunk_next = new_buff;
-				return -ENOSPC;
+		if (dpi->chunk_head == dpi->chunk_size_m1) {
+			if (rte_mempool_get(dpi->chunk_pool, (void **)&new_buff) < 0) {
+				plt_dpi_dbg("Failed to alloc next buffer from NPA");
+				return -ENOMEM;
 			}
-
 			/* Write next buffer address */
 			*ptr = (uint64_t)new_buff;
 			dpi->chunk_base = new_buff;
@@ -465,7 +513,7 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t d
 	cmd[num_words++] = length;
 	cmd[num_words++] = lptr;
 
-	rc = __dpi_queue_write(&dpivf->rdpi, cmd, num_words);
+	rc = __dpi_queue_write(dpivf, cmd, num_words);
 	if (unlikely(rc)) {
 		STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
@@ -537,7 +585,7 @@ cnxk_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge 
 		lptr++;
 	}
 
-	rc = __dpi_queue_write(&dpivf->rdpi, cmd, num_words);
+	rc = __dpi_queue_write(dpivf, cmd, num_words);
 	if (unlikely(rc)) {
 		STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
@@ -593,7 +641,7 @@ cn10k_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t 
 	cmd[num_words++] = length;
 	cmd[num_words++] = lptr;
 
-	rc = __dpi_queue_write(&dpivf->rdpi, cmd, num_words);
+	rc = __dpi_queue_write(dpivf, cmd, num_words);
 	if (unlikely(rc)) {
 		STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
@@ -656,7 +704,7 @@ cn10k_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge
 		lptr++;
 	}
 
-	rc = __dpi_queue_write(&dpivf->rdpi, cmd, num_words);
+	rc = __dpi_queue_write(dpivf, cmd, num_words);
 	if (unlikely(rc)) {
 		STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;

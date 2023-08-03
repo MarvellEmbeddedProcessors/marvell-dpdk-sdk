@@ -12,12 +12,15 @@
 #define DPI_MAX_DESC	     2048
 #define DPI_MIN_DESC	     2
 #define MAX_VCHANS_PER_QUEUE 4
+#define DPI_CMD_QUEUE_BUF_SIZE 4096
+#define DPI_CMD_QUEUE_BUFS     1024
 
 /* Set Completion data to 0xFF when request submitted,
  * upon successful request completion engine reset to completion status
  */
 #define DPI_REQ_CDATA 0xFF
 
+#define CNXK_DMA_POOL_MAX_CACHE_SZ (16)
 #define CNXK_DPI_DEV_CONFIG (1ULL << 0)
 #define CNXK_DPI_DEV_START  (1ULL << 1)
 
@@ -45,8 +48,13 @@ struct cnxk_dpi_conf {
 };
 
 struct cnxk_dpi_vf_s {
-	struct roc_dpi rdpi;
+	uint64_t *chunk_base;
+	uint16_t chunk_head;
+	uint16_t chunk_size_m1;
+	struct rte_mempool *chunk_pool;
 	struct cnxk_dpi_conf conf[MAX_VCHANS_PER_QUEUE];
+	struct roc_dpi rdpi;
+	uint32_t aura;
 	uint16_t num_vchans;
 	uint16_t flag;
 } __plt_cache_aligned;
