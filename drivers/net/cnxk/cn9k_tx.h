@@ -35,7 +35,7 @@
 		int64_t avail;                                                 \
 		/* Cached value is low, Update the fc_cache_pkts */            \
 		if (unlikely((txq)->fc_cache_pkts < (pkts))) {                 \
-			avail = txq->nb_sqb_bufs_adj - *(txq->fc_mem);         \
+			avail = txq->nb_sqb_bufs_adj - *txq->fc_mem;           \
 			/* Multiply with sqe_per_sqb to express in pkts */     \
 			(txq)->fc_cache_pkts =                                 \
 				(avail << (txq)->sqes_per_sqb_log2) - avail;   \

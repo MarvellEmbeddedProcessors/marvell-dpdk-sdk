@@ -207,6 +207,9 @@ deps += ['common_cnxk', 'mempool_cnxk']
 
 # Allow implicit vector conversions and strict aliasing warning
 extra_flags = ['-flax-vector-conversions', '-Wno-strict-aliasing']
+if cc.get_id() == 'clang'
+        extra_flags += ['-Wno-asm-operand-widths']
+endif
 foreach flag: extra_flags
     if cc.has_argument(flag)
         cflags += flag
