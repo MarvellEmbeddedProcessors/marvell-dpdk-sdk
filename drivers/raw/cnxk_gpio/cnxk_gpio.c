@@ -713,7 +713,7 @@ cnxk_gpio_probe(struct rte_vdev_device *dev)
 	cnxk_gpio_format_name(name, sizeof(name));
 	rawdev = rte_rawdev_pmd_allocate(name, sizeof(*gpiochip), rte_socket_id());
 	if (!rawdev) {
-		RTE_LOG(ERR, PMD, "failed to allocate %s rawdev", name);
+		RTE_LOG(ERR, PMD, "failed to allocate %s rawdev\n", name);
 		return -ENOMEM;
 	}
 
@@ -753,7 +753,7 @@ cnxk_gpio_probe(struct rte_vdev_device *dev)
 	snprintf(buf, sizeof(buf), "%s/gpiochip%d/base", CNXK_GPIO_CLASS_PATH, gpiochip->num);
 	ret = cnxk_gpio_read_attr_int(buf, &gpiochip->base);
 	if (ret) {
-		RTE_LOG(ERR, PMD, "failed to read %s", buf);
+		RTE_LOG(ERR, PMD, "failed to read %s\n", buf);
 		goto out;
 	}
 
@@ -761,7 +761,7 @@ cnxk_gpio_probe(struct rte_vdev_device *dev)
 	snprintf(buf, sizeof(buf), "%s/gpiochip%d/ngpio", CNXK_GPIO_CLASS_PATH, gpiochip->num);
 	ret = cnxk_gpio_read_attr_int(buf, &gpiochip->num_gpios);
 	if (ret) {
-		RTE_LOG(ERR, PMD, "failed to read %s", buf);
+		RTE_LOG(ERR, PMD, "failed to read %s\n", buf);
 		goto out;
 	}
 	gpiochip->num_queues = gpiochip->num_gpios;
@@ -774,7 +774,7 @@ cnxk_gpio_probe(struct rte_vdev_device *dev)
 
 	gpiochip->gpios = rte_calloc(NULL, gpiochip->num_gpios, sizeof(struct cnxk_gpio *), 0);
 	if (!gpiochip->gpios) {
-		RTE_LOG(ERR, PMD, "failed to allocate gpios memory");
+		RTE_LOG(ERR, PMD, "failed to allocate gpios memory\n");
 		ret = -ENOMEM;
 		goto out;
 	}
