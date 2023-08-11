@@ -11,7 +11,7 @@
 #define STRM_DEC(s, var)     ((s).var = ((s).var - 1) == -1 ? (s).max_cnt : ((s).var - 1))
 #define DPI_MAX_DESC	     2048
 #define DPI_MIN_DESC	     2
-#define MAX_VCHANS_PER_QUEUE 1
+#define MAX_VCHANS_PER_QUEUE 4
 
 /* Set Completion data to 0xFF when request submitted,
  * upon successful request completion engine reset to completion status
