@@ -13,8 +13,10 @@
 
 #include "cnxk_cryptodev_ops.h"
 
+#define ASYM_SESS_SIZE sizeof(struct rte_cryptodev_asym_session)
+
 struct cnxk_ae_sess {
-	struct rte_cryptodev_asym_session rte_sess;
+	uint8_t rte_sess[ASYM_SESS_SIZE];
 	enum rte_crypto_asym_xform_type xfrm_type;
 	union {
 		struct rte_crypto_rsa_xform rsa_ctx;
