@@ -433,6 +433,8 @@ INTERNAL {
 	roc_ot_ipsec_outb_sa_init;
 	roc_plt_init;
 	roc_plt_init_cb_register;
+	roc_plt_lmt_validate;
+	roc_plt_get_control_lmt_id;
 	roc_sso_dev_fini;
 	roc_sso_dev_init;
 	roc_sso_dump;
