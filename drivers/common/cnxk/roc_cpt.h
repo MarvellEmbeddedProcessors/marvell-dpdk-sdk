@@ -165,7 +165,6 @@ struct roc_cpt_inline_ipsec_inb_cfg {
 	uint8_t ctx_ilen : 7;
 };
 
-
 int __roc_api roc_cpt_rxc_time_cfg(struct roc_cpt *roc_cpt,
 				   struct roc_cpt_rxc_time_cfg *cfg);
 int __roc_api roc_cpt_dev_init(struct roc_cpt *roc_cpt);
