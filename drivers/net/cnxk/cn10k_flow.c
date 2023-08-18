@@ -137,7 +137,7 @@ cn10k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 	void *mcs_flow = NULL;
 	int vtag_actions = 0;
 	uint32_t req_act = 0;
-	int mark_actions = 0;
+	int mark_actions;
 	int i, rc;
 
 	for (i = 0; actions[i].type != RTE_FLOW_ACTION_TYPE_END; i++) {
@@ -251,8 +251,8 @@ cn10k_flow_destroy(struct rte_eth_dev *eth_dev, struct rte_flow *rte_flow,
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 	struct roc_npc *npc = &dev->npc;
 	int vtag_actions = 0;
-	int mark_actions = 0;
-	uint16_t match_id = 0;
+	int mark_actions;
+	uint16_t match_id;
 	uint32_t mtr_id;
 	int rc;
 

@@ -504,9 +504,9 @@ cnxk_flow_get_aged_flows(struct rte_eth_dev *eth_dev, void **context,
 	do {
 		sn = plt_seqcount_read_begin(&flow_age->seq_cnt);
 
-		if (nb_contexts == 0)
+		if (nb_contexts == 0) {
 			cnt = flow_age->aged_flows_cnt;
-		else {
+		} else {
 			start_id = flow_age->start_id;
 			end_id = flow_age->end_id;
 			for (i = start_id; i <= end_id; i++) {
