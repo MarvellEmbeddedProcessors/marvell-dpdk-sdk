@@ -1210,7 +1210,7 @@ error_exit:
 }
 
 static int
-test_dh_keygenration(void)
+test_dh_key_generation(void)
 {
 	int status;
 
@@ -2114,7 +2114,7 @@ static struct unit_test_suite cryptodev_openssl_asym_testsuite  = {
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_capability),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_dsa),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym,
-				test_dh_keygenration),
+				test_dh_key_generation),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_rsa_enc_dec),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym,
 				test_rsa_sign_verify),
