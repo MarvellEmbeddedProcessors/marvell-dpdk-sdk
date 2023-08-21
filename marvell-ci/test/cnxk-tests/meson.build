@@ -46,6 +46,7 @@ test_subdirs = [
         'ipsec_secgw',
         'l2fwd_simple',
         'ipsec_perf',
+        'macsec_perf',
         'sample',
         'tx_chksum',
         'rx_chksum',
