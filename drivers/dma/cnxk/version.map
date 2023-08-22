@@ -1,0 +1,10 @@
+INTERNAL {
+	global:
+
+	cn10k_dma_adapter_enqueue;
+	cn9k_dma_adapter_enqueue;
+	cnxk_dma_adapter_dequeue;
+	cnxk_dev_id_2_dpivf_get;
+
+	local: *;
+};
