@@ -11,6 +11,7 @@
 #include "cnxk_ethdev.h"
 #include "cnxk_eventdev.h"
 #include "cnxk_worker.h"
+#include "cnxk_dma_event_dp.h"
 #include "cn9k_cryptodev_ops.h"
 
 #include "cn9k_ethdev.h"
@@ -205,6 +206,8 @@ cn9k_sso_hws_post_process(uint64_t *u64, uint64_t mbuf, const uint32_t flags,
 		if (flags & NIX_RX_OFFLOAD_TSTAMP_F)
 			cn9k_sso_process_tstamp(u64[1], mbuf, tstamp[port]);
 		u64[1] = mbuf;
+	} else if (CNXK_EVENT_TYPE_FROM_TAG(u64[0]) == RTE_EVENT_TYPE_DMADEV) {
+		u64[1] = cnxk_dma_adapter_dequeue(u64[1]);
 	}
 }
 

@@ -310,5 +310,5 @@ foreach flag: extra_flags
     endif
 endforeach
 
-deps += ['bus_pci', 'common_cnxk', 'net_cnxk', 'crypto_cnxk']
+deps += ['bus_pci', 'common_cnxk', 'net_cnxk', 'crypto_cnxk', 'dma_cnxk']
 pmd_supports_disable_iova_as_pa = true
