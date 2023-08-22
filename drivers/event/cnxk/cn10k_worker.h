@@ -5,7 +5,6 @@
 #ifndef __CN10K_WORKER_H__
 #define __CN10K_WORKER_H__
 
-#include <rte_event_timer_adapter.h>
 #include <rte_eventdev.h>
 
 #include "cn10k_cryptodev_event_dp.h"
@@ -238,10 +237,6 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 		/* Mark vector mempool object as get */
 		RTE_MEMPOOL_CHECK_COOKIES(rte_mempool_from_obj((void *)u64[1]),
 					  (void **)&u64[1], 1, 1);
-	} else if (CNXK_EVENT_TYPE_FROM_TAG(u64[0]) == RTE_EVENT_TYPE_TIMER) {
-		struct rte_event_timer *tim = (void *)u64[1];
-
-		tim->state = RTE_EVENT_TIMER_NOT_ARMED;
 	}
 }
 
