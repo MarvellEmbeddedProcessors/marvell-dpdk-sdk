@@ -191,8 +191,7 @@ roc_ree_af_reg_read(struct roc_ree_vf *vf, uint64_t reg, uint64_t *val)
 	if (ret < 0)
 		return ret;
 
-	off = mbox->rx_start +
-	      RTE_ALIGN(sizeof(struct mbox_hdr), MBOX_MSG_ALIGN);
+	off = mbox->rx_start + PLT_ALIGN(sizeof(struct mbox_hdr), MBOX_MSG_ALIGN);
 	msg = (struct ree_rd_wr_reg_msg *)((uintptr_t)mdev->mbase + off);
 
 	*val = msg->val;
@@ -438,16 +437,15 @@ roc_ree_lf_err_intr_handler(void *param)
 }
 
 static void
-roc_ree_lf_err_intr_unregister(struct roc_ree_vf *vf, uint16_t msix_off,
-			       uintptr_t base)
+roc_ree_lf_err_intr_unregister(struct roc_ree_vf *vf, uint16_t msix_off, uintptr_t base)
 {
-	struct rte_pci_device *pci_dev = vf->pci_dev;
+	struct plt_pci_device *pci_dev = vf->pci_dev;
 
 	/* Disable error interrupts */
 	plt_write64(~0ull, base + REE_LF_MISC_INT_ENA_W1C);
 
-	dev_irq_unregister(pci_dev->intr_handle,
-			   roc_ree_lf_err_intr_handler, (void *)base, msix_off);
+	dev_irq_unregister(pci_dev->intr_handle, roc_ree_lf_err_intr_handler, (void *)base,
+			   msix_off);
 }
 
 void
@@ -465,18 +463,16 @@ roc_ree_err_intr_unregister(struct roc_ree_vf *vf)
 }
 
 static int
-roc_ree_lf_err_intr_register(struct roc_ree_vf *vf, uint16_t msix_off,
-			     uintptr_t base)
+roc_ree_lf_err_intr_register(struct roc_ree_vf *vf, uint16_t msix_off, uintptr_t base)
 {
-	struct rte_pci_device *pci_dev = vf->pci_dev;
+	struct plt_pci_device *pci_dev = vf->pci_dev;
 	int ret;
 
 	/* Disable error interrupts */
 	plt_write64(~0ull, base + REE_LF_MISC_INT_ENA_W1C);
 
 	/* Register error interrupt handler */
-	ret = dev_irq_register(pci_dev->intr_handle,
-			       roc_ree_lf_err_intr_handler, (void *)base,
+	ret = dev_irq_register(pci_dev->intr_handle, roc_ree_lf_err_intr_handler, (void *)base,
 			       msix_off);
 	if (ret)
 		return ret;
@@ -603,7 +599,7 @@ roc_ree_dev_init(struct roc_ree_vf *vf)
 	}
 
 	/* Don't exceed the limits set per VF */
-	nb_queues = RTE_MIN(nb_queues, REE_MAX_QUEUES_PER_VF);
+	nb_queues = PLT_MIN(nb_queues, REE_MAX_QUEUES_PER_VF);
 
 	if (nb_queues == 0) {
 		plt_err("No free queues available on the device");
@@ -621,7 +617,7 @@ roc_ree_dev_init(struct roc_ree_vf *vf)
 		goto fail;
 	}
 	/* Don't exceed the limits set per VF */
-	max_matches = RTE_MIN(max_matches, REE_MAX_MATCHES_PER_VF);
+	max_matches = PLT_MIN(max_matches, REE_MAX_MATCHES_PER_VF);
 	if (max_matches == 0) {
 		plt_err("Could not determine the maximum matches supported");
 		goto fail;
