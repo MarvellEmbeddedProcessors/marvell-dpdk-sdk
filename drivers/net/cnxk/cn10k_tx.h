@@ -1318,8 +1318,8 @@ again:
 			lnum++;
 	}
 
-	if ((flags & NIX_TX_VWQE_F) && !(ws[1] & BIT_ULL(35)))
-		ws[1] = roc_sso_hws_head_wait(ws[0]);
+	if ((flags & NIX_TX_VWQE_F) && !(ws[3] & BIT_ULL(35)))
+		ws[3] = roc_sso_hws_head_wait(ws[0]);
 
 	left -= burst;
 	tx_pkts += burst;
@@ -1475,8 +1475,8 @@ again:
 		}
 	}
 
-	if ((flags & NIX_TX_VWQE_F) && !(ws[1] & BIT_ULL(35)))
-		ws[1] = roc_sso_hws_head_wait(ws[0]);
+	if ((flags & NIX_TX_VWQE_F) && !(ws[3] & BIT_ULL(35)))
+		ws[3] = roc_sso_hws_head_wait(ws[0]);
 
 	left -= burst;
 	tx_pkts += burst;
@@ -3066,8 +3066,8 @@ again:
 	if (flags & (NIX_TX_MULTI_SEG_F | NIX_TX_OFFLOAD_SECURITY_F))
 		wd.data[0] >>= 16;
 
-	if ((flags & NIX_TX_VWQE_F) && !(ws[1] & BIT_ULL(35)))
-		ws[1] = roc_sso_hws_head_wait(ws[0]);
+	if ((flags & NIX_TX_VWQE_F) && !(ws[3] & BIT_ULL(35)))
+		ws[3] = roc_sso_hws_head_wait(ws[0]);
 
 	left -= burst;
 
