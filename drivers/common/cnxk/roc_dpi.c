@@ -47,7 +47,18 @@ roc_dpi_enable(struct roc_dpi *dpi)
 int
 roc_dpi_disable(struct roc_dpi *dpi)
 {
+	uint8_t retry = 100;
+
 	plt_write64(0x0, dpi->rbase + DPI_VDMA_EN);
+
+	while (retry && !(plt_read64(dpi->rbase + DPI_VDMA_SADDR) & BIT_ULL(63))) {
+		retry--;
+		rte_delay_us_block(50);
+	}
+
+	if (!retry && !(plt_read64(dpi->rbase + DPI_VDMA_SADDR) & BIT_ULL(63)))
+		return -EBUSY;
+
 	return 0;
 }
 

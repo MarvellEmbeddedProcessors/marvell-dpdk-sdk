@@ -124,6 +124,12 @@ cnxk_dmadev_configure(struct rte_dma_dev *dev, const struct rte_dma_conf *conf, 
 	if (dpivf->flag & CNXK_DPI_DEV_CONFIG)
 		return rc;
 
+	rc = roc_dpi_disable(&dpivf->rdpi);
+	if (rc < 0) {
+		plt_err("DMA DPI queue disable failed err = %d", rc);
+		goto done;
+	}
+
 	rc = cnxk_dmadev_chunk_pool_create(dev);
 	if (rc < 0) {
 		plt_err("DMA pool configure failed err = %d", rc);
