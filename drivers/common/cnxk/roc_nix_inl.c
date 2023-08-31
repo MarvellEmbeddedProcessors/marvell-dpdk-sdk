@@ -780,7 +780,7 @@ nix_inl_eng_caps_get(struct nix *nix)
 		hw_res->cn10k.compcode = CPT_COMP_NOT_DONE;
 
 		/* Use this reserved LMT line as no one else is using it */
-		lmt_id = roc_plt_get_control_lmt_id();
+		lmt_id = roc_plt_control_lmt_id_get();
 		lmt_base += ((uint64_t)lmt_id << ROC_LMT_LINE_SIZE_LOG2);
 
 		memcpy((void *)lmt_base, &inst, sizeof(inst));

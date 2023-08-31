@@ -315,7 +315,7 @@ __rte_internal
 int roc_plt_init(void);
 
 __rte_internal
-uint16_t roc_plt_get_control_lmt_id(void);
+uint16_t roc_plt_control_lmt_id_get(void);
 __rte_internal
 uint16_t roc_plt_lmt_validate(void);
 
