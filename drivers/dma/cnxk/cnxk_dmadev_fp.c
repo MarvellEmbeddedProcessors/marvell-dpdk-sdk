@@ -19,31 +19,6 @@ __dpi_cpy_scalar(uint64_t *src, uint64_t *dst, uint8_t n)
 		dst[i] = src[i];
 }
 
-static __plt_always_inline void
-__dpi_cpy_scalar_sg(const struct rte_dma_sge *src, uint64_t *dst, uint16_t n)
-{
-	uint8_t i;
-
-	for (i = 0; i < n; i++) {
-		*dst++ = src[i].length;
-		*dst++ = src[i].addr;
-	}
-}
-
-static __plt_always_inline uint8_t
-__dpi_cpy_scalar_sg_lmt(const struct rte_dma_sge *src, uint64_t *dst, uint16_t n, uint16_t lmt)
-{
-	uint8_t i;
-
-	for (i = 0; i < n && lmt; i++) {
-		*dst++ = src[i].length;
-		*dst++ = src[i].addr;
-		lmt -= 2;
-	}
-
-	return i;
-}
-
 #if defined(RTE_ARCH_ARM64)
 static __plt_always_inline void
 __dpi_cpy_vector(uint64_t *src, uint64_t *dst, uint8_t n)
@@ -86,6 +61,31 @@ __dpi_cpy_vector_sg_lmt(const struct rte_dma_sge *src, uint64_t *dst, uint16_t n
 		vec = vandq_u64(vec, mask);
 		vst1q_u64(dst, vec);
 		dst += 2;
+		lmt -= 2;
+	}
+
+	return i;
+}
+#else
+static __plt_always_inline void
+__dpi_cpy_scalar_sg(const struct rte_dma_sge *src, uint64_t *dst, uint16_t n)
+{
+	uint8_t i;
+
+	for (i = 0; i < n; i++) {
+		*dst++ = src[i].length;
+		*dst++ = src[i].addr;
+	}
+}
+
+static __plt_always_inline uint8_t
+__dpi_cpy_scalar_sg_lmt(const struct rte_dma_sge *src, uint64_t *dst, uint16_t n, uint16_t lmt)
+{
+	uint8_t i;
+
+	for (i = 0; i < n && lmt; i++) {
+		*dst++ = src[i].length;
+		*dst++ = src[i].addr;
 		lmt -= 2;
 	}
 
