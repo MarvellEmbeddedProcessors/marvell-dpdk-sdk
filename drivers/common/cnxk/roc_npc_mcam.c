@@ -143,8 +143,8 @@ npc_lid_lt_in_kex(struct npc *npc, uint8_t lid, uint8_t lt)
 }
 
 static void
-npc_construct_ldata_mask(struct npc *npc, struct plt_bitmap *bmap, uint8_t lid,
-			 uint8_t lt, uint8_t ld)
+npc_construct_ldata_mask(struct npc *npc, struct plt_bitmap *bmap, uint8_t lid, uint8_t lt,
+			 uint8_t ld)
 {
 	struct npc_xtract_info *x_info, *infoflag;
 	int hdr_off, keylen;
@@ -197,8 +197,7 @@ npc_construct_ldata_mask(struct npc *npc, struct plt_bitmap *bmap, uint8_t lid,
  * @param len length of the match
  */
 static bool
-npc_is_kex_enabled(struct npc *npc, uint8_t lid, uint8_t lt, int offset,
-		   int len)
+npc_is_kex_enabled(struct npc *npc, uint8_t lid, uint8_t lt, int offset, int len)
 {
 	struct plt_bitmap *bmap;
 	uint32_t bmap_sz;
@@ -349,8 +348,8 @@ exit:
 }
 
 int
-npc_mcam_alloc_entry(struct npc *npc, struct roc_npc_flow *mcam,
-		     struct roc_npc_flow *ref_mcam, int prio, int *resp_count)
+npc_mcam_alloc_entry(struct npc *npc, struct roc_npc_flow *mcam, struct roc_npc_flow *ref_mcam,
+		     int prio, int *resp_count)
 {
 	struct npc_mcam_alloc_entry_req *req;
 	struct npc_mcam_alloc_entry_rsp *rsp;
@@ -450,22 +449,17 @@ npc_mcam_write_entry(struct mbox *mbox, struct roc_npc_flow *mcam)
 static void
 npc_mcam_process_mkex_cfg(struct npc *npc, struct npc_get_kex_cfg_rsp *kex_rsp)
 {
-	volatile uint64_t(
-		*q)[NPC_MAX_INTF][NPC_MAX_LID][NPC_MAX_LT][NPC_MAX_LD];
+	volatile uint64_t(*q)[NPC_MAX_INTF][NPC_MAX_LID][NPC_MAX_LT][NPC_MAX_LD];
 	struct npc_xtract_info *x_info = NULL;
 	int lid, lt, ld, fl, ix;
 	npc_dxcfg_t *p;
 	uint64_t keyw;
 	uint64_t val;
 
-	npc->keyx_supp_nmask[NPC_MCAM_RX] =
-		kex_rsp->rx_keyx_cfg & 0x7fffffffULL;
-	npc->keyx_supp_nmask[NPC_MCAM_TX] =
-		kex_rsp->tx_keyx_cfg & 0x7fffffffULL;
-	npc->keyx_len[NPC_MCAM_RX] =
-		npc_supp_key_len(npc->keyx_supp_nmask[NPC_MCAM_RX]);
-	npc->keyx_len[NPC_MCAM_TX] =
-		npc_supp_key_len(npc->keyx_supp_nmask[NPC_MCAM_TX]);
+	npc->keyx_supp_nmask[NPC_MCAM_RX] = kex_rsp->rx_keyx_cfg & 0x7fffffffULL;
+	npc->keyx_supp_nmask[NPC_MCAM_TX] = kex_rsp->tx_keyx_cfg & 0x7fffffffULL;
+	npc->keyx_len[NPC_MCAM_RX] = npc_supp_key_len(npc->keyx_supp_nmask[NPC_MCAM_RX]);
+	npc->keyx_len[NPC_MCAM_TX] = npc_supp_key_len(npc->keyx_supp_nmask[NPC_MCAM_TX]);
 
 	keyw = (kex_rsp->rx_keyx_cfg >> 32) & 0x7ULL;
 	npc->keyw[NPC_MCAM_RX] = keyw;
@@ -485,8 +479,7 @@ npc_mcam_process_mkex_cfg(struct npc *npc, struct npc_get_kex_cfg_rsp *kex_rsp)
 
 	/* Update LID, LT and LDATA cfg */
 	p = &npc->prx_dxcfg;
-	q = (volatile uint64_t(*)[][NPC_MAX_LID][NPC_MAX_LT][NPC_MAX_LD])(
-		&kex_rsp->intf_lid_lt_ld);
+	q = (volatile uint64_t(*)[][NPC_MAX_LID][NPC_MAX_LT][NPC_MAX_LD])(&kex_rsp->intf_lid_lt_ld);
 	for (ix = 0; ix < NPC_MAX_INTF; ix++) {
 		for (lid = 0; lid < NPC_MAX_LID; lid++) {
 			for (lt = 0; lt < NPC_MAX_LT; lt++) {
@@ -539,8 +532,7 @@ npc_mcam_fetch_kex_cfg(struct npc *npc)
 		goto done;
 	}
 
-	mbox_memcpy((char *)npc->profile_name, kex_rsp->mkex_pfl_name,
-		    MKEX_NAME_LEN);
+	mbox_memcpy((char *)npc->profile_name, kex_rsp->mkex_pfl_name, MKEX_NAME_LEN);
 
 	npc->exact_match_ena = (kex_rsp->rx_keyx_cfg >> 40) & 0xF;
 	npc_mcam_process_mkex_cfg(npc, kex_rsp);
@@ -551,9 +543,8 @@ done:
 }
 
 static void
-npc_mcam_set_channel(struct roc_npc_flow *flow,
-		     struct npc_mcam_write_entry_req *req, uint16_t channel,
-		     uint16_t chan_mask, bool is_second_pass)
+npc_mcam_set_channel(struct roc_npc_flow *flow, struct npc_mcam_write_entry_req *req,
+		     uint16_t channel, uint16_t chan_mask, bool is_second_pass)
 {
 	uint16_t chan = 0, mask = 0;
 
@@ -710,6 +701,9 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 	if (flow->nix_intf == NIX_INTF_TX) {
 		uint16_t pf_func = (flow->npc_action >> 4) & 0xffff;
 
+		if (flow->has_rep)
+			pf_func = flow->rep_pf_func;
+
 		pf_func = plt_cpu_to_be_16(pf_func);
 
 		rc = npc_mcam_set_pf_func(npc, flow, pf_func);
@@ -732,6 +726,14 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 			flow->npc_action |= (uint64_t)pf_func << 4;
 
 			npc_mcam_set_channel(flow, req, inl_dev->channel, inl_dev->chan_mask,
+					     false);
+		} else if (flow->has_rep) {
+			pf_func = flow->rep_pf_func;
+			req->entry_data.action &= ~(GENMASK(19, 4));
+			req->entry_data.action |= (uint64_t)pf_func << 4;
+			flow->npc_action &= ~(GENMASK(19, 4));
+			flow->npc_action |= (uint64_t)pf_func << 4;
+			npc_mcam_set_channel(flow, req, flow->rep_channel, (BIT_ULL(12) - 1),
 					     false);
 		} else if (npc->is_sdp_link) {
 			npc_mcam_set_channel(flow, req, npc->sdp_channel, npc->sdp_channel_mask,
@@ -789,9 +791,8 @@ npc_set_vlan_ltype(struct npc_parse_state *pst)
 	uint64_t val, mask;
 	uint8_t lb_offset;
 
-	lb_offset =
-		__builtin_popcount(pst->npc->keyx_supp_nmask[pst->nix_intf] &
-				   ((1ULL << NPC_LTYPE_LB_OFFSET) - 1));
+	lb_offset = __builtin_popcount(pst->npc->keyx_supp_nmask[pst->nix_intf] &
+				       ((1ULL << NPC_LTYPE_LB_OFFSET) - 1));
 	lb_offset *= 4;
 
 	mask = ~((0xfULL << lb_offset));
@@ -811,9 +812,8 @@ npc_set_ipv6ext_ltype_mask(struct npc_parse_state *pst)
 	uint8_t lc_offset, lcflag_offset;
 	uint64_t val, mask;
 
-	lc_offset =
-		__builtin_popcount(pst->npc->keyx_supp_nmask[pst->nix_intf] &
-				   ((1ULL << NPC_LTYPE_LC_OFFSET) - 1));
+	lc_offset = __builtin_popcount(pst->npc->keyx_supp_nmask[pst->nix_intf] &
+				       ((1ULL << NPC_LTYPE_LC_OFFSET) - 1));
 	lc_offset *= 4;
 
 	mask = ~((0xfULL << lc_offset));
@@ -903,13 +903,11 @@ npc_program_mcam(struct npc *npc, struct npc_parse_state *pst, bool mcam_alloc)
 						data_off = 0;
 						index++;
 					}
-					key_data[index] |=
-						((uint64_t)data << data_off);
+					key_data[index] |= ((uint64_t)data << data_off);
 
 					if (lt == 0)
 						mask = 0;
-					key_mask[index] |=
-						((uint64_t)mask << data_off);
+					key_mask[index] |= ((uint64_t)mask << data_off);
 					data_off += 4;
 				}
 			}
@@ -934,8 +932,12 @@ npc_program_mcam(struct npc *npc, struct npc_parse_state *pst, bool mcam_alloc)
 	    (pst->flow->npc_action & NIX_RX_ACTIONOP_UCAST_IPSEC))
 		skip_base_rule = true;
 
-	if (pst->is_vf && pst->flow->nix_intf == NIX_INTF_RX && !skip_base_rule) {
-		mbox = mbox_get(npc->mbox);
+	if ((pst->is_vf || pst->flow->is_rep_vf) && pst->flow->nix_intf == NIX_INTF_RX &&
+	    !skip_base_rule) {
+		if (pst->flow->has_rep)
+			mbox = mbox_get(pst->flow->rep_mbox);
+		else
+			mbox = mbox_get(npc->mbox);
 		(void)mbox_alloc_msg_npc_read_base_steer_rule(mbox);
 		rc = mbox_process_msg(mbox, (void *)&base_rule_rsp);
 		if (rc) {
