@@ -118,6 +118,16 @@ evt_parse_tx_first(struct evt_options *opt, const char *arg __rte_unused)
 }
 
 static int
+evt_parse_tx_pkt_sz(struct evt_options *opt, const char *arg __rte_unused)
+{
+	int ret;
+
+	ret = parser_read_uint16(&(opt->tx_pkt_sz), arg);
+
+	return ret;
+}
+
+static int
 evt_parse_timer_prod_type(struct evt_options *opt, const char *arg __rte_unused)
 {
 	opt->prod_type = EVT_PROD_TYPE_EVENT_TIMER_ADPTR;
@@ -401,6 +411,10 @@ usage(char *program)
 		"\t--vector_size      : Max vector size.\n"
 		"\t--vector_tmo_ns    : Max vector timeout in nanoseconds\n"
 		"\t--per_port_pool    : Configure unique pool per ethdev port\n"
+		"\t--tx_first         : Transmit given number of packets\n"
+		"                       across all the ethernet devices before\n"
+		"                       event workers start.\n"
+		"\t--tx_pkt_sz        : Packet size to use with Tx first."
 		);
 	printf("available tests:\n");
 	evt_test_dump_names();
@@ -464,7 +478,6 @@ static struct option lgopts[] = {
 	{ EVT_DEQ_TMO_NSEC,        1, 0, 0 },
 	{ EVT_PROD_ETHDEV,         0, 0, 0 },
 	{ EVT_PROD_CRYPTODEV,      0, 0, 0 },
-	{ EVT_TX_FIRST,            1, 0, 0 },
 	{ EVT_PROD_TIMERDEV,       0, 0, 0 },
 	{ EVT_PROD_TIMERDEV_BURST, 0, 0, 0 },
 	{ EVT_CRYPTO_ADPTR_MODE,   1, 0, 0 },
@@ -483,6 +496,8 @@ static struct option lgopts[] = {
 	{ EVT_VECTOR_TMO,          1, 0, 0 },
 	{ EVT_PER_PORT_POOL,       0, 0, 0 },
 	{ EVT_HELP,                0, 0, 0 },
+	{ EVT_TX_FIRST,            1, 0, 0 },
+	{ EVT_TX_PKT_SZ,           1, 0, 0 },
 	{ NULL,                    0, 0, 0 }
 };
 
@@ -508,7 +523,7 @@ evt_opts_parse_long(int opt_idx, struct evt_options *opt)
 		{ EVT_DEQ_TMO_NSEC, evt_parse_deq_tmo_nsec},
 		{ EVT_PROD_ETHDEV, evt_parse_eth_prod_type},
 		{ EVT_PROD_CRYPTODEV, evt_parse_crypto_prod_type},
-		{ EVT_TX_FIRST, evt_parse_tx_first},
+
 		{ EVT_PROD_TIMERDEV, evt_parse_timer_prod_type},
 		{ EVT_PROD_TIMERDEV_BURST, evt_parse_timer_prod_type_burst},
 		{ EVT_CRYPTO_ADPTR_MODE, evt_parse_crypto_adptr_mode},
@@ -526,6 +541,8 @@ evt_opts_parse_long(int opt_idx, struct evt_options *opt)
 		{ EVT_VECTOR_SZ, evt_parse_vector_size},
 		{ EVT_VECTOR_TMO, evt_parse_vector_tmo_ns},
 		{ EVT_PER_PORT_POOL, evt_parse_per_port_pool},
+		{ EVT_TX_FIRST, evt_parse_tx_first},
+		{ EVT_TX_PKT_SZ, evt_parse_tx_pkt_sz},
 	};
 
 	for (i = 0; i < RTE_DIM(parsermap); i++) {

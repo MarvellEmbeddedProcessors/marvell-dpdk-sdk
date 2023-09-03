@@ -35,14 +35,14 @@ cores, RESULT
 ------------------------------------------------------------------------
 GW_MODE_PREF (atomic queue) output in packets per second
 cores, RESULT
-1, 7.777
+1, 7.3
 8, 43.035
 16, 83.120
 
 ------------------------------------------------------------------------
 GW_MODE_WFE_PREF (atomic queue) output in packets per second
 cores, RESULT
-1, 7.775
+1, 7.3
 8, 43.019
 16, 83.129
 
