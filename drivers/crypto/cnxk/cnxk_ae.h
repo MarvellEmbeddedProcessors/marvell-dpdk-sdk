@@ -568,8 +568,8 @@ cnxk_ae_ecdsa_sign_prep(struct rte_crypto_ecdsa_op_param *ecdsa,
 	dptr += p_align;
 
 	/* Setup opcodes */
-	w4.s.opcode_major = ROC_AE_MAJOR_OP_ECDSA;
-	w4.s.opcode_minor = ROC_AE_MINOR_OP_ECDSA_SIGN;
+	w4.s.opcode_major = ROC_AE_MAJOR_OP_EC;
+	w4.s.opcode_minor = ROC_AE_MINOR_OP_EC_SIGN;
 
 	w4.s.param1 = curveid | (message_len << 8);
 	w4.s.param2 = (p_align << 8) | k_len;
@@ -662,8 +662,8 @@ cnxk_ae_ecdsa_verify_prep(struct rte_crypto_ecdsa_op_param *ecdsa,
 	dptr += p_align;
 
 	/* Setup opcodes */
-	w4.s.opcode_major = ROC_AE_MAJOR_OP_ECDSA;
-	w4.s.opcode_minor = ROC_AE_MINOR_OP_ECDSA_VERIFY;
+	w4.s.opcode_major = ROC_AE_MAJOR_OP_EC;
+	w4.s.opcode_minor = ROC_AE_MINOR_OP_EC_VERIFY;
 
 	w4.s.param1 = curveid | (message_len << 8);
 	w4.s.param2 = 0;
