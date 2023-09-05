@@ -24,8 +24,12 @@ roc_plt_init_cb_register(roc_plt_init_cb_t cb)
 uint16_t
 roc_plt_control_lmt_id_get(void)
 {
-	/* Return Last LMT ID to be use in control path functionality */
-	return ROC_NUM_LMT_LINES - 1;
+	uint32_t lcore_id = plt_lcore_id();
+	if (lcore_id != LCORE_ID_ANY)
+		return lcore_id << ROC_LMT_LINES_PER_CORE_LOG2;
+	else
+		/* Return Last LMT ID to be use in control path functionality */
+		return ROC_NUM_LMT_LINES - 1;
 }
 
 uint16_t
