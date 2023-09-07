@@ -685,18 +685,6 @@ xmit_fail:
 	return count;
 }
 
-static inline int32_t __rte_hot
-otx_ep_pkts_to_xmit(struct otx_ep_instr_queue *iq, uint16_t nb_pkts)
-{
-	uint16_t tx_pkts;
-
-	if (iq->host_write_index < iq->flush_index)
-		tx_pkts = iq->flush_index - iq->host_write_index;
-	else
-		tx_pkts = iq->nb_desc - iq->host_write_index + iq->flush_index;
-
-	return RTE_MIN(nb_pkts, tx_pkts);
-}
 
 /* Enqueue requests/packets to OTX_EP IQ queue.
  * returns number of requests enqueued successfully
@@ -711,7 +699,7 @@ otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 	uint32_t pkt_len;
 	uint16_t count, tx_pkts;
 
-	tx_pkts = otx_ep_pkts_to_xmit(iq, nb_pkts);
+	tx_pkts = RTE_MIN(nb_pkts, iq->nb_desc - iq->instr_pending);
 
 	for (count = 0; count < tx_pkts; count++) {
 		iqcmd = (struct otx2_ep_instr_32B *)(iq->base_addr + (iq->host_write_index *
