@@ -56,7 +56,6 @@ check_timeout_cycles(struct roc_npc *roc_npc, uint32_t mcam_id)
 	struct npc_age_flow_list_head *list;
 	struct npc_age_flow_entry *fl_iter;
 	struct roc_npc_flow_age *flow_age;
-	bool aging_enabled = false;
 
 	flow_age = &roc_npc->flow_age;
 	list = &npc->age_flow_list;
@@ -65,10 +64,9 @@ check_timeout_cycles(struct roc_npc *roc_npc, uint32_t mcam_id)
 		    fl_iter->flow->timeout_cycles < plt_tsc_cycles()) {
 			/* update bitmap */
 			plt_bitmap_set(flow_age->aged_flows, mcam_id);
-			if (!aging_enabled) {
+			if (flow_age->aged_flows_cnt == 0) {
 				flow_age->start_id = mcam_id;
 				flow_age->end_id = mcam_id;
-				aging_enabled = true;
 			}
 			if (flow_age->start_id > mcam_id)
 				flow_age->start_id = mcam_id;
