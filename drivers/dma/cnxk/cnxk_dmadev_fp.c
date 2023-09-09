@@ -6,10 +6,6 @@
 
 #include "cnxk_dmadev.h"
 
-#define DMA_DW_PER_SINGLE_CMD 8
-#define DMA_HDR_LEN	      4
-#define DMA_CMD_LEN(src, dst) (DMA_HDR_LEN + (src << 1) + (dst << 1))
-
 static __plt_always_inline void
 __dpi_cpy_scalar(uint64_t *src, uint64_t *dst, uint8_t n)
 {
@@ -128,15 +124,12 @@ __dpi_queue_write_single(struct cnxk_dpi_vf_s *dpi, uint64_t *cmd)
 {
 	uint64_t *ptr = dpi->chunk_base;
 
-	/*
-	 * Normally there is plenty of room in the current buffer for the
-	 * command
-	 */
-	if (dpi->chunk_head + DMA_DW_PER_SINGLE_CMD < dpi->chunk_size_m1) {
+	/* Check if command fits in the current chunk. */
+	if (dpi->chunk_head + CNXK_DPI_DW_PER_SINGLE_CMD < dpi->chunk_size_m1) {
 		ptr += dpi->chunk_head;
 
-		__dpi_cpy_scalar(cmd, ptr, DMA_DW_PER_SINGLE_CMD);
-		dpi->chunk_head += DMA_DW_PER_SINGLE_CMD;
+		__dpi_cpy_scalar(cmd, ptr, CNXK_DPI_DW_PER_SINGLE_CMD);
+		dpi->chunk_head += CNXK_DPI_DW_PER_SINGLE_CMD;
 	} else {
 		uint64_t *new_buff = NULL;
 		int count;
@@ -147,8 +140,8 @@ __dpi_queue_write_single(struct cnxk_dpi_vf_s *dpi, uint64_t *cmd)
 		}
 
 		/*
-		 * Figure out how many cmd words will fit in this buffer.
-		 * One location will be needed for the next buffer pointer.
+		 * Figure out how many cmd words will fit in the current chunk
+		 * and copy them.
 		 */
 		count = dpi->chunk_size_m1 - dpi->chunk_head;
 		ptr += dpi->chunk_head;
@@ -159,15 +152,11 @@ __dpi_queue_write_single(struct cnxk_dpi_vf_s *dpi, uint64_t *cmd)
 		*ptr = (uint64_t)new_buff;
 		ptr = new_buff;
 
-		__dpi_cpy_scalar(cmd + count, ptr, DMA_DW_PER_SINGLE_CMD - count);
+		/* Copy the remaining cmd words to new chunk. */
+		__dpi_cpy_scalar(cmd + count, ptr, CNXK_DPI_DW_PER_SINGLE_CMD - count);
 
-		/*
-		 * The current buffer is full and has a link to the next
-		 * buffers. Time to write the rest of the commands into
-		 * the new buffer.
-		 */
 		dpi->chunk_base = new_buff;
-		dpi->chunk_head = DMA_DW_PER_SINGLE_CMD - count;
+		dpi->chunk_head = CNXK_DPI_DW_PER_SINGLE_CMD - count;
 	}
 
 	return 0;
@@ -177,18 +166,15 @@ static __plt_always_inline int
 __dpi_queue_write_sg(struct cnxk_dpi_vf_s *dpi, uint64_t *hdr, const struct rte_dma_sge *src,
 		     const struct rte_dma_sge *dst, uint16_t nb_src, uint16_t nb_dst)
 {
-	uint8_t cmd_len = DMA_CMD_LEN(nb_src, nb_dst);
+	uint8_t cmd_len = CNXK_DPI_CMD_LEN(nb_src, nb_dst);
 	uint64_t *ptr = dpi->chunk_base;
 
-	/*
-	 * Normally there is plenty of room in the current buffer for the
-	 * command
-	 */
+	/* Check if command fits in the current chunk. */
 	if (dpi->chunk_head + cmd_len < dpi->chunk_size_m1) {
 		ptr += dpi->chunk_head;
 
-		__dpi_cpy(hdr, ptr, DMA_HDR_LEN);
-		ptr += DMA_HDR_LEN;
+		__dpi_cpy(hdr, ptr, CNXK_DPI_HDR_LEN);
+		ptr += CNXK_DPI_HDR_LEN;
 		__dpi_cpy_sg(src, ptr, nb_src);
 		ptr += (nb_src << 1);
 		__dpi_cpy_sg(dst, ptr, nb_dst);
@@ -204,8 +190,8 @@ __dpi_queue_write_sg(struct cnxk_dpi_vf_s *dpi, uint64_t *hdr, const struct rte_
 		}
 
 		/*
-		 * Figure out how many cmd words will fit in this buffer.
-		 * One location will be needed for the next buffer pointer.
+		 * Figure out how many cmd words will fit in the current chunk
+		 * and copy them, copy the rest to the new buffer.
 		 */
 		count = dpi->chunk_size_m1 - dpi->chunk_head;
 		ptr += dpi->chunk_head;
@@ -241,11 +227,6 @@ __dpi_queue_write_sg(struct cnxk_dpi_vf_s *dpi, uint64_t *hdr, const struct rte_
 		__dpi_cpy_sg(dst, buf, nb_dst);
 		buf += (nb_dst << 1);
 
-		/*
-		 * The current buffer is full and has a link to the next
-		 * buffers. Time to write the rest of the commands into
-		 * the new buffer.
-		 */
 		dpi->chunk_base = new_buff;
 		dpi->chunk_head = buf - new_buff;
 	}
@@ -259,7 +240,7 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t d
 {
 	struct cnxk_dpi_vf_s *dpivf = dev_private;
 	struct cnxk_dpi_conf *dpi_conf = &dpivf->conf[vchan];
-	uint64_t cmd[DMA_DW_PER_SINGLE_CMD];
+	uint64_t cmd[CNXK_DPI_DW_PER_SINGLE_CMD];
 	struct cnxk_dpi_compl_s *comp_ptr;
 	int rc;
 
@@ -268,7 +249,7 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t d
 		return -ENOSPC;
 
 	comp_ptr = dpi_conf->c_desc.compl_ptr[dpi_conf->c_desc.tail];
-	STRM_INC(dpi_conf->c_desc, tail);
+	CNXK_DPI_STRM_INC(dpi_conf->c_desc, tail);
 
 	cmd[0] = (1UL << 54) | (1UL << 48);
 	cmd[1] = dpi_conf->cmd.u;
@@ -290,19 +271,19 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t d
 
 	rc = __dpi_queue_write_single(dpivf, cmd);
 	if (unlikely(rc)) {
-		STRM_DEC(dpi_conf->c_desc, tail);
+		CNXK_DPI_STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
 	}
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpi_conf->pnum_words + DMA_DW_PER_SINGLE_CMD,
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_DW_PER_SINGLE_CMD,
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 		dpi_conf->stats.submitted += dpi_conf->pending + 1;
 		dpi_conf->pnum_words = 0;
 		dpi_conf->pending = 0;
 	} else {
-		dpi_conf->pnum_words += DMA_DW_PER_SINGLE_CMD;
+		dpi_conf->pnum_words += CNXK_DPI_DW_PER_SINGLE_CMD;
 		dpi_conf->pending++;
 	}
 
@@ -325,7 +306,7 @@ cnxk_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge 
 		return -ENOSPC;
 
 	comp_ptr = dpi_conf->c_desc.compl_ptr[dpi_conf->c_desc.tail];
-	STRM_INC(dpi_conf->c_desc, tail);
+	CNXK_DPI_STRM_INC(dpi_conf->c_desc, tail);
 
 	hdr[1] = dpi_conf->cmd.u;
 	hdr[2] = (uint64_t)comp_ptr;
@@ -346,19 +327,19 @@ cnxk_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge 
 
 	rc = __dpi_queue_write_sg(dpivf, hdr, fptr, lptr, nb_src, nb_dst);
 	if (unlikely(rc)) {
-		STRM_DEC(dpi_conf->c_desc, tail);
+		CNXK_DPI_STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
 	}
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpi_conf->pnum_words + DMA_CMD_LEN(nb_src, nb_dst),
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 		dpi_conf->stats.submitted += dpi_conf->pending + 1;
 		dpi_conf->pnum_words = 0;
 		dpi_conf->pending = 0;
 	} else {
-		dpi_conf->pnum_words += DMA_CMD_LEN(nb_src, nb_dst);
+		dpi_conf->pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
 		dpi_conf->pending++;
 	}
 
@@ -371,7 +352,7 @@ cn10k_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t 
 {
 	struct cnxk_dpi_vf_s *dpivf = dev_private;
 	struct cnxk_dpi_conf *dpi_conf = &dpivf->conf[vchan];
-	uint64_t cmd[DMA_DW_PER_SINGLE_CMD];
+	uint64_t cmd[CNXK_DPI_DW_PER_SINGLE_CMD];
 	struct cnxk_dpi_compl_s *comp_ptr;
 	int rc;
 
@@ -380,7 +361,7 @@ cn10k_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t 
 		return -ENOSPC;
 
 	comp_ptr = dpi_conf->c_desc.compl_ptr[dpi_conf->c_desc.tail];
-	STRM_INC(dpi_conf->c_desc, tail);
+	CNXK_DPI_STRM_INC(dpi_conf->c_desc, tail);
 
 	cmd[0] = dpi_conf->cmd.u | (1U << 6) | 1U;
 	cmd[1] = (uint64_t)comp_ptr;
@@ -392,13 +373,13 @@ cn10k_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t 
 
 	rc = __dpi_queue_write_single(dpivf, cmd);
 	if (unlikely(rc)) {
-		STRM_DEC(dpi_conf->c_desc, tail);
+		CNXK_DPI_STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
 	}
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpi_conf->pnum_words + DMA_DW_PER_SINGLE_CMD,
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_DW_PER_SINGLE_CMD,
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 		dpi_conf->stats.submitted += dpi_conf->pending + 1;
 		dpi_conf->pnum_words = 0;
@@ -427,7 +408,7 @@ cn10k_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge
 		return -ENOSPC;
 
 	comp_ptr = dpi_conf->c_desc.compl_ptr[dpi_conf->c_desc.tail];
-	STRM_INC(dpi_conf->c_desc, tail);
+	CNXK_DPI_STRM_INC(dpi_conf->c_desc, tail);
 
 	hdr[0] = dpi_conf->cmd.u | (nb_dst << 6) | nb_src;
 	hdr[1] = (uint64_t)comp_ptr;
@@ -435,19 +416,19 @@ cn10k_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge
 
 	rc = __dpi_queue_write_sg(dpivf, hdr, src, dst, nb_src, nb_dst);
 	if (unlikely(rc)) {
-		STRM_DEC(dpi_conf->c_desc, tail);
+		CNXK_DPI_STRM_DEC(dpi_conf->c_desc, tail);
 		return rc;
 	}
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpi_conf->pnum_words + DMA_CMD_LEN(nb_src, nb_dst),
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 		dpi_conf->stats.submitted += dpi_conf->pending + 1;
 		dpi_conf->pnum_words = 0;
 		dpi_conf->pending = 0;
 	} else {
-		dpi_conf->pnum_words += DMA_CMD_LEN(nb_src, nb_dst);
+		dpi_conf->pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
 		dpi_conf->pending++;
 	}
 
