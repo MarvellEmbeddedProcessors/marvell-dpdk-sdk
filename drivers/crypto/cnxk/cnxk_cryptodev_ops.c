@@ -121,7 +121,7 @@ cnxk_cpt_dev_config(struct rte_cryptodev *dev, struct rte_cryptodev_config *conf
 	if (nb_lf > nb_lf_avail)
 		return -ENOTSUP;
 
-	ret = roc_cpt_dev_configure(roc_cpt, nb_lf);
+	ret = roc_cpt_dev_configure(roc_cpt, nb_lf, false, 0);
 	if (ret) {
 		plt_err("Could not configure device");
 		return ret;
