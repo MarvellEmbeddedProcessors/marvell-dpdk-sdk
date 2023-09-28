@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2022 Marvell.
 
-set -ou pipefail
+set -euo pipefail
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
@@ -41,30 +41,18 @@ register_cn10k_inline_ipsec_test() {
 }
 
 run_cn10k_inline_ipsec_tests() {
-	unbuffer="$(command -v stdbuf) -o 0" || unbuffer=
-	local out=ipsec_out.txt
-	local parse=log_ipsec_parse_out.txt
 	for test in ${!cn10k_inline_ipsec_test_args[@]}; do
-		DPDK_TEST=$test $unbuffer $DPDK_TEST_BIN ${cn10k_inline_ipsec_test_args[$test]} >$out 2>&1
-		cat $out
-		cat $out | grep "failed" > temp.txt
-		awk '!/failed:/' temp.txt > $parse
-		if [[ $test == "event_inline_ipsec_autotest" ]]; then
-			awk '!/Inbound Out-Of-Place processing failed/' $parse > $parse
-		fi
-		rm -rf temp.txt
+		DPDK_TEST=$test $DPDK_TEST_BIN ${cn10k_inline_ipsec_test_args[$test]}
 	done
-	count=`grep -c "failed" $parse`
-	if [[ $count -ne 0 ]]; then
-		exit 1;
-	fi
 }
 
 run_inline_ipsec_tests() {
 	case $PLAT in
 		cn10*) run_cn10k_inline_ipsec_tests ;;
 	esac
+
 }
+
 
 #					DPDK TEST NAME		TEST ARGS
 register_cn10k_inline_ipsec_test	inline_ipsec_autotest	"-a $ETHERNET_DEVICE -a $NIX_INL_DEVICE -a $CRYPTO_DEVICE"
