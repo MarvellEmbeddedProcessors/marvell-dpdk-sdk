@@ -274,34 +274,58 @@ cnxk_dmadev_start(struct rte_dma_dev *dev)
 		dpi_conf->completed_offset = 0;
 	}
 
-	chunks = CNXK_DPI_CHUNKS_FROM_DESC(CNXK_DPI_QUEUE_BUF_SIZE, nb_desc);
-	rc = cnxk_dmadev_chunk_pool_create(dev, chunks, CNXK_DPI_QUEUE_BUF_SIZE);
+	chunks = CNXK_DPI_CHUNKS_FROM_DESC(CNXK_DPI_QUEUE_BUF_SIZE_V2, nb_desc);
+	rc = cnxk_dmadev_chunk_pool_create(dev, chunks, CNXK_DPI_QUEUE_BUF_SIZE_V2);
 	if (rc < 0) {
 		plt_err("DMA pool configure failed err = %d", rc);
-		goto done;
+		goto error;
 	}
 
 	rc = rte_mempool_get(dpivf->chunk_pool, &chunk);
 	if (rc < 0) {
 		plt_err("DMA failed to get chunk pointer err = %d", rc);
 		rte_mempool_free(dpivf->chunk_pool);
-		goto done;
+		goto error;
+	}
+
+	rc = roc_dpi_configure_v2(&dpivf->rdpi, CNXK_DPI_QUEUE_BUF_SIZE_V2, dpivf->aura,
+				  (uint64_t)chunk);
+	if (rc < 0) {
+		plt_err("DMA configure v2 failed err = %d", rc);
+		rte_mempool_free(dpivf->chunk_pool);
+		goto open_v1;
+	}
+	dpivf->chunk_size_m1 = (CNXK_DPI_QUEUE_BUF_SIZE_V2 >> 3) - 2;
+	goto done;
+
+open_v1:
+	chunks = CNXK_DPI_CHUNKS_FROM_DESC(CNXK_DPI_QUEUE_BUF_SIZE, nb_desc);
+	rc = cnxk_dmadev_chunk_pool_create(dev, chunks, CNXK_DPI_QUEUE_BUF_SIZE);
+	if (rc < 0) {
+		plt_err("DMA pool configure failed err = %d", rc);
+		goto error;
+	}
+
+	rc = rte_mempool_get(dpivf->chunk_pool, &chunk);
+	if (rc < 0) {
+		plt_err("DMA failed to get chunk pointer err = %d", rc);
+		rte_mempool_free(dpivf->chunk_pool);
+		goto error;
 	}
 
 	rc = roc_dpi_configure(&dpivf->rdpi, CNXK_DPI_QUEUE_BUF_SIZE, dpivf->aura, (uint64_t)chunk);
 	if (rc < 0) {
 		plt_err("DMA configure failed err = %d", rc);
 		rte_mempool_free(dpivf->chunk_pool);
-		goto done;
+		goto error;
 	}
-
+	dpivf->chunk_size_m1 = (CNXK_DPI_QUEUE_BUF_SIZE >> 3) - 2;
+done:
 	dpivf->chunk_base = chunk;
 	dpivf->chunk_head = 0;
-	dpivf->chunk_size_m1 = (CNXK_DPI_QUEUE_BUF_SIZE >> 3) - 2;
 
 	roc_dpi_enable(&dpivf->rdpi);
-
-done:
+error:
 	return rc;
 }
 

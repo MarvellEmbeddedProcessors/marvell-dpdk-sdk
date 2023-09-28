@@ -94,6 +94,45 @@ roc_dpi_configure(struct roc_dpi *roc_dpi, uint32_t chunk_sz, uint64_t aura, uin
 	mbox_msg.s.sso_pf_func = idev_sso_pffunc_get();
 	mbox_msg.s.npa_pf_func = idev_npa_pffunc_get();
 
+	rc = send_msg_to_pf(&pci_dev->addr, (const char *)&mbox_msg, sizeof(dpi_mbox_msg_t));
+	if (rc < 0)
+		plt_err("Failed to send mbox message %d to DPI PF, err %d", mbox_msg.s.cmd, rc);
+
+	return rc;
+}
+
+int
+roc_dpi_configure_v2(struct roc_dpi *roc_dpi, uint32_t chunk_sz, uint64_t aura, uint64_t chunk_base)
+{
+	struct plt_pci_device *pci_dev;
+	dpi_mbox_msg_t mbox_msg;
+	uint64_t reg;
+	int rc;
+
+	if (!roc_dpi) {
+		plt_err("roc_dpi is NULL");
+		return -EINVAL;
+	}
+
+	pci_dev = roc_dpi->pci_dev;
+
+	roc_dpi_disable(roc_dpi);
+	reg = plt_read64(roc_dpi->rbase + DPI_VDMA_SADDR);
+	while (!(reg & BIT_ULL(63)))
+		reg = plt_read64(roc_dpi->rbase + DPI_VDMA_SADDR);
+
+	plt_write64(0x0, roc_dpi->rbase + DPI_VDMA_REQQ_CTL);
+	plt_write64(chunk_base, roc_dpi->rbase + DPI_VDMA_SADDR);
+	mbox_msg.u[0] = 0;
+	mbox_msg.u[1] = 0;
+	/* DPI PF driver expects vfid starts from index 0 */
+	mbox_msg.s.vfid = roc_dpi->vfid;
+	mbox_msg.s.cmd = DPI_QUEUE_OPEN_V2;
+	mbox_msg.s.csize = chunk_sz / 8;
+	mbox_msg.s.aura = aura;
+	mbox_msg.s.sso_pf_func = idev_sso_pffunc_get();
+	mbox_msg.s.npa_pf_func = idev_npa_pffunc_get();
+
 	rc = send_msg_to_pf(&pci_dev->addr, (const char *)&mbox_msg,
 			    sizeof(dpi_mbox_msg_t));
 	if (rc < 0)

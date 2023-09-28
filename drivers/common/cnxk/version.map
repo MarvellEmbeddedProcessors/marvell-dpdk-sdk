@@ -83,6 +83,7 @@ INTERNAL {
 	roc_cpt_int_misc_cb_register;
 	roc_cpt_int_misc_cb_unregister;
 	roc_dpi_configure;
+	roc_dpi_configure_v2;
 	roc_dpi_dev_fini;
 	roc_dpi_dev_init;
 	roc_dpi_disable;
