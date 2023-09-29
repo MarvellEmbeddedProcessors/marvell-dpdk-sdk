@@ -49,6 +49,7 @@ test_sources = files(
         'test_errno.c',
         'test_ethdev_link.c',
         'test_event_crypto_adapter.c',
+        'test_event_dma_adapter.c',
         'test_event_eth_rx_adapter.c',
         'test_event_ring.c',
         'test_event_timer_adapter.c',
