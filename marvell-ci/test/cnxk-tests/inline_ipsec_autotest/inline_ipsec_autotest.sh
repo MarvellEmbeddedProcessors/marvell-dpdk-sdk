@@ -50,10 +50,6 @@ run_inline_ipsec_tests() {
 	case $PLAT in
 		cn10*) run_cn10k_inline_ipsec_tests ;;
 	esac
-
-	for test in ${!cn10k_inline_ipsec_test_args[@]}; do
-		DPDK_TEST=$test $DPDK_TEST_BIN ${cn10k_inline_ipsec_test_args[$test]}
-	done
 }
 
 
