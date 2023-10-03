@@ -110,6 +110,11 @@ EXPERIMENTAL {
 	# added in 22.07
 	rte_event_queue_attr_set;
 	rte_event_port_quiesce;
+
+	#added in 22.11
+	rte_event_port_profile_links_set;
+	rte_event_port_profile_unlink;
+	rte_event_port_profile_links_get;
 };
 
 INTERNAL {

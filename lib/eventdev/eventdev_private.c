@@ -81,6 +81,13 @@ dummy_event_crypto_adapter_enqueue(__rte_unused void *port,
 	return 0;
 }
 
+static int
+dummy_event_port_profile_switch(__rte_unused void *port, __rte_unused uint8_t profile_id)
+{
+	RTE_EDEV_LOG_ERR("change profile requested for unconfigured event device");
+	return -EINVAL;
+}
+
 void
 event_dev_fp_ops_reset(struct rte_event_fp_ops *fp_op)
 {
@@ -97,6 +104,7 @@ event_dev_fp_ops_reset(struct rte_event_fp_ops *fp_op)
 		.txa_enqueue_same_dest =
 			dummy_event_tx_adapter_enqueue_same_dest,
 		.ca_enqueue = dummy_event_crypto_adapter_enqueue,
+		.profile_switch = dummy_event_port_profile_switch,
 		.data = dummy_data,
 	};
 
@@ -117,5 +125,6 @@ event_dev_fp_ops_set(struct rte_event_fp_ops *fp_op,
 	fp_op->txa_enqueue = dev->txa_enqueue;
 	fp_op->txa_enqueue_same_dest = dev->txa_enqueue_same_dest;
 	fp_op->ca_enqueue = dev->ca_enqueue;
+	fp_op->profile_switch = dev->profile_switch;
 	fp_op->data = dev->data->ports;
 }

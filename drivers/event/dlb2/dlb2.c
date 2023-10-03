@@ -68,6 +68,7 @@ static struct rte_event_dev_info evdev_dlb2_default_info = {
 			  RTE_EVENT_DEV_CAP_IMPLICIT_RELEASE_DISABLE |
 			  RTE_EVENT_DEV_CAP_QUEUE_ALL_TYPES |
 			  RTE_EVENT_DEV_CAP_MAINTENANCE_FREE),
+	.max_profiles_per_port = 1,
 };
 
 struct process_local_port_data

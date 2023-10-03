@@ -76,12 +76,34 @@ RTE_TRACE_POINT(
 )
 
 RTE_TRACE_POINT(
+	rte_eventdev_trace_port_profile_links_set,
+	RTE_TRACE_POINT_ARGS(uint8_t dev_id, uint8_t port_id,
+		uint16_t nb_links, uint8_t profile_id, int rc),
+	rte_trace_point_emit_u8(dev_id);
+	rte_trace_point_emit_u8(port_id);
+	rte_trace_point_emit_u16(nb_links);
+	rte_trace_point_emit_u8(profile_id);
+	rte_trace_point_emit_int(rc);
+)
+
+RTE_TRACE_POINT(
 	rte_eventdev_trace_port_unlink,
 	RTE_TRACE_POINT_ARGS(uint8_t dev_id, uint8_t port_id,
 		uint16_t nb_unlinks, int rc),
 	rte_trace_point_emit_u8(dev_id);
 	rte_trace_point_emit_u8(port_id);
 	rte_trace_point_emit_u16(nb_unlinks);
+	rte_trace_point_emit_int(rc);
+)
+
+RTE_TRACE_POINT(
+	rte_eventdev_trace_port_profile_unlink,
+	RTE_TRACE_POINT_ARGS(uint8_t dev_id, uint8_t port_id,
+		uint16_t nb_unlinks, uint8_t profile_id, int rc),
+	rte_trace_point_emit_u8(dev_id);
+	rte_trace_point_emit_u8(port_id);
+	rte_trace_point_emit_u16(nb_unlinks);
+	rte_trace_point_emit_u8(profile_id);
 	rte_trace_point_emit_int(rc);
 )
 
