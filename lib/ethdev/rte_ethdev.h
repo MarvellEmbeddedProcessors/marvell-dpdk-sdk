@@ -3836,6 +3836,10 @@ rte_eth_tx_done_cleanup(uint16_t port_id, uint16_t queue_id, uint32_t free_cnt);
  * eth device.
  */
 enum rte_eth_event_ipsec_subtype {
+	/**  PMD specific error start */
+	RTE_ETH_EVENT_IPSEC_PMD_ERROR_START = -256,
+	/**  PMD specific error end */
+	RTE_ETH_EVENT_IPSEC_PMD_ERROR_END = -1,
 	/** Unknown event type */
 	RTE_ETH_EVENT_IPSEC_UNKNOWN = 0,
 	/** Sequence number overflow */
