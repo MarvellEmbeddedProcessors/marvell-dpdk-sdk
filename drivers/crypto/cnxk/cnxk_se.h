@@ -1718,6 +1718,10 @@ cpt_kasumi_enc_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 	cpt_inst_w4.s.param2 = auth_data_len;
 
 	inst->w4.u64 = cpt_inst_w4.u64;
+
+	if (unlikely(iv_s == NULL))
+		return -1;
+
 	if (is_sg_ver2)
 		sg2_inst_prep(params, inst, offset_ctrl, iv_s, iv_len, 0, 0, inputlen, outputlen, 0,
 			      req_flags, 0, 0);
@@ -1774,6 +1778,10 @@ cpt_kasumi_dec_prep(uint64_t d_offs, uint64_t d_lens, struct roc_se_fc_params *p
 	}
 
 	inst->w4.u64 = cpt_inst_w4.u64;
+
+	if (unlikely(params->iv_buf == NULL))
+		return -1;
+
 	if (is_sg_ver2)
 		sg2_inst_prep(params, inst, offset_ctrl, params->iv_buf, iv_len, 0, 0, inputlen,
 			      outputlen, 0, 0, 0, 1);
