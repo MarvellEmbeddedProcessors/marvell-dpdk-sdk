@@ -1517,6 +1517,9 @@ roc_npc_flow_create(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 	}
 	roc_npc->rep_npc = NULL;
 
+	if (flow->has_age_action)
+		npc_age_flow_list_entry_add(roc_npc, flow);
+
 	if (flow->use_pre_alloc == 0)
 		list = &npc->flow_list[flow->priority];
 	else
@@ -1530,8 +1533,6 @@ roc_npc_flow_create(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 		}
 	}
 	TAILQ_INSERT_TAIL(list, flow, next);
-
-	npc_age_flow_list_entry_add(roc_npc, flow);
 
 	return flow;
 
@@ -1636,7 +1637,9 @@ roc_npc_flow_destroy(struct roc_npc *roc_npc, struct roc_npc_flow *flow)
 
 	npc_delete_prio_list_entry(npc, flow);
 
-	npc_age_flow_list_entry_delete(roc_npc, flow);
+	if (flow->has_age_action)
+		npc_age_flow_list_entry_delete(roc_npc, flow);
+
 	if (roc_npc->flow_age.age_flow_refcnt == 0 && roc_npc->flow_age.aged_flows_poll_thread)
 		npc_aging_ctrl_thread_destroy(roc_npc);
 

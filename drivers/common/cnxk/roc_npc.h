@@ -307,6 +307,7 @@ struct roc_npc_flow {
 	uint64_t timeout_cycles;
 	void *age_context;
 	uint32_t timeout;
+	bool has_age_action;
 	uint16_t rep_pf_func;
 	uint16_t rep_channel;
 	struct mbox *rep_mbox;
