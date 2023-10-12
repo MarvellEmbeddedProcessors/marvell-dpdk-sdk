@@ -38,7 +38,7 @@
 		int64_t avail;                                                 \
 		/* Cached value is low, Update the fc_cache_pkts */            \
 		if (unlikely((txq)->fc_cache_pkts < (pkts))) {                 \
-			avail = txq->nb_sqb_bufs_adj - *(txq->fc_mem);         \
+			avail = txq->nb_sqb_bufs_adj - *txq->fc_mem;           \
 			/* Multiply with sqe_per_sqb to express in pkts */     \
 			(txq)->fc_cache_pkts =                                 \
 				(avail << (txq)->sqes_per_sqb_log2) - avail;   \
@@ -167,7 +167,7 @@ retry:
 	while (__atomic_load_n(&txq->fc_cache_pkts, __ATOMIC_RELAXED) < 0)
 		;
 #endif
-	cached = __atomic_sub_fetch(&txq->fc_cache_pkts, req, __ATOMIC_ACQUIRE);
+	cached = __atomic_fetch_sub(&txq->fc_cache_pkts, req, __ATOMIC_ACQUIRE) - req;
 	/* Check if there is enough space, else update and retry. */
 	if (cached >= 0)
 		return;
@@ -423,7 +423,7 @@ again:
 		;
 #endif
 
-	val = __atomic_sub_fetch(fc_sw, nb_pkts, __ATOMIC_ACQUIRE);
+	val = __atomic_fetch_sub(fc_sw, nb_pkts, __ATOMIC_ACQUIRE) - nb_pkts;
 	if (likely(val >= 0))
 		return;
 
@@ -1012,7 +1012,7 @@ cn10k_nix_xmit_prepare(struct cn10k_eth_txq *txq,
 	}
 
 	if (flags & NIX_TX_NEED_EXT_HDR && flags & NIX_TX_OFFLOAD_TSO_F &&
-			(ol_flags & RTE_MBUF_F_TX_TCP_SEG)) {
+	    (ol_flags & RTE_MBUF_F_TX_TCP_SEG)) {
 		uint16_t lso_sb;
 		uint64_t mask;
 
@@ -3197,12 +3197,12 @@ again:
 		if (flags & NIX_TX_VWQE_F) {
 			if (flags & NIX_TX_MULTI_SEG_F) {
 				if (burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1) > 0)
-					cn10k_nix_vwqe_wait_fc(
-						txq,
+					cn10k_nix_vwqe_wait_fc(txq,
 						burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1));
-			} else
-				cn10k_nix_vwqe_wait_fc(
-					txq, burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1));
+			} else {
+				cn10k_nix_vwqe_wait_fc(txq,
+						burst - (cn10k_nix_pkts_per_vec_brst(flags) >> 1));
+			}
 		}
 		/* STEOR1 */
 		roc_lmt_submit_steorl(wd.data[1], pa);
