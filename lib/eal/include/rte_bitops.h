@@ -271,4 +271,116 @@ rte_bit_relaxed_test_and_clear64(unsigned int nr, volatile uint64_t *addr)
 	return val & mask;
 }
 
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the count of leading 0-bits in v.
+ *
+ * @param v
+ *   The value.
+ * @return
+ *   The count of leading zero bits.
+ */
+__rte_experimental
+static inline unsigned int
+rte_clz32(uint32_t v)
+{
+	return (unsigned int)__builtin_clz(v);
+}
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the count of leading 0-bits in v.
+ *
+ * @param v
+ *   The value.
+ * @return
+ *   The count of leading zero bits.
+ */
+__rte_experimental
+static inline unsigned int
+rte_clz64(uint64_t v)
+{
+	return (unsigned int)__builtin_clzll(v);
+}
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the count of trailing 0-bits in v.
+ *
+ * @param v
+ *   The value.
+ * @return
+ *   The count of trailing zero bits.
+ */
+__rte_experimental
+static inline unsigned int
+rte_ctz32(uint32_t v)
+{
+	return (unsigned int)__builtin_ctz(v);
+}
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the count of trailing 0-bits in v.
+ *
+ * @param v
+ *   The value.
+ * @return
+ *   The count of trailing zero bits.
+ */
+__rte_experimental
+static inline unsigned int
+rte_ctz64(uint64_t v)
+{
+	return (unsigned int)__builtin_ctzll(v);
+}
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the count of 1-bits in v.
+ *
+ * @param v
+ *   The value.
+ * @return
+ *   The count of 1-bits.
+ */
+__rte_experimental
+static inline unsigned int
+rte_popcount32(uint32_t v)
+{
+	return (unsigned int)__builtin_popcount(v);
+}
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the count of 1-bits in v.
+ *
+ * @param v
+ *   The value.
+ * @return
+ *   The count of 1-bits.
+ */
+__rte_experimental
+static inline unsigned int
+rte_popcount64(uint64_t v)
+{
+	return (unsigned int)__builtin_popcountll(v);
+}
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* _RTE_BITOPS_H_ */

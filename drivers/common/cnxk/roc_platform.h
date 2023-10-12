@@ -193,6 +193,11 @@
 #define plt_io_rmb()		rte_io_rmb()
 #define plt_atomic_thread_fence rte_atomic_thread_fence
 
+#define plt_popcount32		rte_popcount32
+#define plt_popcount64		rte_popcount64
+#define plt_clz32		rte_clz32
+#define plt_ctz64		rte_ctz64
+
 #define plt_mmap       mmap
 #define PLT_PROT_READ  PROT_READ
 #define PLT_PROT_WRITE PROT_WRITE
@@ -228,6 +233,8 @@
 #define plt_tel_data_add_dict_string rte_tel_data_add_dict_string
 #define plt_tel_data_add_dict_u64    rte_tel_data_add_dict_u64
 #define plt_telemetry_register_cmd   rte_telemetry_register_cmd
+
+#define plt_thread_t pthread_t
 
 /* Log */
 extern int cnxk_logtype_base;
