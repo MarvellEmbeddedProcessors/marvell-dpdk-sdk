@@ -16,6 +16,7 @@ test_dir = meson.current_build_dir()
 # Copy the required scripts to build directory.
 run_command(copy_data, test_script)
 run_command(copy_data, 'pcap/eth_vlan_ipv4_tcp.pcap')
+run_command(copy_data, 'pcap/eth_vlan_ipv4_ipv6_tcp_2flows.pcap')
 
 # Add the meson test
 test(test_name,
