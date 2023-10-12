@@ -56,17 +56,18 @@ function pktgen_send_flow()
 function testpmd_check_aging()
 {
 	local prefix=$1
+	local cnt=$2
 	local out=testpmd.out.$prefix
 
 	testpmd_cmd $prefix "flow aged 0"
 
 	sleep 3
 	testpmd_prompt $prefix
-	COUNT=`cat $out | tail -n6 | grep "total aged flows:" | cut -d':' -f2`
+	COUNT=`cat $out | tail -n7 | grep "total aged flows:" | cut -d':' -f2`
 
 	echo -e "Total aged flows:$COUNT \n"
 
-	if [[ "$COUNT" -eq "1" ]]; then
+	if [[ "$COUNT" -eq "$cnt" ]]; then
 		return 0
 	fi
 
@@ -95,12 +96,50 @@ function testpmd_test_aging()
 	pktgen_quit
 	pktgen_cleanup
 
-	sleep 30
+	sleep 40
 
-	if testpmd_check_aging $prefix; then
+	if testpmd_check_aging $prefix 1; then
 		echo "$name passed"
 		#Delete rule
 		testpmd_cmd $prefix "flow destroy 0 rule 0"
+		return 0
+	else
+		echo "$name failed"
+		exit -1
+	fi
+}
+
+function testpmd_test_aging_2flows()
+{
+	local prefix=$1
+	local name=$2
+	local flow1=$3
+	local flow2=$4
+	local pcapfile=$5
+	local in=testpmd.in.$prefix
+	echo "$cmd" >> $in
+	testpmd_prompt $prefix
+
+	#Add rule
+	testpmd_cmd $prefix "$flow1"
+	testpmd_cmd $prefix "$flow2"
+
+	testpmd_cmd $prefix "start"
+
+	pktgen_send_flow $pcapfile
+
+	sleep 3
+
+	pktgen_quit
+	pktgen_cleanup
+
+	sleep 40
+
+	if testpmd_check_aging $prefix 2; then
+		echo "$name passed"
+		#Delete rule
+		testpmd_cmd $prefix "flow destroy 0 rule 0"
+		testpmd_cmd $prefix "flow destroy 0 rule 1"
 		return 0
 	else
 		echo "$name failed"
@@ -118,6 +157,12 @@ testpmd_launch $PRFX \
 testpmd_test_aging $PRFX FLOW_AGING "flow create 0 ingress pattern eth / \
  vlan / ipv4 / tcp / end actions age timeout 20 / queue index 2 / count / end" \
  "pcap/eth_vlan_ipv4_tcp.pcap"
+
+testpmd_test_aging_2flows $PRFX FLOW_AGING "flow create 0 ingress pattern eth / \
+ vlan / ipv4 / tcp / end actions age timeout 20 / queue index 2 / count / end" \
+ "flow create 0 ingress pattern eth / vlan / ipv6 / tcp / end actions age \
+ timeout 20 / queue index 2 / count / end" \
+ "pcap/eth_vlan_ipv4_ipv6_tcp_2flows.pcap"
 
 testpmd_quit $PRFX
 echo "SUCCESS: flow aging test completed"
