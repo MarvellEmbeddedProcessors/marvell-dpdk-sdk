@@ -141,6 +141,14 @@ main(int argc, char **argv)
 		}
 	}
 
+	/* Test specific dmadev setup */
+	if (test->ops.dmadev_setup) {
+		if (test->ops.dmadev_setup(test, &opt)) {
+			evt_err("%s: dmadev setup failed", opt.test_name);
+			goto cryptodev_destroy;
+		}
+	}
+
 	/* Test specific eventdev setup */
 	if (test->ops.eventdev_setup) {
 		if (test->ops.eventdev_setup(test, &opt)) {
@@ -173,6 +181,9 @@ main(int argc, char **argv)
 
 	if (test->ops.cryptodev_destroy)
 		test->ops.cryptodev_destroy(test, &opt);
+
+	if (test->ops.dmadev_destroy)
+		test->ops.dmadev_destroy(test, &opt);
 
 	if (test->ops.mempool_destroy)
 		test->ops.mempool_destroy(test, &opt);
