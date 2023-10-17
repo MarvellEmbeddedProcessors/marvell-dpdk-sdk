@@ -19,4 +19,8 @@ struct roc_nix *__roc_api roc_idev_npa_nix_get(void);
 uint64_t __roc_api roc_idev_nix_inl_meta_aura_get(void);
 struct roc_nix_list *__roc_api roc_idev_nix_list_get(void);
 
+uint8_t __roc_api roc_idev_nix_rx_inject_get(uint16_t port);
+void __roc_api roc_idev_nix_rx_inject_set(uint16_t port, uint8_t enable);
+uint16_t *__roc_api roc_idev_nix_rx_chan_base_get(void);
+void __roc_api roc_idev_nix_rx_chan_set(uint16_t port, uint16_t chan);
 #endif /* _ROC_IDEV_H_ */

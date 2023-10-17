@@ -125,6 +125,10 @@ INTERNAL {
 	roc_ml_dev_fini;
 	roc_ml_blk_init;
 	roc_ml_blk_fini;
+	roc_idev_nix_rx_chan_base_get;
+	roc_idev_nix_rx_chan_set;
+	roc_idev_nix_rx_inject_get;
+	roc_idev_nix_rx_inject_set;
 	roc_model;
 	roc_se_auth_key_set;
 	roc_se_ciph_key_set;
