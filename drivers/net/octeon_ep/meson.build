@@ -13,6 +13,12 @@ sources = files(
         'cnxk_ep_tx.c',
 )
 
+if cc.get_define('__AVX2__', args: machine_args) != ''
+    cflags += ['-DCC_AVX2_SUPPORT']
+elif cc.has_argument('-mavx2')
+    cflags += ['-DCC_AVX2_SUPPORT']
+endif
+
 extra_flags = ['-Wno-strict-aliasing']
 foreach flag: extra_flags
     if cc.has_argument(flag)
