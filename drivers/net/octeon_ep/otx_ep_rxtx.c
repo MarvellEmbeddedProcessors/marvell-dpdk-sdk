@@ -13,14 +13,7 @@
 
 #include "otx_ep_common.h"
 #include "otx_ep_vf.h"
-#include "otx2_ep_vf.h"
 #include "otx_ep_rxtx.h"
-
-/* SDP_LENGTH_S specifies packet length and is of 8-byte size */
-#define OTX_EP_INFO_SIZE 8
-#define OTX_EP_FSZ_FS0 0
-#define DROQ_REFILL_THRESHOLD 16
-#define OTX2_SDP_REQUEST_ISM   (0x1ULL << 63)
 
 static void
 otx_ep_dmazone_free(const struct rte_memzone *mz)
@@ -143,6 +136,13 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 	otx_ep_info("IQ[%d]: base: %p basedma: %lx count: %d\n",
 		     iq_no, iq->base_addr, (unsigned long)iq->base_addr_dma,
 		     iq->nb_desc);
+
+	iq->mbuf_list = rte_zmalloc_socket("mbuf_list",	(iq->nb_desc * sizeof(struct rte_mbuf *)),
+					   RTE_CACHE_LINE_SIZE, rte_socket_id());
+	if (!iq->mbuf_list) {
+		otx_ep_err("IQ[%d] mbuf_list alloc failed\n", iq_no);
+		goto iq_init_fail;
+	}
 
 	iq->otx_ep_dev = otx_ep;
 	iq->q_no = iq_no;
@@ -479,25 +479,6 @@ otx_ep_flush_iq(struct otx_ep_instr_queue *iq)
 	iq->instr_pending -= instr_processed;
 }
 
-static void
-otx2_ep_flush_iq(struct otx_ep_instr_queue *iq)
-{
-	uint32_t instr_processed = 0;
-
-	iq->otx_read_index = otx_vf_update_read_index(iq);
-	while (iq->flush_index != iq->otx_read_index) {
-		/* Free the IQ data buffer to the pool */
-		rte_pktmbuf_free(iq->req_list[iq->flush_index].finfo.mbuf);
-		iq->flush_index =
-			otx_ep_incr_index(iq->flush_index, 1, iq->nb_desc);
-
-		instr_processed++;
-	}
-
-	iq->stats.instr_processed = instr_processed;
-	iq->instr_pending -= instr_processed;
-}
-
 static inline void
 otx_ep_ring_doorbell(struct otx_ep_device *otx_ep __rte_unused,
 		struct otx_ep_instr_queue *iq)
@@ -687,68 +668,6 @@ otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 xmit_fail:
 	if (iq->instr_pending >= OTX_EP_MAX_INSTR)
 		otx_ep_flush_iq(iq);
-
-	/* Return no# of instructions posted successfully. */
-	return count;
-}
-
-
-/* Enqueue requests/packets to OTX_EP IQ queue.
- * returns number of requests enqueued successfully
- */
-uint16_t
-otx2_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
-{
-	struct otx_ep_instr_queue *iq = (struct otx_ep_instr_queue *)tx_queue;
-	struct otx_ep_device *otx_ep = iq->otx_ep_dev;
-	struct otx2_ep_instr_32B *iqcmd;
-	struct rte_mbuf *m;
-	uint32_t pkt_len;
-	uint16_t count, tx_pkts;
-
-	tx_pkts = RTE_MIN(nb_pkts, iq->nb_desc - iq->instr_pending);
-
-	for (count = 0; count < tx_pkts; count++) {
-		iqcmd = (struct otx2_ep_instr_32B *)(iq->base_addr + (iq->host_write_index *
-						    iq->desc_size));
-		iqcmd->ih.u64 = iq->partial_ih;
-
-		m = pkts[count];
-		iq->req_list[iq->host_write_index].finfo.mbuf = m;
-		if (m->nb_segs == 1) {
-			pkt_len = rte_pktmbuf_data_len(m);
-			iqcmd->ih.s.tlen = pkt_len;
-			iqcmd->dptr = rte_mbuf_data_iova(m); /*dptr*/
-		} else {
-			if (unlikely(!(otx_ep->tx_offloads & RTE_ETH_TX_OFFLOAD_MULTI_SEGS)))
-				goto xmit_fail;
-
-			if (unlikely(prepare_xmit_gather_list(iq, m, &iqcmd->dptr, &iqcmd->ih) < 0))
-				goto xmit_fail;
-
-			pkt_len = rte_pktmbuf_pkt_len(m);
-		}
-
-#ifdef OTX_EP_IO_DEBUG
-		otx_ep_dbg("Word0 [dptr]: 0x%016lx\n", (unsigned long)(iqcmd->dptr));
-		otx_ep_dbg("Word1 [ihtx]: 0x%016lx\n", (unsigned long)(iqcmd->ih));
-		otx_ep_dbg("Word2 [rsvd0]: 0x%016lx\n", (unsigned long)(iqcmd->rsvd[0]));
-		otx_ep_dbg("Word3 [rsvd1]: 0x%016lx\n", (unsigned long)(iqcmd->rsvd[1]));
-#endif
-		/* Increment the host write index */
-		iq->host_write_index = otx_ep_incr_index(iq->host_write_index, 1, iq->nb_desc);
-		iq->stats.tx_bytes += pkt_len;
-	}
-
-	/* ring dbell */
-	rte_io_wmb();
-	rte_write64(count, iq->doorbell_reg);
-	iq->instr_pending += count;
-	iq->stats.tx_pkts += count;
-
-xmit_fail:
-	if (iq->instr_pending >= OTX_EP_MAX_INSTR)
-		otx2_ep_flush_iq(iq);
 
 	/* Return no# of instructions posted successfully. */
 	return count;
