@@ -12,3 +12,10 @@ sources = files(
         'cnxk_ep_rx.c',
         'cnxk_ep_tx.c',
 )
+
+extra_flags = ['-Wno-strict-aliasing']
+foreach flag: extra_flags
+    if cc.has_argument(flag)
+        cflags += flag
+    endif
+endforeach
