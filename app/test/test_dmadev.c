@@ -49,6 +49,8 @@ struct dma_add_test dma_add_test[] = {
 	[TEST_M2D_AUTO_FREE] = {.name = "m2d_auto_free", .enabled = false},
 };
 
+static bool dev_init;
+
 static void
 __rte_format_printf(3, 4)
 print_err(const char *func, int lineno, const char *format, ...)
@@ -787,7 +789,6 @@ test_m2d_auto_free(int16_t dev_id, uint16_t vchan)
 	};
 	uint32_t buf_cnt1, buf_cnt2;
 	struct rte_mempool_ops *ops;
-	static bool dev_init;
 	uint16_t nb_done = 0;
 	bool dma_err = false;
 	int retry = 100;
@@ -957,6 +958,7 @@ test_dmadev_instance(int16_t dev_id)
 
 	if ((info.dev_capa & RTE_DMA_CAPA_M2D_AUTO_FREE) &&
 	    dma_add_test[TEST_M2D_AUTO_FREE].enabled == true) {
+		dev_init = false;
 		if (runtest("m2d_auto_free", test_m2d_auto_free, 128, dev_id, vchan,
 			    CHECK_ERRS) < 0)
 			goto err;
