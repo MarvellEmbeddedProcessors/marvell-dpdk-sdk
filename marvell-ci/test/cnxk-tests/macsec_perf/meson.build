@@ -27,13 +27,6 @@ run_command(copy_data, 'pcap/port_1_plain_pkt_64B.pcap')
 run_command(copy_data, 'pcap/port_1_plain_pkt_380B.pcap')
 run_command(copy_data, 'pcap/port_1_plain_pkt_1410B.pcap')
 # Add the meson test
-test(test_name,
-    cnxk_test_script_wrapper,
-    env : [['DPDK_TEST=' + test_name],
-    ['TEST_DIR=' + test_dir]],
-    args : [[test_script], [test_args]],
-    is_parallel : false, suite : 'cnxk-tests')
-
 test_args+= ' inline'
 test(test_inline_name,
     cnxk_test_script_wrapper,
