@@ -11,10 +11,9 @@
 enum octep_pfvf_mbox_version {
 	OTX_EP_MBOX_VERSION_V0,
 	OTX_EP_MBOX_VERSION_V1,
-	OTX_EP_MBOX_VERSION_V2,
 };
 
-#define OTX_EP_MBOX_VERSION_CURRENT OTX_EP_MBOX_VERSION_V2
+#define OTX_EP_MBOX_VERSION_CURRENT OTX_EP_MBOX_VERSION_V1
 
 enum otx_ep_mbox_opcode {
 	OTX_EP_MBOX_CMD_VERSION,
@@ -28,9 +27,6 @@ enum otx_ep_mbox_opcode {
 	OTX_EP_MBOX_CMD_GET_LINK_STATUS,
 	OTX_EP_MBOX_CMD_GET_MTU,
 	OTX_EP_MBOX_CMD_DEV_REMOVE,
-	OTX_EP_MBOX_CMD_GET_FW_INFO,
-	OTX_EP_MBOX_CMD_SET_OFFLOADS,
-	OTX_EP_MBOX_NOTIF_LINK_STATUS,
 	OTX_EP_MBOX_CMD_MAX,
 };
 
@@ -125,15 +121,6 @@ union otx_ep_mbox_word {
 		uint64_t status:1;
 		uint64_t rsvd:53;
 	} s_link_status;
-	struct {
-		uint64_t opcode:8;
-		uint64_t type:2;
-		uint64_t pkind:8;
-		uint64_t fsz:8;
-		uint64_t rx_ol_flags:16;
-		uint64_t tx_ol_flags:16;
-		uint64_t rsvd:6;
-	} s_fw_info;
 } __rte_packed;
 
 /* Hardware interface link state information. */
@@ -180,5 +167,4 @@ void otx_ep_mbox_disable_interrupt(struct otx_ep_device *otx_ep);
 int otx_ep_mbox_get_max_pkt_len(struct rte_eth_dev *eth_dev);
 int otx_ep_mbox_version_check(struct rte_eth_dev *eth_dev);
 int otx_ep_mbox_send_dev_exit(struct rte_eth_dev *eth_dev);
-int otx_ep_mbox_get_fw_info(struct rte_eth_dev *eth_dev);
 #endif

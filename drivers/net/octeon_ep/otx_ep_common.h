@@ -344,17 +344,6 @@ struct otx_ep_oq_config {
 	uint32_t refill_threshold;
 };
 
-struct otx_ep_fw_info {
-	/* pkind value to be used in every Tx hardware descriptor */
-	uint8_t pkind;
-	/* front size data */
-	uint8_t fsz;
-	/* supported rx offloads */
-	uint16_t rx_ol_flags;
-	/* supported tx offloads */
-	uint16_t tx_ol_flags;
-};
-
 /* The Descriptor Ring Output Queue(DROQ) structure. */
 struct otx_ep_droq {
 	struct otx_ep_device *otx_ep_dev;
@@ -405,11 +394,11 @@ struct otx_ep_droq {
 	 */
 	void *pkts_sent_reg;
 
-	/** Fix for DMA incompletion during pkt reads.
-	 *  This variable is used to initiate a sent_reg_read
-	 *  that completes pending dma
-	 *  this variable is used as lvalue so compiler cannot optimize
-	 *  the reads
+	/** Handle DMA incompletion during pkt reads.
+	 * This variable is used to initiate a sent_reg_read
+	 * that completes pending dma
+	 * this variable is used as lvalue so compiler cannot optimize
+	 * the reads.
 	 */
 	uint32_t sent_reg_val;
 
@@ -558,9 +547,6 @@ struct otx_ep_device {
 
 	/* Negotiated Mbox version */
 	uint32_t mbox_neg_ver;
-
-	/* firmware info */
-	struct otx_ep_fw_info fw_info;
 };
 
 int otx_ep_setup_iqs(struct otx_ep_device *otx_ep, uint32_t iq_no,

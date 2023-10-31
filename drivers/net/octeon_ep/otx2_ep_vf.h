@@ -128,7 +128,6 @@
 #define PCI_DEVID_CN98XX_EP_NET_VF		0xB103
 #define PCI_DEVID_CNF95N_EP_NET_VF		0xB403
 #define PCI_DEVID_CNF95O_EP_NET_VF		0xB603
-#define PCI_DEVID_LIO3_EP_NET_VF		0x3383
 
 int
 otx2_ep_vf_setup_device(struct otx_ep_device *sdpvf);
