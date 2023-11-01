@@ -61,7 +61,7 @@
  */
 union dpi_instr_hdr_s {
 	uint64_t u[4];
-	struct dpi_cn9k_instr_hdr_s {
+	struct dpi_cn9k_instr_hdr_s_s {
 		uint64_t tag : 32;
 		uint64_t tt : 2;
 		uint64_t grp : 10;
@@ -95,7 +95,7 @@ union dpi_instr_hdr_s {
 		/* Word 3 - End */
 	} cn9k;
 
-	struct dpi_cn10k_instr_hdr_s {
+	struct dpi_cn10k_instr_hdr_s_s {
 		uint64_t nfst : 4;
 		uint64_t reserved_4_5 : 2;
 		uint64_t nlst : 4;
