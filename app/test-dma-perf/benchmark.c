@@ -337,10 +337,18 @@ do_cpu_mem_copy(void *p)
 	return 0;
 }
 
+static void
+dummy_free_ext_buf(void *addr, void *opaque)
+{
+	RTE_SET_USED(addr);
+	RTE_SET_USED(opaque);
+}
+
 static int
 setup_memory_env(struct test_configure *cfg, struct rte_mbuf ***srcs,
 			struct rte_mbuf ***dsts)
 {
+	static struct rte_mbuf_ext_shared_info *ext_buf_info;
 	unsigned int buf_size = cfg->buf_size.cur;
 	unsigned int nr_sockets;
 	uint32_t nr_buf = cfg->nr_buf;
@@ -397,19 +405,34 @@ setup_memory_env(struct test_configure *cfg, struct rte_mbuf ***srcs,
 		return -1;
 	}
 
+	if (cfg->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM ||
+	    cfg->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV) {
+		ext_buf_info = rte_malloc(NULL, sizeof(struct rte_mbuf_ext_shared_info), 0);
+		if (ext_buf_info == NULL) {
+			printf("Error: ext_buf_info malloc failed.\n");
+			return -1;
+		}
+	}
+
 	if (cfg->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM) {
+		ext_buf_info->free_cb = dummy_free_ext_buf;
+		ext_buf_info->fcb_opaque = NULL;
 		for (i = 0; i < nr_buf; i++) {
 			/* Using mbuf structure to hold remote iova address. */
-			rte_mbuf_iova_set(*srcs[i], (rte_iova_t)cfg->raddr);
-			((*srcs)[i])->data_off = 0;
+			rte_pktmbuf_attach_extbuf((*srcs)[i], (void *)cfg->raddr,
+						  (rte_iova_t)cfg->raddr, 0, ext_buf_info);
+			rte_mbuf_ext_refcnt_update(ext_buf_info, 1);
 		}
 	}
 
 	if (cfg->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV) {
+		ext_buf_info->free_cb = dummy_free_ext_buf;
+		ext_buf_info->fcb_opaque = NULL;
 		for (i = 0; i < nr_buf; i++) {
 			/* Using mbuf structure to hold remote iova address. */
-			rte_mbuf_iova_set(*dsts[i], (rte_iova_t)cfg->raddr);
-			((*dsts)[i])->data_off = 0;
+			rte_pktmbuf_attach_extbuf((*dsts)[i], (void *)cfg->raddr,
+						  (rte_iova_t)cfg->raddr, 0, ext_buf_info);
+			rte_mbuf_ext_refcnt_update(ext_buf_info, 1);
 		}
 	}
 
@@ -419,10 +442,10 @@ setup_memory_env(struct test_configure *cfg, struct rte_mbuf ***srcs,
 void
 mem_copy_benchmark(struct test_configure *cfg, bool is_dma)
 {
-	uint16_t i;
+	uint32_t i;
 	uint32_t offset;
 	unsigned int lcore_id = 0;
-	struct rte_mbuf **srcs = NULL, **dsts = NULL;
+	struct rte_mbuf **srcs = NULL, **dsts = NULL, **m = NULL;
 	struct lcore_dma_map_t *ldm = &cfg->lcore_dma_map;
 	unsigned int buf_size = cfg->buf_size.cur;
 	uint16_t kick_batch = cfg->kick_batch.cur;
@@ -528,6 +551,20 @@ mem_copy_benchmark(struct test_configure *cfg, bool is_dma)
 			avg_cycles_total / nb_workers, bandwidth_total, mops_total);
 
 out:
+
+	if (cfg->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM)
+		m = srcs;
+	else if (cfg->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV)
+		m = dsts;
+
+	if (m) {
+		for (i = 0; i < nr_buf; i++)
+			rte_pktmbuf_detach_extbuf(m[i]);
+
+		if (m[0]->shinfo && rte_mbuf_ext_refcnt_read(m[0]->shinfo) == 0)
+			rte_free(m[0]->shinfo);
+	}
+
 	/* free mbufs used in the test */
 	if (srcs != NULL)
 		rte_pktmbuf_free_bulk(srcs, nr_buf);

@@ -63,7 +63,7 @@ struct test_configure {
 	uint8_t dcoreid;
 	uint8_t pfid;
 	uint16_t vfid;
-	uint64_t raddr;
+	uintptr_t raddr;
 };
 
 void mem_copy_benchmark(struct test_configure *cfg, bool is_dma);
