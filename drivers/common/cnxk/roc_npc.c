@@ -1113,8 +1113,10 @@ npc_rss_action_program(struct roc_npc *roc_npc,
 	uint8_t alg_idx;
 	int rc;
 
-	if (flow->has_rep)
+	if (flow->has_rep) {
 		npc = roc_npc->rep_npc;
+		npc->flowkey_cfg_state = roc_npc->flowkey_cfg_state;
+	}
 
 	for (; actions->type != ROC_NPC_ACTION_TYPE_END; actions++) {
 		if (actions->type == ROC_NPC_ACTION_TYPE_RSS) {
