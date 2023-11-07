@@ -17,6 +17,10 @@
 #include <rte_debug.h>
 #include <rte_compat.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Get the uint64_t value for a specified bit set.
  *
