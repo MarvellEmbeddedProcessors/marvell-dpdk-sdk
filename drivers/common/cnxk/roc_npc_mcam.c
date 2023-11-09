@@ -719,6 +719,8 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 
 	req->intf = (flow->nix_intf == NIX_INTF_RX) ? NPC_MCAM_RX : NPC_MCAM_TX;
 	req->enable_entry = 1;
+	if (flow->nix_intf == NIX_INTF_RX)
+		flow->npc_action |= (uint64_t)flow->recv_queue << 20;
 	req->entry_data.action = flow->npc_action;
 
 	/*
@@ -741,7 +743,6 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 	}
 
 	if (flow->nix_intf == NIX_INTF_RX) {
-		flow->npc_action |= (uint64_t)flow->recv_queue << 20;
 		if (inl_dev && inl_dev->is_multi_channel &&
 		    (flow->npc_action & NIX_RX_ACTIONOP_UCAST_IPSEC)) {
 			pf_func = nix_inl_dev_pffunc_get();
