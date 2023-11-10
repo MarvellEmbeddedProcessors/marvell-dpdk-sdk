@@ -190,6 +190,24 @@ function testpmd_check_vlan_flags()
 	return -1
 }
 
+function testpmd_check_queue_index()
+{
+	local prefix=$1
+	local out=testpmd.out.$prefix
+	local queue_idx=$2
+
+	QUEUE_ID_COUNT=`cat $out | grep "queue=$queue_idx" | wc -l`
+
+	echo "queue occurrence count:" $QUEUE_ID_COUNT
+
+	if [[ "$QUEUE_ID_COUNT" -gt "0" ]]; then
+		return 0
+	fi
+
+	return -1
+}
+
+
 echo "Testpmd running with $TESTPMD_PORT, Coremask=$TESTPMD_COREMASK"
 testpmd_launch $PRFX \
 		" -c $TESTPMD_COREMASK -a $TESTPMD_PORT" \
@@ -314,6 +332,21 @@ if ! testpmd_check_mark_id $PRFX $MARKID; then
 fi
 
 echo "FLOW_ACTION_MARK passed"
+
+#---------------------------FLOW_ACTION_QUEUE-----------------------------------
+QUEUE_ID=0x3
+
+testpmd_test_flow $PRFX FLOW_QUEUE "flow create 0 ingress pattern ipv4 src is \
+ 10.11.12.13 / end actions  queue index $QUEUE_ID / count / end" \
+ "pcap/eth_ipv4_tcp.pcap"
+
+if ! testpmd_check_queue_index $PRFX $QUEUE_ID; then
+	echo "FAILED: incorrect queue"
+	exit 1
+fi
+
+echo "FLOW_ACTION_QUEUE passed"
+
 
 testpmd_quit  $PRFX
 echo "SUCCESS: flow regression tests completed"
