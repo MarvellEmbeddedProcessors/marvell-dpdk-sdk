@@ -99,13 +99,6 @@ otx_ep_dev_info_get(struct rte_eth_dev *eth_dev,
 		return -EINVAL;
 	}
 
-	if (otx_epvf->chip_id == PCI_DEVID_CN9K_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF) {
-		max_rx_pktlen =  OTX2_EP_MAX_RX_PKT_LEN;
-		otx_ep_dbg("Max supported pkt len is %d", max_rx_pktlen);
-	}
-
 	devinfo->speed_capa = RTE_ETH_LINK_SPEED_10G;
 	devinfo->max_rx_queues = otx_epvf->max_rx_queues;
 	devinfo->max_tx_queues = otx_epvf->max_tx_queues;
