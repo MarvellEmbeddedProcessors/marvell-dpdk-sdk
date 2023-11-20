@@ -87,6 +87,19 @@ output_header(uint32_t case_id, struct test_configure *case_cfg)
 	output_csv(true);
 }
 
+static int
+open_output_csv(const char *rst_path_ptr)
+{
+	fd = fopen(rst_path_ptr, "a");
+	if (!fd) {
+		printf("Open output CSV file error.\n");
+		return 1;
+	}
+	output_csv(true);
+	fclose(fd);
+	return 0;
+}
+
 static void
 run_test_case(struct test_configure *case_cfg)
 {
@@ -602,42 +615,16 @@ main(int argc, char *argv[])
 			printf("Test case %d configured to be skipped.\n\n", i + 1);
 			snprintf(output_str[0], MAX_OUTPUT_STR_LEN, "Skip the test-case %d\n",
 				 i + 1);
-
-			fd = fopen(rst_path_ptr, "a");
-			if (!fd) {
-				printf("Open output CSV file error.\n");
+			if (open_output_csv(rst_path_ptr))
 				return 0;
-			}
-			output_csv(true);
-			fclose(fd);
 			continue;
 		}
 
 		if (!test_cases[i].is_valid) {
 			printf("Invalid test case %d.\n\n", i + 1);
 			snprintf(output_str[0], MAX_OUTPUT_STR_LEN, "Invalid case %d\n", i + 1);
-
-			fd = fopen(rst_path_ptr, "a");
-			if (!fd) {
-				printf("Open output CSV file error.\n");
+			if (open_output_csv(rst_path_ptr))
 				return 0;
-			}
-			output_csv(true);
-			fclose(fd);
-			continue;
-		}
-
-		if (test_cases[i].test_type == TEST_TYPE_NONE) {
-			printf("No valid test type in test case %d.\n\n", i + 1);
-			snprintf(output_str[0], MAX_OUTPUT_STR_LEN, "Invalid case %d\n", i + 1);
-
-			fd = fopen(rst_path_ptr, "a");
-			if (!fd) {
-				printf("Open output CSV file error.\n");
-				return 0;
-			}
-			output_csv(true);
-			fclose(fd);
 			continue;
 		}
 
