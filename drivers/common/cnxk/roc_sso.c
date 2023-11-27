@@ -17,6 +17,11 @@ sso_lf_alloc(struct dev *dev, enum sso_lf_type lf_type, uint16_t nb_lf,
 	struct mbox *mbox = mbox_get(dev->mbox);
 	int rc = -ENOSPC;
 
+	if (!nb_lf) {
+		mbox_put(mbox);
+		return 0;
+	}
+
 	switch (lf_type) {
 	case SSO_LF_TYPE_HWS: {
 		struct ssow_lf_alloc_req *req;
@@ -55,6 +60,11 @@ sso_lf_free(struct dev *dev, enum sso_lf_type lf_type, uint16_t nb_lf)
 {
 	struct mbox *mbox = mbox_get(dev->mbox);
 	int rc = -ENOSPC;
+
+	if (!nb_lf) {
+		mbox_put(mbox);
+		return 0;
+	}
 
 	switch (lf_type) {
 	case SSO_LF_TYPE_HWS: {
@@ -97,6 +107,11 @@ sso_rsrc_attach(struct roc_sso *roc_sso, enum sso_lf_type lf_type,
 	struct mbox *mbox = mbox_get(dev->mbox);
 	struct rsrc_attach_req *req;
 	int rc = -ENOSPC;
+
+	if (!nb_lf) {
+		mbox_put(mbox);
+		return 0;
+	}
 
 	req = mbox_alloc_msg_attach_resources(mbox);
 	if (req == NULL)
@@ -221,6 +236,47 @@ sso_hws_link_modify(uint8_t hws, uintptr_t base, struct plt_bitmap *bmp, uint16_
 }
 
 static int
+sso_hws_link_modify_af(struct dev *dev, uint8_t hws, struct plt_bitmap *bmp, uint16_t hwgrp[],
+		       uint16_t n, uint8_t set, uint16_t enable)
+{
+	struct mbox *mbox = mbox_get(dev->mbox);
+	struct ssow_chng_mship *req;
+	int rc, i;
+
+	req = mbox_alloc_msg_ssow_chng_mship(mbox);
+	if (req == NULL) {
+		rc = mbox_process(mbox);
+		if (rc) {
+			mbox_put(mbox);
+			return -EIO;
+		}
+		req = mbox_alloc_msg_ssow_chng_mship(mbox);
+		if (req == NULL) {
+			mbox_put(mbox);
+			return -ENOSPC;
+		}
+	}
+	req->enable = enable;
+	req->set = set;
+	req->hws = hws;
+	req->nb_hwgrps = n;
+	for (i = 0; i < n; i++)
+		req->hwgrps[i] = hwgrp[i];
+	rc = mbox_process(mbox);
+	mbox_put(mbox);
+	if (rc == MBOX_MSG_INVALID)
+		return rc;
+	if (rc)
+		return -EIO;
+
+	for (i = 0; i < n; i++)
+		enable ? plt_bitmap_set(bmp, hwgrp[i]) :
+			 plt_bitmap_clear(bmp, hwgrp[i]);
+
+	return 0;
+}
+
+static int
 sso_msix_fill(struct roc_sso *roc_sso, uint16_t nb_hws, uint16_t nb_hwgrp)
 {
 	struct sso *sso = roc_sso_to_sso_priv(roc_sso);
@@ -264,13 +320,10 @@ roc_sso_hwgrp_base_get(struct roc_sso *roc_sso, uint16_t hwgrp)
 }
 
 uint64_t
-roc_sso_ns_to_gw(struct roc_sso *roc_sso, uint64_t ns)
+roc_sso_ns_to_gw(uint64_t base, uint64_t ns)
 {
-	struct dev *dev = &roc_sso_to_sso_priv(roc_sso)->dev;
-	uint64_t current_us, current_ns, new_ns;
-	uintptr_t base;
+	uint64_t current_us;
 
-	base = dev->bar2 + (RVU_BLOCK_ADDR_SSOW << 20);
 	current_us = plt_read64(base + SSOW_LF_GWS_NW_TIM);
 	/* From HRM, table 14-19:
 	 * The SSOW_LF_GWS_NW_TIM[NW_TIM] period is specified in n-1 notation.
@@ -279,43 +332,64 @@ roc_sso_ns_to_gw(struct roc_sso *roc_sso, uint64_t ns)
 
 	/* From HRM, table 14-1:
 	 * SSOW_LF_GWS_NW_TIM[NW_TIM] specifies the minimum timeout. The SSO
-	 * hardware times out a GET_WORK request within 2 usec of the minimum
+	 * hardware times out a GET_WORK request within 1 usec of the minimum
 	 * timeout specified by SSOW_LF_GWS_NW_TIM[NW_TIM].
 	 */
-	current_us += 2;
-	current_ns = current_us * 1E3;
-	new_ns = (ns - PLT_MIN(ns, current_ns));
-	new_ns = !new_ns ? 1 : new_ns;
-	return (new_ns * plt_tsc_hz()) / 1E9;
+	current_us += 1;
+	return PLT_MAX(1UL, (uint64_t)PLT_DIV_CEIL(ns, (current_us * 1E3)));
 }
 
 int
 roc_sso_hws_link(struct roc_sso *roc_sso, uint8_t hws, uint16_t hwgrp[], uint16_t nb_hwgrp,
-		 uint8_t set)
+		 uint8_t set, bool use_mbox)
 {
-	struct dev *dev = &roc_sso_to_sso_priv(roc_sso)->dev;
-	struct sso *sso;
+	struct sso *sso = roc_sso_to_sso_priv(roc_sso);
+	struct dev *dev = &sso->dev;
 	uintptr_t base;
+	int rc;
 
-	sso = roc_sso_to_sso_priv(roc_sso);
+	if (!nb_hwgrp)
+		return 0;
+
+	if (use_mbox && roc_model_is_cn10k()) {
+		rc = sso_hws_link_modify_af(dev, hws, sso->link_map[hws], hwgrp, nb_hwgrp, set, 1);
+		if (rc == MBOX_MSG_INVALID)
+			goto lf_access;
+		if (rc < 0)
+			return 0;
+		goto done;
+	}
+lf_access:
 	base = dev->bar2 + (RVU_BLOCK_ADDR_SSOW << 20 | hws << 12);
 	sso_hws_link_modify(hws, base, sso->link_map[hws], hwgrp, nb_hwgrp, set, 1);
-
+done:
 	return nb_hwgrp;
 }
 
 int
-roc_sso_hws_unlink(struct roc_sso *roc_sso, uint8_t hws, uint16_t hwgrp[], uint16_t nb_hwgrp,
-		   uint8_t set)
+roc_sso_hws_unlink(struct roc_sso *roc_sso, uint8_t hws, uint16_t hwgrp[],
+		   uint16_t nb_hwgrp, uint8_t set, bool use_mbox)
 {
-	struct dev *dev = &roc_sso_to_sso_priv(roc_sso)->dev;
-	struct sso *sso;
+	struct sso *sso = roc_sso_to_sso_priv(roc_sso);
+	struct dev *dev = &sso->dev;
 	uintptr_t base;
+	int rc;
 
-	sso = roc_sso_to_sso_priv(roc_sso);
+	if (!nb_hwgrp)
+		return 0;
+
+	if (use_mbox && roc_model_is_cn10k()) {
+		rc = sso_hws_link_modify_af(dev, hws, sso->link_map[hws], hwgrp, nb_hwgrp, set, 0);
+		if (rc == MBOX_MSG_INVALID)
+			goto lf_access;
+		if (rc < 0)
+			return 0;
+		goto done;
+	}
+lf_access:
 	base = dev->bar2 + (RVU_BLOCK_ADDR_SSOW << 20 | hws << 12);
 	sso_hws_link_modify(hws, base, sso->link_map[hws], hwgrp, nb_hwgrp, set, 0);
-
+done:
 	return nb_hwgrp;
 }
 
@@ -705,6 +779,9 @@ roc_sso_hwgrp_release_xaq(struct roc_sso *roc_sso, uint16_t hwgrps)
 	struct dev *dev = &sso->dev;
 	int rc;
 
+	if (!hwgrps)
+		return 0;
+
 	rc = sso_hwgrp_release_xaq(dev, hwgrps);
 	return rc;
 }
@@ -891,7 +968,7 @@ roc_sso_rsrc_init(struct roc_sso *roc_sso, uint8_t nb_hws, uint16_t nb_hwgrp, ui
 			goto sso_msix_fail;
 		}
 
-		nb_tim_lfs = nb_tim_lfs ? PLT_MIN(nb_tim_lfs, free_tim_lfs) : free_tim_lfs;
+		nb_tim_lfs = PLT_MIN(nb_tim_lfs, free_tim_lfs);
 	}
 
 	/* 2 error interrupt per TIM LF */
