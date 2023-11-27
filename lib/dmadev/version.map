@@ -26,6 +26,7 @@ INTERNAL {
 	rte_dma_fp_objs;
 	rte_dma_pmd_allocate;
 	rte_dma_pmd_release;
+	rte_dma_pmd_get_dev_by_id;
 
 	local: *;
 };
