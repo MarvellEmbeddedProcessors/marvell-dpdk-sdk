@@ -1434,8 +1434,8 @@ cpt_pdcp_chain_alg_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 		return -1;
 	}
 
+	cpt_inst_w4.u64 = se_ctx->template_w4.u64;
 	cpt_inst_w4.s.opcode_major = ROC_SE_MAJOR_OP_PDCP_CHAIN;
-	cpt_inst_w4.s.opcode_minor = se_ctx->template_w4.s.opcode_minor;
 
 	cpt_inst_w4.s.param1 = auth_data_len;
 	cpt_inst_w4.s.param2 = 0;
@@ -1519,8 +1519,8 @@ cpt_pdcp_alg_prep(uint32_t req_flags, uint64_t d_offs, uint64_t d_lens,
 	flags = se_ctx->zsk_flags;
 	mac_len = se_ctx->mac_len;
 
+	cpt_inst_w4.u64 = se_ctx->template_w4.u64;
 	cpt_inst_w4.s.opcode_major = ROC_SE_MAJOR_OP_PDCP;
-	cpt_inst_w4.s.opcode_minor = se_ctx->template_w4.s.opcode_minor;
 
 	if (flags == 0x1) {
 		iv_s = params->auth_iv_buf;
