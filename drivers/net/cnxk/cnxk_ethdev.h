@@ -403,6 +403,9 @@ struct cnxk_eth_dev {
 	/* Reassembly dynfield/flag offsets */
 	int reass_dynfield_off;
 	int reass_dynflag_bit;
+
+	/* Inject packets */
+	struct cnxk_ethdev_inj_cfg inj_cfg;
 };
 
 struct cnxk_eth_rxq_sp {
