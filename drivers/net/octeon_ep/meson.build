@@ -2,6 +2,12 @@
 # Copyright(C) 2021 Marvell.
 #
 
+if not is_linux or not dpdk_conf.get('RTE_ARCH_64')
+    build = false
+    reason = 'only supported on 64-bit Linux'
+    subdir_done()
+endif
+
 sources = files(
         'otx_ep_ethdev.c',
         'otx_ep_rxtx.c',
