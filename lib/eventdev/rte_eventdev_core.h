@@ -45,6 +45,10 @@ typedef uint16_t (*event_crypto_adapter_enqueue_t)(void *port,
 typedef int (*event_profile_switch_t)(void *port, uint8_t profile);
 /**< @internal Switch active link profile on the event port. */
 
+typedef uint16_t (*event_dma_adapter_enqueue_t)(void *port, struct rte_event ev[],
+						uint16_t nb_events);
+/**< @internal Enqueue burst of events on DMA adapter */
+
 struct rte_event_fp_ops {
 	void **data;
 	/**< points to array of internal port data pointers */
@@ -70,7 +74,9 @@ struct rte_event_fp_ops {
 	/**< PMD Crypto adapter enqueue function. */
 	event_profile_switch_t profile_switch;
 	/**< PMD Event switch profile function. */
-	uintptr_t reserved[4];
+	event_dma_adapter_enqueue_t dma_enqueue;
+	/**< PMD DMA adapter enqueue function. */
+	uintptr_t reserved[3];
 } __rte_cache_aligned;
 
 extern struct rte_event_fp_ops rte_event_fp_ops[RTE_EVENT_MAX_DEVS];

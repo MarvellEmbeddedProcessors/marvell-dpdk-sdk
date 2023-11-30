@@ -32,6 +32,7 @@ libraries = [
         'compressdev',
         'cryptodev',
         'distributor',
+        'dmadev',  # eventdev depends on this
         'efd',
         'eventdev',
         'gpudev',
@@ -47,7 +48,6 @@ libraries = [
         'power',
         'rawdev',
         'regexdev',
-        'dmadev',
         'rib',
         'reorder',
         'sched',
