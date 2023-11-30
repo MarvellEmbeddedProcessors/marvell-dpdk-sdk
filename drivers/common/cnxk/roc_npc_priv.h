@@ -458,6 +458,7 @@ int npc_parse_item_basic(const struct roc_npc_item_info *item, struct npc_parse_
 int npc_parse_meta_items(struct npc_parse_state *pst);
 int npc_parse_mark_item(struct npc_parse_state *pst);
 int npc_parse_port_representor_id(struct npc_parse_state *pst);
+int npc_parse_represented_port_id(struct npc_parse_state *pst);
 int npc_parse_pre_l2(struct npc_parse_state *pst);
 int npc_parse_higig2_hdr(struct npc_parse_state *pst);
 int npc_parse_cpt_hdr(struct npc_parse_state *pst);

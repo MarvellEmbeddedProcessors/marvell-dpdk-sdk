@@ -1390,6 +1390,7 @@ npc_vtag_strip_action_configure(struct mbox *mbox,
 
 	rx_vtag_action |= (NIX_RX_VTAGACTION_VTAG_VALID << 15);
 	rx_vtag_action |= ((uint64_t)NPC_LID_LB << 8);
+	rx_vtag_action |= ((uint64_t)NIX_RX_VTAG_TYPE6 << 12);
 	rx_vtag_action |= NIX_RX_VTAGACTION_VTAG0_RELPTR;
 
 	if (*strip_cnt == 2) {
@@ -1440,6 +1441,7 @@ npc_vtag_action_program(struct roc_npc *roc_npc,
 			if (rc)
 				return rc;
 
+			plt_npc_dbg("VLAN strip action, strip_cnt %d", strip_cnt);
 			if (strip_cnt == 2)
 				actions++;
 
