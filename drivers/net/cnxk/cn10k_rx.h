@@ -579,7 +579,7 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t inb_sa,
 		       RTE_MBUF_F_RX_IP_CKSUM_MASK);
 
 
-	if (flags & NIX_RX_REAS_F && !inb_sa ) {
+	if (flags & NIX_RX_REAS_F && !inb_sa) {
 		/* Clear and update original lower 16 bit of data offset */
 		*rearm = (*rearm & ~(BIT_ULL(16) - 1)) | inner->data_off;
 	} else {
@@ -587,7 +587,6 @@ nix_sec_meta_to_mbuf(uint64_t cq_w1, uint64_t cq_w5, uintptr_t inb_sa,
 		inb_priv = roc_nix_inl_ot_ipsec_inb_sa_sw_rsvd((void *)inb_sa);
 		/* Update dynamic field with userdata */
 		*rte_security_dynfield(inner) = (uint64_t)inb_priv->userdata;
-
 	}
 
 	/* Clear and update original lower 16 bit of data offset */

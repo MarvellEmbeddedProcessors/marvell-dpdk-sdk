@@ -1489,8 +1489,8 @@ dev_init(struct dev *dev, struct plt_pci_device *pci_dev)
 
 		snprintf(name, MBOX_HANDLER_NAME_MAX_LEN, "pf%d_vf_msg_hndlr", dev->pf);
 		dev->sync.start_thread = true;
-		rc = plt_ctrl_thread_create(&dev->sync.pfvf_msg_thread, name, NULL,
-					    pf_vf_mbox_thread_main, dev);
+		rc = plt_thread_create_control(&dev->sync.pfvf_msg_thread, name,
+				pf_vf_mbox_thread_main, dev);
 		if (rc != 0) {
 			plt_err("Failed to create thread for VF mbox handling\n");
 			goto thread_fail;
@@ -1520,7 +1520,7 @@ stop_msg_thrd:
 	if (dev->sync.start_thread) {
 		dev->sync.start_thread = false;
 		pthread_cond_signal(&dev->sync.pfvf_msg_cond);
-		pthread_join(dev->sync.pfvf_msg_thread, NULL);
+		plt_thread_join(dev->sync.pfvf_msg_thread, NULL);
 	}
 thread_fail:
 	pthread_mutex_destroy(&dev->sync.mutex);
@@ -1552,7 +1552,7 @@ dev_fini(struct dev *dev, struct plt_pci_device *pci_dev)
 	if (dev->sync.start_thread) {
 		dev->sync.start_thread = false;
 		pthread_cond_signal(&dev->sync.pfvf_msg_cond);
-		pthread_join(dev->sync.pfvf_msg_thread, NULL);
+		plt_thread_join(dev->sync.pfvf_msg_thread, NULL);
 		pthread_mutex_destroy(&dev->sync.mutex);
 		pthread_cond_destroy(&dev->sync.pfvf_msg_cond);
 	}

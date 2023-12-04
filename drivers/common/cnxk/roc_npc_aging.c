@@ -280,9 +280,9 @@ npc_aging_ctrl_thread_create(struct roc_npc *roc_npc,
 			goto done;
 
 		flow_age->aged_flows_get_thread_exit = false;
-		if (plt_ctrl_thread_create(&flow_age->aged_flows_poll_thread,
-					   "Aged Flows Get Ctrl Thread", NULL,
-					   npc_aged_flows_get, roc_npc) != 0) {
+		if (plt_thread_create_control(&flow_age->aged_flows_poll_thread,
+					      "Aged Flows Get Ctrl Thread",
+					      npc_aged_flows_get, roc_npc) != 0) {
 			plt_err("Failed to create thread for age flows");
 			npc_aged_flows_bitmap_free(roc_npc);
 			errcode = NPC_ERR_ACTION_NOTSUP;
