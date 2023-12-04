@@ -1724,7 +1724,7 @@ do_tx(struct lcore_info *li, uint16_t cnt, uint16_t tx_port,
 static char *
 pretty_number(uint64_t n, char *buf)
 {
-	char p[6][4];
+	char p[6][5];
 	int i = 0;
 	int off = 0;
 

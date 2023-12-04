@@ -351,6 +351,8 @@ ree_enqueue(struct roc_ree_qp *qp, struct rte_regex_ops *op,
 	return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 static uint16_t
 cn9k_ree_enqueue_burst(struct rte_regexdev *dev, uint16_t qp_id,
 		       struct rte_regex_ops **ops, uint16_t nb_ops)
@@ -386,6 +388,7 @@ cn9k_ree_enqueue_burst(struct rte_regexdev *dev, uint16_t qp_id,
 
 	return count;
 }
+#pragma GCC diagnostic pop
 
 static inline void
 ree_dequeue_post_process(struct rte_regex_ops *ops)

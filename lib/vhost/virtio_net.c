@@ -1058,7 +1058,7 @@ vhost_enqueue_single_packed(struct virtio_net *dev,
 	uint16_t buf_id = 0;
 	uint32_t len = 0;
 	uint16_t desc_count;
-	uint32_t size = pkt->pkt_len + sizeof(struct virtio_net_hdr_mrg_rxbuf);
+	uint64_t size = pkt->pkt_len + sizeof(struct virtio_net_hdr_mrg_rxbuf);
 	uint16_t num_buffers = 0;
 	uint32_t buffer_len[vq->size];
 	uint16_t buffer_buf_id[vq->size];
@@ -1564,7 +1564,7 @@ vhost_enqueue_async_packed(struct virtio_net *dev,
 	uint16_t buf_id = 0;
 	uint32_t len = 0;
 	uint16_t desc_count = 0;
-	uint32_t size = pkt->pkt_len + sizeof(struct virtio_net_hdr_mrg_rxbuf);
+	uint64_t size = pkt->pkt_len + sizeof(struct virtio_net_hdr_mrg_rxbuf);
 	uint32_t buffer_len[vq->size];
 	uint16_t buffer_buf_id[vq->size];
 	uint16_t buffer_desc_count[vq->size];
