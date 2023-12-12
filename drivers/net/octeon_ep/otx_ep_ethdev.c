@@ -752,7 +752,6 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	if (otx_epdev_init(otx_epvf))
 		return -ENOMEM;
 	if (otx_epvf->chip_id == PCI_DEVID_CN9K_EP_NET_VF ||
-	    otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CNF95O_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CN10KA_EP_NET_VF ||
@@ -764,6 +763,9 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	} else if (otx_epvf->chip_id == PCI_DEVID_OCTEONTX_EP_VF) {
 		otx_epvf->pkind = SDP_PKIND;
 		otx_ep_info("Using pkind %d.\n", otx_epvf->pkind);
+	} else if (otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF) {
+		otx_epvf->pkind = SDP_OTX2_PKIND;
+		otx_ep_info("using pkind %d\n", otx_epvf->pkind);
 	} else {
 		otx_ep_err("Invalid chip id\n");
 		return -EINVAL;
