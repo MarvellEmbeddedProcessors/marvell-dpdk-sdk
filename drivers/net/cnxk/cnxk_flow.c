@@ -40,11 +40,12 @@ const struct cnxk_rte_flow_term_info term[] = {
 	[RTE_FLOW_ITEM_TYPE_TX_QUEUE] = {ROC_NPC_ITEM_TYPE_TX_QUEUE,
 					 sizeof(struct rte_flow_item_tx_queue)},
 	[RTE_FLOW_ITEM_TYPE_REPRESENTED_PORT] = {ROC_NPC_ITEM_TYPE_REPRESENTED_PORT,
-						 sizeof(struct rte_flow_item_ethdev)}};
+						 sizeof(struct rte_flow_item_ethdev)},
+	[RTE_FLOW_ITEM_TYPE_PPPOES] = {ROC_NPC_ITEM_TYPE_PPPOES,
+				       sizeof(struct rte_flow_item_pppoe)}};
 
 static int
-npc_rss_action_validate(struct rte_eth_dev *eth_dev,
-			const struct rte_flow_attr *attr,
+npc_rss_action_validate(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 			const struct rte_flow_action *act)
 {
 	const struct rte_flow_action_rss *rss;
