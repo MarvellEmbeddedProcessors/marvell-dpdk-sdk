@@ -538,6 +538,29 @@ pf_vf_mbox_send_up_msg(struct dev *dev, void *rec_msg)
 }
 
 static int
+mbox_up_handler_rep_repte_notify(struct dev *dev, struct rep_repte_req *req, struct msg_rsp *rsp)
+{
+	int rc = 0;
+
+	plt_base_dbg("pf:%d/vf:%d msg id 0x%x (%s) from: pf:%d/vf:%d", dev_get_pf(dev->pf_func),
+		     dev_get_vf(dev->pf_func), req->hdr.id, mbox_id2name(req->hdr.id),
+		     dev_get_pf(req->hdr.pcifunc), dev_get_vf(req->hdr.pcifunc));
+
+	plt_base_dbg("repte pcifunc %x, enable %d", req->repte_pcifunc, req->enable);
+
+	if (dev->ops && dev->ops->repte_notify) {
+		rc = dev->ops->repte_notify(dev->roc_nix, req->repte_pcifunc,
+					    req->enable);
+		if (rc < 0)
+			plt_err("Failed to sent new representee %x notification to %s",
+				req->repte_pcifunc, (req->enable == true) ? "enable" : "disable");
+	}
+
+	rsp->hdr.rc = rc;
+	return rc;
+}
+
+static int
 mbox_up_handler_mcs_intr_notify(struct dev *dev, struct mcs_intr_info *info, struct msg_rsp *rsp)
 {
 	struct roc_mcs_event_desc desc = {0};
@@ -711,6 +734,7 @@ mbox_process_msgs_up(struct dev *dev, struct mbox_msghdr *req)
 	}
 		MBOX_UP_CGX_MESSAGES
 		MBOX_UP_MCS_MESSAGES
+		MBOX_UP_REP_MESSAGES
 #undef M
 	}
 

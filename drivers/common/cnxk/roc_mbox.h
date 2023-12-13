@@ -357,9 +357,12 @@ struct mbox_msghdr {
 
 #define MBOX_UP_MCS_MESSAGES M(MCS_INTR_NOTIFY, 0xE00, mcs_intr_notify, mcs_intr_info, msg_rsp)
 
+#define MBOX_UP_REP_MESSAGES						       \
+M(REP_REPTE_NOTIFY, 0xEF1, rep_repte_notify, rep_repte_req, msg_rsp)
+
 enum {
 #define M(_name, _id, _1, _2, _3) MBOX_MSG_##_name = _id,
-	MBOX_MESSAGES MBOX_UP_CGX_MESSAGES MBOX_UP_MCS_MESSAGES
+	MBOX_MESSAGES MBOX_UP_CGX_MESSAGES MBOX_UP_MCS_MESSAGES MBOX_UP_REP_MESSAGES
 #undef M
 };
 
@@ -2798,5 +2801,11 @@ struct nix_spi_to_sa_delete_req {
 	struct mbox_msghdr hdr;
 	uint16_t __io hash_index;
 	uint8_t __io way;
+};
+
+struct rep_repte_req {
+	struct mbox_msghdr hdr;
+	uint16_t __io repte_pcifunc;
+	bool __io enable;
 };
 #endif /* __ROC_MBOX_H__ */
