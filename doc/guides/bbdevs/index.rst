@@ -16,3 +16,4 @@ Baseband Device Drivers
     acc100
     acc200
     la12xx
+    octeon_ep

@@ -12,6 +12,7 @@ drivers = [
         'la12xx',
         'null',
         'turbo_sw',
+        'octeon_ep',
 ]
 
 log_prefix = 'pmd.bb'
