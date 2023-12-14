@@ -37,6 +37,9 @@ Features of the CNXK Ethdev PMD are:
 - Inline IPsec processing support
 - Ingress meter support
 - Queue based priority flow control support
+- Port representors
+- Represented port pattern matching and action
+- Port representor pattern matching and action
 
 Prerequisites
 -------------
@@ -637,6 +640,41 @@ Runtime Config Options for inline device
    With the above configuration, driver would enable packet inject from ARM cores
    to crypto to process and send back in Rx path.
 
+Port Representors
+-----------------
+
+The CNXK driver supports port representor model by adding virtual ethernet
+ports providing a logical representation in DPDK for physical function(PF) or
+SR-IOV virtual function (VF) devices for control and monitoring.
+
+Base device or parent device underneath the representor ports is a eswitch
+device which is not a cnxk ethernet device but has NIC RX and TX capabilities.
+Each representor port is represented by a RQ and SQ pair of this eswitch
+device.
+
+Implementation supports representors for both physical function and virtual
+function.
+
+Port representor ethdev instances can be spawned on an as needed basis
+through configuration parameters passed to the driver of the underlying
+base device using devargs ``-a <base PCI BDF>,representor=pf*vf*``
+
+.. note::
+
+   Representor ports to be created for respective representees should be
+   defined via standard representor devargs patterns
+   Eg. To create a representor for representee PF1VF0, devargs to be passed
+   is ``-a <base PCI BDF>,representor=pf01vf0``
+
+   Implementation supports creation of multiple port representors with pattern:
+   ``-a <base PCI BDF>,representor=[pf0vf[1,2],pf1vf[2-5]]``
+
+Port representor PMD supports following operations:
+
+- Get and clear VF statistics
+- Set mac address
+- Flow operations - create, validate, destroy, query, flush, dump
+
 Debugging Options
 -----------------
 
@@ -650,4 +688,8 @@ Debugging Options
    | 1 | NIX        | --log-level='pmd\.net.cnxk,8'                         |
    +---+------------+-------------------------------------------------------+
    | 2 | NPC        | --log-level='pmd\.net.cnxk\.flow,8'                   |
+   +---+------------+-------------------------------------------------------+
+   | 3 | REP        | --log-level='pmd\.net.cnxk\.rep,8'                    |
+   +---+------------+-------------------------------------------------------+
+   | 4 | ESW        | --log-level='pmd\.net.cnxk\.esw,8'                    |
    +---+------------+-------------------------------------------------------+
