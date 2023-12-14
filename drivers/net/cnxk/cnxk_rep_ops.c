@@ -486,19 +486,151 @@ cnxk_rep_tx_queue_release(struct rte_eth_dev *ethdev, uint16_t queue_id)
 		plt_err("Failed to release txq %d, rc=%d", rc, txq->qid);
 }
 
+static int
+process_eth_stats(struct cnxk_rep_dev *rep_dev, cnxk_rep_msg_ack_data_t *adata, cnxk_rep_msg_t msg)
+{
+	cnxk_rep_msg_eth_stats_meta_t msg_st_meta;
+	uint32_t len = 0, rc;
+	void *buffer;
+	size_t size;
+
+	size = CNXK_REP_MSG_MAX_BUFFER_SZ;
+	buffer = plt_zmalloc(size, 0);
+	if (!buffer) {
+		plt_err("Failed to allocate mem");
+		rc = -ENOMEM;
+		goto fail;
+	}
+
+	cnxk_rep_msg_populate_header(buffer, &len);
+
+	msg_st_meta.portid = rep_dev->rep_id;
+	cnxk_rep_msg_populate_command_meta(buffer, &len, &msg_st_meta,
+					   sizeof(cnxk_rep_msg_eth_stats_meta_t), msg);
+	cnxk_rep_msg_populate_msg_end(buffer, &len);
+
+	rc = cnxk_rep_msg_send_process(rep_dev, buffer, len, adata);
+	if (rc) {
+		plt_err("Failed to process the message, err %d", rc);
+		goto fail;
+	}
+
+	rte_free(buffer);
+
+	return 0;
+fail:
+	rte_free(buffer);
+	return rc;
+}
+
+static int
+native_repte_eth_stats(struct cnxk_rep_dev *rep_dev, struct rte_eth_stats *stats)
+{
+	struct roc_nix_stats nix_stats;
+	int rc = 0;
+
+	rc = roc_eswitch_nix_repte_stats(&rep_dev->parent_dev->nix, rep_dev->hw_func, &nix_stats);
+	if (rc) {
+		plt_err("Failed to get stats for representee %x, err %d", rep_dev->hw_func, rc);
+		goto fail;
+	}
+
+	memset(stats, 0, sizeof(struct rte_eth_stats));
+	stats->opackets = nix_stats.tx_ucast;
+	stats->opackets += nix_stats.tx_mcast;
+	stats->opackets += nix_stats.tx_bcast;
+	stats->oerrors = nix_stats.tx_drop;
+	stats->obytes = nix_stats.tx_octs;
+
+	stats->ipackets = nix_stats.rx_ucast;
+	stats->ipackets += nix_stats.rx_mcast;
+	stats->ipackets += nix_stats.rx_bcast;
+	stats->imissed = nix_stats.rx_drop;
+	stats->ibytes = nix_stats.rx_octs;
+	stats->ierrors = nix_stats.rx_err;
+
+	return 0;
+fail:
+	return rc;
+}
+
 int
 cnxk_rep_stats_get(struct rte_eth_dev *ethdev, struct rte_eth_stats *stats)
 {
-	PLT_SET_USED(ethdev);
-	PLT_SET_USED(stats);
+	struct cnxk_rep_dev *rep_dev = cnxk_rep_pmd_priv(ethdev);
+	struct rte_eth_stats vf_stats;
+	cnxk_rep_msg_ack_data_t adata;
+	int rc;
+
+	/* If representor not representing any active VF, return 0 */
+	if (!rep_dev->is_vf_active)
+		return 0;
+
+	if (rep_dev->native_repte) {
+		/* For representees which are independent */
+		rc = native_repte_eth_stats(rep_dev, &vf_stats);
+		if (rc) {
+			plt_err("Failed to get stats for vf rep %x (hw_func %x), err %d",
+				rep_dev->port_id, rep_dev->hw_func, rc);
+			goto fail;
+		}
+	} else {
+		/* For representees which are part of companian app */
+		rc = process_eth_stats(rep_dev, &adata, CNXK_REP_MSG_ETH_STATS_GET);
+		if (rc || adata.u.sval < 0) {
+			if (adata.u.sval < 0)
+				rc = adata.u.sval;
+
+			plt_err("Failed to get stats for vf rep %x, err %d", rep_dev->port_id, rc);
+		}
+
+		if (adata.size != sizeof(struct rte_eth_stats)) {
+			rc = -EINVAL;
+			plt_err("Incomplete stats received for vf rep %d", rep_dev->port_id);
+			goto fail;
+		}
+
+		rte_memcpy(&vf_stats, adata.u.data, adata.size);
+	}
+
+	stats->q_ipackets[0] = vf_stats.ipackets;
+	stats->q_ibytes[0] = vf_stats.ibytes;
+	stats->ipackets = vf_stats.ipackets;
+	stats->ibytes = vf_stats.ibytes;
+
+	stats->q_opackets[0] = vf_stats.opackets;
+	stats->q_obytes[0] = vf_stats.obytes;
+	stats->opackets = vf_stats.opackets;
+	stats->obytes = vf_stats.obytes;
+
+	plt_rep_dbg("Input packets %ld stats->ipackets %ld Output %ld stats->opacket %ld",
+		    stats->q_ipackets[0], stats->ipackets, stats->q_opackets[0], stats->opackets);
+
 	return 0;
+fail:
+	return rc;
 }
 
 int
 cnxk_rep_stats_reset(struct rte_eth_dev *ethdev)
 {
-	PLT_SET_USED(ethdev);
-	return 0;
+	struct cnxk_rep_dev *rep_dev = cnxk_rep_pmd_priv(ethdev);
+	cnxk_rep_msg_ack_data_t adata;
+	int rc = 0;
+
+	/* If representor not representing any active VF, return 0 */
+	if (!rep_dev->is_vf_active)
+		return 0;
+
+	rc = process_eth_stats(rep_dev, &adata, CNXK_REP_MSG_ETH_STATS_CLEAR);
+	if (rc || adata.u.sval < 0) {
+		if (adata.u.sval < 0)
+			rc = adata.u.sval;
+
+		plt_err("Failed to clear stats for vf rep %x, err %d", rep_dev->port_id, rc);
+	}
+
+	return rc;
 }
 
 int
