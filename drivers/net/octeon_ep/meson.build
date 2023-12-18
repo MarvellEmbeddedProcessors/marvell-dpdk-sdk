@@ -35,7 +35,7 @@ if arch_subdir == 'x86'
     endif
 endif
 
-extra_flags = ['-Wno-strict-aliasing']
+extra_flags = ['-Wno-strict-aliasing', '-Wno-array-bounds']
 foreach flag: extra_flags
     if cc.has_argument(flag)
         cflags += flag
