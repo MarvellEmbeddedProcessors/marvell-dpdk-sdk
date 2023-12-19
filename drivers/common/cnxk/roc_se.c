@@ -253,8 +253,8 @@ int
 roc_se_auth_key_set(struct roc_se_ctx *se_ctx, roc_se_auth_type type, const uint8_t *key,
 		    uint16_t key_len, uint16_t mac_len)
 {
-	struct roc_se_pdcp_ctx *pctx;
 	struct roc_se_kasumi_ctx *k_ctx;
+	struct roc_se_pdcp_ctx *pctx;
 	struct roc_se_context *fctx;
 	uint8_t opcode_minor;
 	bool chained_op;
