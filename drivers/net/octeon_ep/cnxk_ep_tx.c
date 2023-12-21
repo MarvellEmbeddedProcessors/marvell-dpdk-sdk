@@ -5,8 +5,8 @@
 #include "cnxk_ep_vf.h"
 #include "otx_ep_rxtx.h"
 
-static uint32_t
-cnxk_vf_update_read_index(struct otx_ep_instr_queue *iq)
+uint32_t
+cnxk_ep_check_tx_ism_mem(struct otx_ep_instr_queue *iq)
 {
 	uint32_t val;
 
@@ -15,8 +15,8 @@ cnxk_vf_update_read_index(struct otx_ep_instr_queue *iq)
 	 * number of PCIe writes.
 	 */
 	val = __atomic_load_n(iq->inst_cnt_ism, __ATOMIC_RELAXED);
-	iq->inst_cnt += val - iq->inst_cnt_ism_prev;
-	iq->inst_cnt_ism_prev = val;
+	iq->inst_cnt += val - iq->inst_cnt_prev;
+	iq->inst_cnt_prev = val;
 
 	if (val > (uint32_t)(1 << 31)) {
 		/* Only subtract the packet count in the HW counter
@@ -31,9 +31,34 @@ cnxk_vf_update_read_index(struct otx_ep_instr_queue *iq)
 			rte_mb();
 		}
 
-		iq->inst_cnt_ism_prev = 0;
+		iq->inst_cnt_prev = 0;
 	}
 	rte_write64(OTX2_SDP_REQUEST_ISM, iq->inst_cnt_reg);
+
+	/* Modulo of the new index with the IQ size will give us
+	 * the new index.
+	 */
+	return iq->inst_cnt & (iq->nb_desc - 1);
+}
+
+uint32_t
+cnxk_ep_check_tx_pkt_reg(struct otx_ep_instr_queue *iq)
+{
+	uint32_t val;
+
+	val = rte_read32(iq->inst_cnt_reg);
+	iq->inst_cnt += val - iq->inst_cnt_prev;
+	iq->inst_cnt_prev = val;
+
+	if (val > (uint32_t)(1 << 31)) {
+		/* Only subtract the packet count in the HW counter
+		 * when count above halfway to saturation.
+		 */
+		rte_write64((uint64_t)val, iq->inst_cnt_reg);
+		rte_mb();
+
+		iq->inst_cnt_prev = 0;
+	}
 
 	/* Modulo of the new index with the IQ size will give us
 	 * the new index.
@@ -47,7 +72,7 @@ cnxk_ep_flush_iq(struct otx_ep_instr_queue *iq)
 	uint32_t instr_processed = 0;
 	uint32_t cnt = 0;
 
-	iq->otx_read_index = cnxk_vf_update_read_index(iq);
+	iq->otx_read_index = iq->update_read_index(iq);
 
 	if (unlikely(iq->flush_index == iq->otx_read_index))
 		return;

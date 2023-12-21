@@ -30,6 +30,12 @@ otx_ep_incr_index(uint32_t index, uint32_t count, uint32_t max)
 	return ((index + count) & (max - 1));
 }
 
+uint32_t
+cnxk_ep_check_tx_pkt_reg(struct otx_ep_instr_queue *iq);
+
+uint32_t
+cnxk_ep_check_tx_ism_mem(struct otx_ep_instr_queue *iq);
+
 uint16_t
 otx_ep_xmit_pkts(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts);
 
