@@ -11,6 +11,18 @@ and **Cavium OCTEON** families of adapters in SR-IOV context.
 More information can be found at `Marvell Official Website
 <https://www.marvell.com/content/dam/marvell/en/public-collateral/embedded-processors/marvell-liquidio-III-solutions-brief.pdf>`_.
 
+Runtime Config Options
+----------------------
+
+- ``Rx&Tx ISM memory accesses enable`` (default ``0``)
+
+   PMD supports 2 modes for checking Rx & Tx packet count, PMD may read the packet count directly
+   from hardware registers or it may read from ISM memory, this may be selected at runtime
+   using ``ism_enable`` ``devargs`` parameter.
+
+   For example::
+
+      -a 0002:02:00.0,ism_enable=1
 
 Prerequisites
 -------------
