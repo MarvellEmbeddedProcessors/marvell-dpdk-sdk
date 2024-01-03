@@ -5,6 +5,7 @@ DPDK_22 {
 	__rte_eventdev_trace_deq_burst;
 	__rte_eventdev_trace_enq_burst;
 	__rte_eventdev_trace_eth_tx_adapter_enqueue;
+	__rte_eventdev_trace_port_profile_switch;
 	__rte_eventdev_trace_timer_arm_burst;
 	__rte_eventdev_trace_timer_arm_tmo_tick_burst;
 	__rte_eventdev_trace_timer_cancel_burst;
