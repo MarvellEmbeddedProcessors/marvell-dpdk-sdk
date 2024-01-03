@@ -706,12 +706,11 @@ mcs_stats_check(struct rte_security_ctx *ctx, enum mcs_op op,
 
 		rte_security_macsec_sc_stats_get(ctx, rx_sc_id,
 				RTE_SECURITY_MACSEC_DIR_RX, &sc_stat);
-#define FIXME 0
-#if FIXME /* pkt_unchecked_cnt is getting increased instead of pkt_ok_cnt */
+
 		if ((opts->check_decap_stats || opts->check_verify_only_stats) &&
 				sc_stat.pkt_ok_cnt != 1)
 			return TEST_FAILED;
-#endif
+
 		if (opts->check_pkts_invalid_stats && sc_stat.pkt_notvalid_cnt != 1)
 			return TEST_FAILED;
 
