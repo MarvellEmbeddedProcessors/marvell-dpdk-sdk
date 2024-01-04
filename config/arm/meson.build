@@ -86,7 +86,7 @@ part_number_config_arm = {
         ]
     },
     '0xd49': {
-        'march': 'armv8.5-a',
+        'march': 'armv9-a',
         'march_features': ['sve2'],
         'flags': [
             ['RTE_MACHINE', '"neoverse-n2"'],
@@ -613,7 +613,7 @@ if update_flags
     # probe supported archs and their features
     candidate_march = ''
     if part_number_config.has_key('march')
-        supported_marchs = ['armv8.6-a', 'armv8.5-a', 'armv8.4-a', 'armv8.3-a',
+        supported_marchs = ['armv9-a', 'armv8.6-a', 'armv8.5-a', 'armv8.4-a', 'armv8.3-a',
                             'armv8.2-a', 'armv8.1-a', 'armv8-a']
         check_compiler_support = false
         foreach supported_march: supported_marchs
