@@ -246,8 +246,6 @@ struct otx_ep_instr_queue {
 	/* OTX_EP instruction count register for this ring. */
 	void *inst_cnt_reg;
 
-	uint32_t (*update_read_index)(struct otx_ep_instr_queue *iq);
-
 	/* Number of instructions pending to be posted to OCTEON 9. */
 	uint32_t fill_cnt;
 
@@ -263,6 +261,9 @@ struct otx_ep_instr_queue {
 
 	/* Number of  descriptors in this ring. */
 	uint32_t nb_desc;
+
+	/* Use ISM memory */
+	uint8_t ism_ena;
 
 	/* Size of the descriptor. */
 	uint8_t desc_size;
@@ -408,7 +409,8 @@ struct otx_ep_droq {
 	 */
 	void *pkts_sent_reg;
 
-	void (*check_rx_pkts)(struct otx_ep_droq *droq);
+	/* Use ISM memory */
+	uint8_t ism_ena;
 
 	/* Pointer to host memory copy of output packet count, set by ISM */
 	uint32_t *pkts_sent_ism;
