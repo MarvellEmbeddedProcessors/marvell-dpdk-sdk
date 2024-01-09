@@ -160,11 +160,7 @@ otx_ep_init_instr_queue(struct otx_ep_device *otx_ep, int iq_no, int num_descs,
 		otx_ep->io_qmask.iq64B |= (1ull << iq_no);
 
 	iq->iqcmd_64B = (conf->iq.instr_type == 64);
-
-	if (otx_ep->ism_ena)
-		iq->update_read_index = cnxk_ep_check_tx_ism_mem;
-	else
-		iq->update_read_index = cnxk_ep_check_tx_pkt_reg;
+	iq->ism_ena = otx_ep->ism_ena;
 
 	/* Set up IQ registers */
 	ret = otx_ep->fn_list.setup_iq_regs(otx_ep, iq_no);
@@ -373,11 +369,7 @@ otx_ep_init_droq(struct otx_ep_device *otx_ep, uint32_t q_no,
 
 	droq->refill_threshold = c_refill_threshold;
 	droq->rearm_data = otx_ep_set_rearm_data(otx_ep);
-
-	if (otx_ep->ism_ena)
-		droq->check_rx_pkts = cnxk_ep_check_rx_ism_mem;
-	else
-		droq->check_rx_pkts = cnxk_ep_check_rx_pkt_reg;
+	droq->ism_ena = otx_ep->ism_ena;
 
 	/* Set up OQ registers */
 	ret = otx_ep->fn_list.setup_oq_regs(otx_ep, q_no);

@@ -84,9 +84,10 @@ cnxk_ep_rx_refill(struct otx_ep_droq *droq)
 	rte_write32(desc_refilled, droq->pkts_credit_reg);
 }
 
-static inline void
-cnxk_ep_check_rx_ism_mem(struct otx_ep_droq *droq)
+static inline uint32_t
+cnxk_ep_check_rx_ism_mem(void *rx_queue)
 {
+	struct otx_ep_droq *droq = (struct otx_ep_droq *)rx_queue;
 	uint32_t new_pkts;
 	uint32_t val;
 
@@ -115,12 +116,14 @@ cnxk_ep_check_rx_ism_mem(struct otx_ep_droq *droq)
 	}
 
 	rte_write64(OTX2_SDP_REQUEST_ISM, droq->pkts_sent_reg);
-	droq->pkts_pending += new_pkts;
+
+	return new_pkts;
 }
 
-static inline void
-cnxk_ep_check_rx_pkt_reg(struct otx_ep_droq *droq)
+static inline uint32_t
+cnxk_ep_check_rx_pkt_reg(void *rx_queue)
 {
+	struct otx_ep_droq *droq = (struct otx_ep_droq *)rx_queue;
 	uint32_t new_pkts;
 	uint32_t val;
 
@@ -138,14 +141,17 @@ cnxk_ep_check_rx_pkt_reg(struct otx_ep_droq *droq)
 		droq->pkts_sent_prev = 0;
 	}
 
-	droq->pkts_pending += new_pkts;
+	return new_pkts;
 }
 
 static inline int16_t __rte_hot
 cnxk_ep_rx_pkts_to_process(struct otx_ep_droq *droq, uint16_t nb_pkts)
 {
+	const otx_ep_check_pkt_count_t cnxk_rx_pkt_count[2] = { cnxk_ep_check_rx_pkt_reg,
+								cnxk_ep_check_rx_ism_mem};
+
 	if (droq->pkts_pending < nb_pkts)
-		droq->check_rx_pkts(droq);
+		droq->pkts_pending += cnxk_rx_pkt_count[droq->ism_ena](droq);
 
 	return RTE_MIN(nb_pkts, droq->pkts_pending);
 }

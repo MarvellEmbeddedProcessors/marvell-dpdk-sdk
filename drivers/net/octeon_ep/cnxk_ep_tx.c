@@ -5,9 +5,10 @@
 #include "cnxk_ep_vf.h"
 #include "otx_ep_rxtx.h"
 
-uint32_t
-cnxk_ep_check_tx_ism_mem(struct otx_ep_instr_queue *iq)
+static inline uint32_t
+cnxk_ep_check_tx_ism_mem(void *tx_queue)
 {
+	struct otx_ep_instr_queue *iq = (struct otx_ep_instr_queue *)tx_queue;
 	uint32_t val;
 
 	/* Batch subtractions from the HW counter to reduce PCIe traffic
@@ -41,9 +42,10 @@ cnxk_ep_check_tx_ism_mem(struct otx_ep_instr_queue *iq)
 	return iq->inst_cnt & (iq->nb_desc - 1);
 }
 
-uint32_t
-cnxk_ep_check_tx_pkt_reg(struct otx_ep_instr_queue *iq)
+static inline uint32_t
+cnxk_ep_check_tx_pkt_reg(void *tx_queue)
 {
+	struct otx_ep_instr_queue *iq = (struct otx_ep_instr_queue *)tx_queue;
 	uint32_t val;
 
 	val = rte_read32(iq->inst_cnt_reg);
@@ -69,10 +71,13 @@ cnxk_ep_check_tx_pkt_reg(struct otx_ep_instr_queue *iq)
 static inline void
 cnxk_ep_flush_iq(struct otx_ep_instr_queue *iq)
 {
+	const otx_ep_check_pkt_count_t cnxk_tx_pkt_count[2] = { cnxk_ep_check_tx_pkt_reg,
+								cnxk_ep_check_tx_ism_mem};
+
 	uint32_t instr_processed = 0;
 	uint32_t cnt = 0;
 
-	iq->otx_read_index = iq->update_read_index(iq);
+	iq->otx_read_index = cnxk_tx_pkt_count[iq->ism_ena](iq);
 
 	if (unlikely(iq->flush_index == iq->otx_read_index))
 		return;
