@@ -56,6 +56,13 @@
 #define L3FWD_HASH_ENTRIES		(1024*1024*1)
 #endif
 
+struct thread_context {
+	pthread_t id;
+};
+
+int
+check_lcore(unsigned int lcore_id);
+
 struct parm_cfg {
 	const char *rule_ipv4_name;
 	const char *rule_ipv6_name;
@@ -251,8 +258,8 @@ acl_main_loop(__rte_unused void *dummy);
 int
 em_main_loop(__rte_unused void *dummy);
 
-int
-lpm_main_loop(__rte_unused void *dummy);
+void *
+lpm_main_loop(void *dummy);
 
 int
 fib_main_loop(__rte_unused void *dummy);

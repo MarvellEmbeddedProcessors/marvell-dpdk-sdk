@@ -14,6 +14,7 @@
 #include <getopt.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 #include <rte_common.h>
 #include <rte_vect.h>
@@ -102,6 +103,8 @@ struct lcore_params {
 	uint8_t lcore_id;
 } __rte_cache_aligned;
 
+#define TEST_FAILED -1
+
 static struct lcore_params lcore_params_array[MAX_LCORE_PARAMS];
 static struct lcore_params lcore_params_array_default[] = {
 	{0, 0, 2},
@@ -172,7 +175,7 @@ static struct l3fwd_lkp_mode l3fwd_lpm_lkp = {
 	.setup                  = setup_lpm,
 	.check_ptype		= lpm_check_ptype,
 	.cb_parse_ptype		= lpm_cb_parse_ptype,
-	.main_loop              = lpm_main_loop,
+	.main_loop              = NULL,
 	.get_ipv4_lookup_struct = lpm_get_ipv4_l3fwd_lookup_struct,
 	.get_ipv6_lookup_struct = lpm_get_ipv6_l3fwd_lookup_struct,
 	.free_routes			= lpm_free_routes,
@@ -303,7 +306,7 @@ check_lcore_params(void)
 			return -1;
 		}
 		lcore = lcore_params[i].lcore_id;
-		if (!rte_lcore_is_enabled(lcore)) {
+		if (!check_lcore(lcore)) {
 			printf("error: lcore %hhu is not enabled in lcore mask\n", lcore);
 			return -1;
 		}
@@ -998,6 +1001,18 @@ print_ethaddr(const char *name, const struct rte_ether_addr *eth_addr)
 }
 
 int
+check_lcore(unsigned int lcore_id)
+{
+	int i;
+
+	for (i = 0; i < nb_lcore_params; ++i) {
+		if (lcore_id == lcore_params[i].lcore_id)
+			return 1;
+	}
+	return 0;
+}
+
+int
 init_mem(uint16_t portid, unsigned int nb_mbuf)
 {
 #ifdef RTE_LIB_EVENTDEV
@@ -1009,9 +1024,11 @@ init_mem(uint16_t portid, unsigned int nb_mbuf)
 	char s[64];
 
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
-		if (rte_lcore_is_enabled(lcore_id) == 0)
+		if (check_lcore(lcore_id))
+			goto found;
+		else
 			continue;
-
+found:
 		if (numa_on)
 			socketid = rte_lcore_to_socket_id(lcore_id);
 		else
@@ -1218,7 +1235,8 @@ l3fwd_poll_resource_setup(void)
 	struct lcore_conf *qconf;
 	uint16_t queueid, portid;
 	unsigned int nb_ports;
-	unsigned int lcore_id;
+	unsigned int lcore_id, i;
+	int tx_cores = 0;
 	int ret;
 
 	if (check_lcore_params() < 0)
@@ -1234,6 +1252,11 @@ l3fwd_poll_resource_setup(void)
 		rte_exit(EXIT_FAILURE, "check_port_config failed\n");
 
 	nb_lcores = rte_lcore_count();
+	for (i = 0; i < RTE_MAX_LCORE; i++) {
+		if (check_lcore(i))
+			tx_cores++;
+	}
+	nb_lcores = tx_cores;
 
 	/* initialize all ports */
 	RTE_ETH_FOREACH_DEV(portid) {
@@ -1246,7 +1269,7 @@ l3fwd_poll_resource_setup(void)
 		}
 
 		/* init port */
-		printf("Initializing port %d ... ", portid );
+		printf("Initializing port %d ...\n", portid);
 		fflush(stdout);
 
 		nb_rx_queue = get_port_n_rx_queues(portid);
@@ -1349,9 +1372,11 @@ l3fwd_poll_resource_setup(void)
 		/* init one TX queue per couple (lcore,port) */
 		queueid = 0;
 		for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
-			if (rte_lcore_is_enabled(lcore_id) == 0)
+			if (check_lcore(lcore_id))
+				goto found;
+			else
 				continue;
-
+found:
 			if (numa_on)
 				socketid =
 				(uint8_t)rte_lcore_to_socket_id(lcore_id);
@@ -1381,8 +1406,11 @@ l3fwd_poll_resource_setup(void)
 	}
 
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
-		if (rte_lcore_is_enabled(lcore_id) == 0)
+		if (check_lcore(lcore_id))
+			goto found2;
+		else
 			continue;
+found2:
 		qconf = &lcore_conf[lcore_id];
 		printf("\nInitializing rx queues on lcore %u ... ", lcore_id );
 		fflush(stdout);
@@ -1523,11 +1551,15 @@ main(int argc, char **argv)
 {
 #ifdef RTE_LIB_EVENTDEV
 	struct l3fwd_event_resources *evt_rsrc;
-	int i;
 #endif
+	struct thread_context thread_contexts[RTE_MAX_LCORE];
+	unsigned int non_eal_threads_count = 0;
+	unsigned int eal_threads_count = 0;
+	struct thread_context *t;
 	struct lcore_conf *qconf;
 	uint16_t queueid, portid;
-	unsigned int lcore_id;
+	unsigned int lcore_id, i;
+	unsigned int tid = 0;
 	uint8_t queue;
 	int ret;
 
@@ -1537,6 +1569,15 @@ main(int argc, char **argv)
 		rte_exit(EXIT_FAILURE, "Invalid EAL parameters\n");
 	argc -= ret;
 	argv += ret;
+
+	for (i = 0; i < RTE_MAX_LCORE; i++) {
+		if (!rte_lcore_has_role(i, ROLE_OFF))
+			eal_threads_count++;
+	}
+	if (eal_threads_count == 0) {
+		printf("Error: something is broken, no EAL thread detected.\n");
+		return TEST_FAILED;
+	}
 
 	force_quit = false;
 	signal(SIGINT, signal_handler);
@@ -1556,6 +1597,7 @@ main(int argc, char **argv)
 	ret = parse_args(argc, argv);
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Invalid L3FWD parameters\n");
+
 
 	/* Setup function pointers for lookup method. */
 	setup_l3fwd_lookup_tables();
@@ -1612,8 +1654,11 @@ main(int argc, char **argv)
 	printf("\n");
 
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
-		if (rte_lcore_is_enabled(lcore_id) == 0)
+		if (check_lcore(lcore_id))
+			goto found;
+		else
 			continue;
+found:
 		qconf = &lcore_conf[lcore_id];
 		for (queue = 0; queue < qconf->n_rx_queue; ++queue) {
 			portid = qconf->rx_queue_list[queue].port_id;
@@ -1627,7 +1672,14 @@ main(int argc, char **argv)
 
 	ret = 0;
 	/* launch per-lcore init on every lcore */
-	rte_eal_mp_remote_launch(l3fwd_lkp.main_loop, NULL, CALL_MAIN);
+	non_eal_threads_count = RTE_MAX_LCORE - eal_threads_count;
+	for (i = 0; i < non_eal_threads_count; i++) {
+		t = &thread_contexts[tid];
+		ret = pthread_create(&t->id, NULL, lpm_main_loop, t);
+		if (ret != 0)
+			printf("Cannot start send pkts thread: %d\n", ret);
+		tid++;
+	}
 
 #ifdef RTE_LIB_EVENTDEV
 	if (evt_rsrc->enabled) {
@@ -1660,7 +1712,10 @@ main(int argc, char **argv)
 	} else
 #endif
 	{
-		rte_eal_mp_wait_lcore();
+		for (i = 0 ; i < tid ; i++) {
+			t = &thread_contexts[i];
+			pthread_join(t->id, NULL);
+		}
 
 		RTE_ETH_FOREACH_DEV(portid) {
 			if ((enabled_port_mask & (1 << portid)) == 0)

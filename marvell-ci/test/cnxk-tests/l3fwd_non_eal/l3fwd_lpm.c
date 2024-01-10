@@ -26,6 +26,7 @@
 #include <rte_udp.h>
 #include <rte_lpm.h>
 #include <rte_lpm6.h>
+#include <pthread.h>
 
 #include "l3fwd.h"
 #include "l3fwd_common.h"
@@ -141,8 +142,8 @@ lpm_get_dst_port_with_ipv4(const struct lcore_conf *qconf, struct rte_mbuf *pkt,
 #endif
 
 /* main processing loop */
-int
-lpm_main_loop(__rte_unused void *dummy)
+void *
+lpm_main_loop(void *dummy)
 {
 	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
 	unsigned lcore_id;
@@ -153,9 +154,23 @@ lpm_main_loop(__rte_unused void *dummy)
 	struct lcore_conf *qconf;
 	const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) /
 		US_PER_S * BURST_TX_DRAIN_US;
+	pthread_t thread;
+	cpu_set_t cpuset;
+
+
+	RTE_SET_USED(dummy);
+	rte_thread_register();
+
+	if (!check_lcore(rte_lcore_id()))
+		return 0;
 
 	lcore_id = rte_lcore_id();
 	qconf = &lcore_conf[lcore_id];
+
+	CPU_ZERO(&cpuset);
+	CPU_SET(lcore_id, &cpuset);
+	thread = pthread_self();
+	pthread_setaffinity_np(thread, sizeof(cpuset), &cpuset);
 
 	const uint16_t n_rx_q = qconf->n_rx_queue;
 	const uint16_t n_tx_p = qconf->n_tx_port;
@@ -223,6 +238,7 @@ lpm_main_loop(__rte_unused void *dummy)
 		cur_tsc = rte_rdtsc();
 	}
 
+	rte_thread_unregister();
 	return 0;
 }
 
