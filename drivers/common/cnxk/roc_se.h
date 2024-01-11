@@ -5,6 +5,8 @@
 #ifndef __ROC_SE_H__
 #define __ROC_SE_H__
 
+#include "roc_constants.h"
+
 /* SE opcodes */
 #define ROC_SE_MAJOR_OP_FC	      0x33
 #define ROC_SE_FC_MINOR_OP_ENCRYPT    0x0
@@ -162,6 +164,15 @@ typedef enum {
 	ROC_SE_ERR_GC_ICV_MISCOMPARE = 0x4c,
 	ROC_SE_ERR_GC_DATA_UNALIGNED = 0x4d,
 
+	ROC_SE_ERR_SSL_RECORD_LEN_INVALID = 0x82,
+	ROC_SE_ERR_SSL_CTX_LEN_INVALID = 0x83,
+	ROC_SE_ERR_SSL_CIPHER_UNSUPPORTED = 0x84,
+	ROC_SE_ERR_SSL_MAC_UNSUPPORTED = 0x85,
+	ROC_SE_ERR_SSL_VERSION_UNSUPPORTED = 0x86,
+	ROC_SE_ERR_SSL_MAC_MISMATCH = 0x89,
+	ROC_SE_ERR_SSL_PKT_REPLAY_SEQ_OUT_OF_WINDOW = 0xC1,
+	ROC_SE_ERR_SSL_PKT_REPLAY_SEQ = 0xC9,
+
 	/* API Layer */
 	ROC_SE_ERR_REQ_PENDING = 0xfe,
 	ROC_SE_ERR_REQ_TIMEOUT = 0xff,
@@ -179,6 +190,12 @@ typedef enum {
 	ROC_SE_PDCP_MAC_LEN_64_BIT = 0x2,
 	ROC_SE_PDCP_MAC_LEN_128_BIT = 0x3
 } roc_se_pdcp_mac_len_type;
+
+typedef enum {
+	ROC_SE_IPSEC = 0x0,
+	ROC_SE_TLS = 0x1,
+	ROC_SE_FC = 0x2,
+} roc_se_op_type;
 
 struct roc_se_enc_context {
 	uint64_t iv_source : 1;
@@ -390,4 +407,7 @@ int __roc_api roc_se_ciph_key_set(struct roc_se_ctx *se_ctx, roc_se_cipher_type 
 void __roc_api roc_se_ctx_swap(struct roc_se_ctx *se_ctx);
 void __roc_api roc_se_ctx_init(struct roc_se_ctx *se_ctx);
 
+void __roc_api roc_se_hmac_opad_ipad_gen(roc_se_auth_type auth_type, const uint8_t *key,
+					 uint16_t length, uint8_t *opad_ipad,
+					 roc_se_op_type op_type);
 #endif /* __ROC_SE_H__ */
