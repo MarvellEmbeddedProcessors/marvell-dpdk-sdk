@@ -574,10 +574,9 @@ cnxk_nix_mtu_set(struct rte_eth_dev *eth_dev, uint16_t mtu)
 			buffsz = rte_pktmbuf_data_room_size(rxq_sp->qconf.mp);
 	}
 
-	if (!buffsz) {
-		plt_err("Unable to get min buf size");
-		goto exit;
-	}
+	/* Skip validation if RQ's are not yet setup */
+	if (!buffsz)
+		goto skip_buffsz_check;
 
 	buffsz -= RTE_PKTMBUF_HEADROOM;
 
