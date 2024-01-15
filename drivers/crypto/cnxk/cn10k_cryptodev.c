@@ -12,6 +12,7 @@
 
 #include "cn10k_cryptodev.h"
 #include "cn10k_cryptodev_ops.h"
+#include "cn10k_cryptodev_sec.h"
 #include "cn10k_ipsec.h"
 #include "cnxk_cryptodev.h"
 #include "cnxk_cryptodev_capabilities.h"
