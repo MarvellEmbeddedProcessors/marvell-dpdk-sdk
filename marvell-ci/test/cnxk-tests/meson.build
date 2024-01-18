@@ -82,6 +82,7 @@ test_subdirs_arm = [
         'cpt_t106_mode',
         'policer_test',
         'flow_aging',
+        'l3fwd_non_eal',
 ]
 
 test_subdirs_x86 = [
