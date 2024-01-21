@@ -89,6 +89,7 @@ part_number_config_arm = {
     '0xd49': {
         'march': 'armv9-a',
         'march_features': ['sve2'],
+        'fallback_march': 'armv8.5-a',
         'mcpu': 'neoverse-n2',
         'flags': [
             ['RTE_MACHINE', '"neoverse-n2"'],
@@ -640,14 +641,14 @@ if update_flags
 
     # probe supported archs and their features
     candidate_march = ''
+    supported_marchs = ['armv9-a', 'armv8.6-a', 'armv8.5-a', 'armv8.4-a',
+                        'armv8.3-a', 'armv8.2-a', 'armv8.1-a', 'armv8-a']
     if part_number_config.has_key('march')
         if part_number_config.get('force_march', false) or support_mcpu
             if cc.has_argument('-march=' +  part_number_config['march'])
                 candidate_march = part_number_config['march']
             endif
         else
-            supported_marchs = ['armv9-a', 'armv8.6-a', 'armv8.5-a', 'armv8.4-a', 'armv8.3-a',
-                                'armv8.2-a', 'armv8.1-a', 'armv8-a']
             check_compiler_support = false
             foreach supported_march: supported_marchs
                 if supported_march == part_number_config['march']
@@ -664,6 +665,16 @@ if update_flags
         endif
 
         if candidate_march != part_number_config['march']
+            if part_number_config.has_key('fallback_march') and not support_mcpu
+                fallback_march = part_number_config['fallback_march']
+                foreach supported_march: supported_marchs
+                    if (supported_march == fallback_march
+                        and cc.has_argument('-march=' + supported_march))
+                        candidate_march = supported_march
+                        break
+                    endif
+                endforeach
+            endif
             warning('Configuration march version is @0@, not supported.'
                     .format(part_number_config['march']))
             if candidate_march != ''
