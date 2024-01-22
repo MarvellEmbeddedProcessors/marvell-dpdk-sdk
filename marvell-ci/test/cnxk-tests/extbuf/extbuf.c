@@ -61,10 +61,12 @@
 #define EXIT(...)   rte_exit(EXIT_FAILURE, __VA_ARGS__)
 
 static bool keep_running = true;
+static bool is_cn9k;
 
 struct app_arg {
 	bool tx_mode;
 	bool perf_mode;
+	uint64_t pkt_type;
 	bool use_tx_compl;
 	bool event_tx_compl;
 	unsigned int n_queue;
@@ -77,6 +79,7 @@ struct queue_info {
 	uint64_t pkts;
 	uint64_t last_count;
 	uint64_t dropped;
+	uint64_t alloc_fail;
 } __rte_cache_aligned;
 
 struct packet_header {
@@ -104,8 +107,19 @@ struct thread_info {
 	bool launched;
 } __rte_cache_aligned;
 
+enum pkt_type {
+	P_DIR = 0,
+	P_INDIR = 1,
+	P_EXTBUF = 2,
+	P_DIR_INDIR = 3,
+	P_INDIR_DIR = 4,
+	P_INDIR_INDIR = 5,
+	P_DIR_INDIR_SG2 = 6,
+	P_DIR_DIR_SG2 = 7,
+	P_MAX,
+};
+
 struct rte_mempool *shinfo_pool;
-struct rte_mbuf_ext_shared_info *s[MAX_PKT_BURST];
 
 static void
 print_event_stats(struct global_event_resources *rsrc, bool show_pps)
@@ -215,6 +229,7 @@ initialize(struct port_info *pinfo, struct app_arg *arg)
 	struct rte_eth_conf port_lconf;
 	struct rte_eth_fc_conf fc_conf;
 	uint16_t nb_txd, nb_rxd;
+	uint64_t cache_sz;
 	char name[16];
 	int ret;
 	struct rte_eth_conf port_conf = {
@@ -234,19 +249,20 @@ initialize(struct port_info *pinfo, struct app_arg *arg)
 	portid = pinfo->portid;
 	pinfo->n_queue = arg->n_queue;
 
+	cache_sz = arg->perf_mode ? MEMPOOL_CACHE_SIZE : 0;
 	/* Create the mbuf pool. */
 	nb_mbufs = ((unsigned int)arg->n_desc + MAX_PKT_BURST +
 		   MEMPOOL_CACHE_SIZE) * MAX_NUM_LCORE;
 	snprintf(name, sizeof(name), "mbuf_pool_%u", portid);
 	pinfo->pool =
-		rte_pktmbuf_pool_create(name, nb_mbufs, MEMPOOL_CACHE_SIZE, 0,
+		rte_pktmbuf_pool_create(name, nb_mbufs, cache_sz, 0,
 					MTU, rte_socket_id());
 	if (pinfo->pool == NULL)
 		EXIT("Cannot init mbuf pool\n");
 
 	snprintf(name, sizeof(name), "mbuf_pinned_pool_%u", portid);
 	pinfo->pinned_pool =
-		rte_pktmbuf_pool_create(name, nb_mbufs, MEMPOOL_CACHE_SIZE, 0,
+		rte_pktmbuf_pool_create(name, nb_mbufs, cache_sz, 0,
 				MTU, rte_socket_id());
 	if (pinfo->pinned_pool == NULL)
 		EXIT("Cannot init mbuf pinned_pool\n");
@@ -266,11 +282,20 @@ initialize(struct port_info *pinfo, struct app_arg *arg)
 		EXIT("Error during getting device (port %u) info: %s\n", portid,
 		     strerror(-ret));
 
+	/* Check if it is CN9K */
+	if (!strcmp(dev_info.driver_name, "net_cn9k"))
+		is_cn9k = true;
+
 	port_lconf = port_conf;
 	/* Enable Multi Seg */
 	if (!(dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_MULTI_SEGS))
 		EXIT("Device doesn't support multi seg\n");
-	port_lconf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
+
+	/* Don't enable multi-seg to test vector path when running in pkt type based mode and
+	 * don't have to test packet type > P_EXTBUF
+	 */
+	if (!arg->pkt_type || (arg->pkt_type > 0x7))
+		port_lconf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
 
 	/* Disable Fast Free */
 	port_lconf.txmode.offloads &= ~RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
@@ -341,11 +366,11 @@ initialize(struct port_info *pinfo, struct app_arg *arg)
 	fflush(stdout);
 }
 
-static void
+static int
 finalize(struct port_info *pinfo)
 {
 	unsigned int portid;
-	int ret;
+	int ret = 0;
 
 	portid = pinfo->portid;
 
@@ -356,6 +381,13 @@ finalize(struct port_info *pinfo)
 		EXIT("rte_eth_dev_stop: err=%d, port=%d\n", ret, portid);
 	rte_eth_dev_close(portid);
 
+	if (!rte_mempool_full(pinfo->pool) || !rte_mempool_full(pinfo->pinned_pool)) {
+		ret = -EFAULT;
+		ERROR("Failed to get all pkts back to mempool's(%u, %u)\n",
+		      rte_mempool_in_use_count(pinfo->pool),
+		      rte_mempool_in_use_count(pinfo->pinned_pool));
+	}
+
 	/* Free mempool */
 	rte_mempool_free(pinfo->pool);
 
@@ -363,6 +395,7 @@ finalize(struct port_info *pinfo)
 		rte_mempool_free(pinfo->pinned_pool);
 	if (shinfo_pool)
 		rte_mempool_free(shinfo_pool);
+	return ret;
 }
 
 static void
@@ -375,9 +408,14 @@ dummy_free_cb(void *addr, void *opaque)
 static void
 free_cb_compl(void *addr, void *opaque)
 {
-	struct rte_mbuf *m = (struct rte_mbuf *)addr;
+	struct rte_mbuf *m = (((struct rte_mbuf *)addr) - 1);
+	struct rte_mbuf_ext_shared_info *s = opaque;
+
+	RTE_SET_USED(addr);
 	rte_pktmbuf_free(m);
-	rte_mempool_put(shinfo_pool, opaque);
+	if (s == NULL)
+		abort();
+	rte_mempool_put(shinfo_pool, s);
 }
 
 static void
@@ -404,7 +442,7 @@ launch_lcore_rx(void *args)
 	struct thread_info *tinfo = args;
 	struct queue_info *qinfo;
 	struct port_info *pinfo;
-	uint64_t *addr;
+	uint64_t *addr, off;
 
 	rte_mb();
 	lcore = rte_lcore_id();
@@ -428,11 +466,13 @@ launch_lcore_rx(void *args)
 				rte_prefetch0(rte_pktmbuf_mtod(m, void *));
 				addr = (uint64_t *)((uint64_t)m->buf_addr +
 						    m->data_off);
-				if (*(addr + 8) != MAGIC_PATTERN ||
-				    *(addr + 16) != MAGIC_PATTERN ||
-				    *(addr + 24) != MAGIC_PATTERN ||
-				    *(addr + 32) != MAGIC_PATTERN) {
-					ERROR("Invalid data received\n");
+				off = SEG_LEN;
+				while (off + 8 < m->pkt_len) {
+					if (*(addr + (off / 8)) != MAGIC_PATTERN) {
+						rte_pktmbuf_dump(stdout, m, -1);
+						ERROR("Invalid data received\n");
+					}
+					off += SEG_LEN;
 				}
 				rte_pktmbuf_free(m);
 			}
@@ -446,7 +486,7 @@ launch_lcore_rx(void *args)
 }
 
 static int
-launch_lcore_tx(void *args)
+launch_lcore_tx_extbuf(void *args)
 {
 	unsigned int lcore, portid, extra_bytes = 0, qid;
 	struct rte_mbuf_ext_shared_info s2, s3, s4, s5;
@@ -458,6 +498,7 @@ launch_lcore_tx(void *args)
 	int sent, flow = 0;
 	uint64_t usr_addr;
 	void *usrbuf;
+	int i;
 
 	rte_mb();
 	lcore = rte_lcore_id();
@@ -565,6 +606,10 @@ launch_lcore_tx(void *args)
 		}
 		m5->data_len += extra_bytes;
 		extra_bytes++;
+		/* Update magic pattern for extra bytes */
+		for (i = 0; i < m5->data_len ; i += SEG_LEN)
+			*(uint64_t *)((uint64_t)m5->buf_addr + 128 + i) = MAGIC_PATTERN;
+
 		setup_packet((struct packet_header *)m1->buf_addr, m1->pkt_len,
 			     portid, flow);
 
@@ -607,7 +652,10 @@ launch_lcore_tx(void *args)
 		qinfo->pkts += sent;
 
 		/* Detach the external buffers from m4 and m5 so
-		 * that those can be re-used again in next iteration
+		 * that those can be re-used again in next iteration.
+		 * This only works with tx_compl_ena=0 since we are relinking
+		 * m4 and m5 to different chain without knowing if the earlier
+		 * ones are transmitted.
 		 */
 		rte_pktmbuf_detach_extbuf(m4);
 		rte_pktmbuf_detach_extbuf(m5);
@@ -632,6 +680,7 @@ free_usrbuf:
 static int
 launch_lcore_tx_perf_compl(void *args)
 {
+	struct rte_mbuf_ext_shared_info *s[MAX_PKT_BURST];
 	unsigned int lcore, j, portid, qid;
 	struct rte_mbuf *m[MAX_PKT_BURST];
 	struct rte_mbuf *pinned_m[MAX_PKT_BURST];
@@ -672,7 +721,7 @@ launch_lcore_tx_perf_compl(void *args)
 		for (j = 0; j < MAX_PKT_BURST; j++) {
 			init_shinfo_compl(s[j]);
 			rte_pktmbuf_attach_extbuf(
-				m[j], pinned_m[j], (uint64_t)pinned_m[j],
+				m[j], pinned_m[j]->buf_addr, (uint64_t)pinned_m[j]->buf_addr,
 				sizeof(struct rte_mbuf), s[j]);
 			m[j]->data_len = sizeof(struct rte_mbuf);
 			m[j]->data_off = 0;
@@ -792,6 +841,319 @@ launch_lcore_tx_perf(void *args)
 	return 0;
 }
 
+static inline struct rte_mbuf *
+prepare_pkt_with_type(uint32_t portid, enum pkt_type type,
+		      struct rte_mempool *mp1, struct rte_mempool *mp2)
+{
+	struct rte_mbuf_ext_shared_info *s = NULL;
+	struct rte_mbuf *head = NULL, *next, *next2;
+
+	switch (type) {
+	default:
+		/* Fall through */
+	case P_DIR:
+		/* Direct(mp1) */
+		head = rte_pktmbuf_alloc(mp1);
+		if (!head)
+			goto error;
+		head->data_off = 0;
+		head->data_len = SEG_LEN * 2;
+		head->pkt_len = head->data_len;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(head, uint64_t *, SEG_LEN) = MAGIC_PATTERN;
+		break;
+	case P_INDIR:
+		/* Indirect(mp1->mp2) */
+		head = rte_pktmbuf_alloc(mp1);
+		if (!head)
+			goto error;
+
+		next = rte_pktmbuf_alloc(mp2);
+		if (!next)
+			goto error;
+		rte_pktmbuf_attach(head, next);
+		/* Release the attached mbuf reference */
+		rte_pktmbuf_free(next);
+		head->data_off = 64;
+		head->data_len = SEG_LEN * 2;
+		head->pkt_len = head->data_len;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(head, uint64_t *, SEG_LEN) = MAGIC_PATTERN;
+		break;
+	case P_EXTBUF:
+		/* EXT BUF(mp1->mp2) */
+		head = rte_pktmbuf_alloc(mp1);
+		if (!head)
+			goto error;
+
+		if (rte_mempool_get(shinfo_pool, (void **)&s)) {
+			ERROR("Failed to allocate shinfo\n");
+			goto error;
+		}
+
+		next = rte_pktmbuf_alloc(mp2);
+		if (!next) {
+			rte_mempool_put(shinfo_pool, s);
+			goto error;
+		}
+		/* Attach the user memory to the segments */
+		init_shinfo_compl(s);
+		rte_pktmbuf_attach_extbuf(head, next->buf_addr, (uint64_t)next->buf_addr,
+					  next->buf_len, s);
+		head->data_off = 0;
+		head->data_len = SEG_LEN * 2;
+		head->pkt_len = head->data_len;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(head, uint64_t *, SEG_LEN) = MAGIC_PATTERN;
+		break;
+	case P_DIR_INDIR:
+		/* Direct(mp1)->Indirect(mp2->mp1) */
+
+		/* Direct(mp1) */
+		head = rte_pktmbuf_alloc(mp1);
+		if (!head)
+			goto error;
+		head->data_off = 0;
+		head->data_len = SEG_LEN;
+		head->pkt_len = head->data_len;
+
+		/* Indirect(mp2) */
+		next = rte_pktmbuf_alloc(mp2);
+		if (!next)
+			goto error;
+
+		/* Indirect data(mp1) */
+		next2 = rte_pktmbuf_alloc(mp1);
+		if (!next2) {
+			rte_pktmbuf_free(next);
+			goto error;
+		}
+		rte_pktmbuf_attach(next, next2);
+		/* Release the attached mbuf reference */
+		rte_pktmbuf_free(next2);
+		next->data_off = 64;
+		next->data_len = SEG_LEN;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(next, uint64_t *, 0) = MAGIC_PATTERN;
+
+		head->next = next;
+		head->nb_segs = 2;
+		head->pkt_len += next->data_len;
+		break;
+	case P_INDIR_DIR:
+		/* Indirect(mp2->mp1)->Direct(mp1) */
+
+		/* Indirect(mp2) */
+		head = rte_pktmbuf_alloc(mp2);
+		if (!head)
+			goto error;
+
+		/* Indirect data(mp1) */
+		next = rte_pktmbuf_alloc(mp1);
+		if (!next)
+			goto error;
+
+		rte_pktmbuf_attach(head, next);
+		/* Release the attached mbuf reference */
+		rte_pktmbuf_free(next);
+		head->data_off = 64;
+		head->data_len = SEG_LEN;
+		head->pkt_len = head->data_len;
+
+		/* Direct(mp1) */
+		next = rte_pktmbuf_alloc(mp1);
+		if (!next)
+			goto error;
+		next->data_off = 48;
+		next->data_len = SEG_LEN;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(next, uint64_t *, 0) = MAGIC_PATTERN;
+
+		head->next = next;
+		head->nb_segs = 2;
+		head->pkt_len += next->data_len;
+		break;
+	case P_INDIR_INDIR:
+		/* Indirect(mp2->mp1)->Indirect(mp2->mp1) */
+
+		/* Indirect(mp2) */
+		head = rte_pktmbuf_alloc(mp2);
+		if (!head)
+			goto error;
+
+		/* Indirect data(mp1) */
+		next = rte_pktmbuf_alloc(mp1);
+		if (!next)
+			goto error;
+		rte_pktmbuf_attach(head, next);
+		/* Release the attached mbuf reference */
+		rte_pktmbuf_free(next);
+		head->data_off = 48;
+		head->data_len = SEG_LEN;
+		head->pkt_len = head->data_len;
+
+		/* Indirect(mp2) */
+		next = rte_pktmbuf_alloc(mp2);
+		if (!next)
+			goto error;
+
+		/* Indirect data(mp1) */
+		next2 = rte_pktmbuf_alloc(mp1);
+		if (!next2) {
+			rte_pktmbuf_free(next);
+			goto error;
+		}
+		rte_pktmbuf_attach(next, next2);
+		/* Release the attached mbuf reference */
+		rte_pktmbuf_free(next2);
+		next->data_off = 128;
+		next->data_len = SEG_LEN;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(next, uint64_t *, 0) = MAGIC_PATTERN;
+
+		head->next = next;
+		head->nb_segs = 2;
+		head->pkt_len += next->data_len;
+		break;
+	case P_DIR_INDIR_SG2:
+		/* Direct(mp1)->Indirect(mp1->mp2) */
+
+		/* Direct(mp1) */
+		head = rte_pktmbuf_alloc(mp1);
+		if (!head)
+			goto error;
+		head->data_off = 0;
+		head->data_len = SEG_LEN;
+		head->pkt_len = head->data_len;
+
+		/* Indirect(mp1) */
+		next = rte_pktmbuf_alloc(mp1);
+		if (!next)
+			goto error;
+
+		/* Indirect data(mp2) */
+		next2 = rte_pktmbuf_alloc(mp2);
+		if (!next2) {
+			rte_pktmbuf_free(next);
+			goto error;
+		}
+		rte_pktmbuf_attach(next, next2);
+		/* Release the attached mbuf reference */
+		rte_pktmbuf_free(next2);
+		next->data_off = 128;
+		next->data_len = SEG_LEN;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(next, uint64_t *, 0) = MAGIC_PATTERN;
+
+		head->next = next;
+		head->nb_segs = 2;
+		head->pkt_len += next->data_len;
+		break;
+	case P_DIR_DIR_SG2:
+		/* Direct(mp1)->Direct(mp2) */
+
+		/* Direct(mp1) */
+		head = rte_pktmbuf_alloc(mp1);
+		if (!head)
+			goto error;
+		head->data_off = 0;
+		head->data_len = SEG_LEN;
+		head->pkt_len = head->data_len;
+
+		/* Direct(mp2) */
+		next = rte_pktmbuf_alloc(mp2);
+		if (!next)
+			goto error;
+		next->data_off = 48;
+		next->data_len = SEG_LEN;
+		/* Update MAGIC */
+		*rte_pktmbuf_mtod_offset(next, uint64_t *, 0) = MAGIC_PATTERN;
+
+		head->next = next;
+		head->nb_segs = 2;
+		head->pkt_len += next->data_len;
+		break;
+	};
+
+	setup_packet(rte_pktmbuf_mtod(head, struct packet_header *), head->pkt_len, portid, type);
+	return head;
+error:
+	rte_pktmbuf_free(head);
+	return NULL;
+}
+
+static int
+launch_lcore_tx(void *args)
+{
+	unsigned int lcore, portid, qid;
+	struct rte_eth_dev_tx_buffer *tx_buffer;
+	struct thread_info *tinfo = args;
+	struct queue_info *qinfo;
+	struct port_info *pinfo;
+	struct rte_mbuf *m;
+	uint16_t to_send;
+	uint8_t type = 1;
+	int sent;
+
+	rte_mb();
+	lcore = rte_lcore_id();
+	pinfo = tinfo->pinfo;
+	portid = pinfo->portid;
+	qid = tinfo->qid;
+	qinfo = &pinfo->qinfo[qid];
+	NOTICE("Entering TX indirect main loop on lcore %u portid=%u qid=%u\n", lcore, portid, qid);
+	fflush(stdout);
+
+	/* Initialize TX buffer */
+	tx_buffer = rte_zmalloc_socket("tx_buffer", RTE_ETH_TX_BUFFER_SIZE(MAX_PKT_BURST), 0,
+				       rte_eth_dev_socket_id(portid));
+	if (tx_buffer == NULL)
+		rte_exit(EXIT_FAILURE, "Cannot allocate buffer for tx on port %u\n",
+			 portid);
+	/* Avoid multiple of 4 to test vec and non-vec path's */
+	rte_eth_tx_buffer_init(tx_buffer, MAX_PKT_BURST - 1);
+
+	while (keep_running) {
+		if ((RTE_BIT64(type) & tinfo->arg->pkt_type) == 0 ||
+		    (is_cn9k && (type >= P_DIR_INDIR_SG2))) {
+			type = type >= P_MAX ? 0 : type + 1;
+			continue;
+		}
+
+		m = prepare_pkt_with_type(portid, type, pinfo->pool, pinfo->pinned_pool);
+		if (!m) {
+			qinfo->alloc_fail++;
+			goto skip;
+		}
+		type = type >= P_MAX ? 0 : type + 1;
+
+		/* Enqueue pkt to tx buffer */
+		qinfo->pkts++;
+		sent = rte_eth_tx_buffer(portid, qid, tx_buffer, m);
+		/* Check for dropped pkts */
+		if (!tx_buffer->length)
+			qinfo->dropped += (tx_buffer->size - sent);
+skip:
+		if (tinfo->arg->max_pkts &&
+		    qinfo->pkts + qinfo->alloc_fail >= tinfo->arg->max_pkts)
+			break;
+	}
+	to_send = tx_buffer->length;
+	sent = rte_eth_tx_buffer_flush(portid, qid, tx_buffer);
+	qinfo->dropped += (to_send - sent);
+
+	rte_io_wmb();
+	if (tinfo->arg->max_pkts && qinfo->pkts + qinfo->alloc_fail >= tinfo->arg->max_pkts)
+		ERROR("Max packets reached\n");
+	if (qinfo->dropped || qinfo->alloc_fail)
+		ERROR("Failed to send all pkts (dropped %lu, alloc_fail %lu)\n",
+		      qinfo->dropped, qinfo->alloc_fail);
+
+
+	rte_free(tx_buffer);
+	return 0;
+}
+
 static void
 signal_handler(int signum)
 {
@@ -816,10 +1178,8 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 			arg->tx_mode = false;
 		} else if (strncmp(argv[1], "--perf", 6) == 0) {
 			arg->perf_mode = true;
-			if (strncmp(argv[3], "--use-tx-completion", 19) == 0)
-				arg->use_tx_compl = true;
-			argv = argv + 2;
-			argc = argc - 2;
+		} else if (strncmp(argv[1], "--use-tx-completion", 19) == 0) {
+			arg->use_tx_compl = true;
 		} else if (strncmp(argv[1], "--event-tx-compl", 16) == 0) {
 			arg->event_tx_compl = true;
 		} else if (strncmp(argv[1], "--nqueue", 8) == 0) {
@@ -840,12 +1200,21 @@ parse_args(int argc, char **argv, struct app_arg *arg)
 			arg->max_pkts = strtoul(argv[2], 0, 0);
 			argv++;
 			argc--;
+		} else if (strncmp(argv[1], "--pkt-type", 10) == 0) {
+			if (argc < 3)
+				return -1;
+			arg->pkt_type = strtoul(argv[2], 0, 0);
+			argv++;
+			argc--;
 		} else {
 			return -1;
 		}
 		argv++;
 		argc--;
 	}
+
+	if (arg->pkt_type && arg->perf_mode)
+		return -1;
 
 	return 0;
 }
@@ -918,8 +1287,10 @@ main(int argc, char **argv)
 					f = arg.use_tx_compl ?
 						launch_lcore_tx_perf_compl :
 						launch_lcore_tx_perf;
-				else
+				else if (arg.pkt_type)
 					f = launch_lcore_tx;
+				else
+					f = launch_lcore_tx_extbuf;
 			} else {
 				f = launch_lcore_rx;
 			}
@@ -962,7 +1333,7 @@ cleanup:
 
 	/* Finalize the ports */
 	for (p = 0; p < n_port; p++)
-		finalize(&pinfo[p]);
+		ret |= finalize(&pinfo[p]);
 
 	if (arg.event_tx_compl) {
 		print_event_stats(rsrc, true);
