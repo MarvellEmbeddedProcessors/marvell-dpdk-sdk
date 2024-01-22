@@ -25,7 +25,7 @@ echo "================================"
 (stdbuf -o 0 ./cnxk-extbuf \
 	--file-prefix $RX_PREFIX \
 	-c 0x3 \
-	-a 0002:01:00.2,tx_compl_ena=1 \
+	-a 0002:01:00.2 \
 	-- \
 	--max-pkts 100 \
 	--rx 2>&1) > $RX_LOG &
@@ -44,7 +44,7 @@ echo "================================"
 (./cnxk-extbuf \
 	--file-prefix $TX_PREFIX \
 	-c 0x5 \
-	-a 0002:01:00.1,tx_compl_ena=1 \
+	-a 0002:01:00.1 \
 	-- \
 	--max-pkts 100 2>&1) > $TX_LOG
 
@@ -58,7 +58,9 @@ RX_PKTS=$(grep "Total RX Pkts" $RX_LOG | tail -n1 | awk '{print $4}')
 
 if [[ $TX_PKTS != $RX_PKTS ]] || [[ -z $TX_PKTS ]] || [[ -z $RX_PKTS ]] ; then
 	echo "TX and RX Packets not matching \"$TX_PKTS\" != \"$RX_PKTS\""
+	cat $RX_LOG
+	cat $TX_LOG
 	exit 1
 fi
 
-echo "TEST SUCCESSFUL Rx=Tx $TX_PKTS=$RX_PKTS"
+echo "EXTBUF TEST SUCCESSFUL Rx=Tx $TX_PKTS=$RX_PKTS"
