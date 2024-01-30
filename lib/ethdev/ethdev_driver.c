@@ -2,6 +2,7 @@
  * Copyright(c) 2022 Intel Corporation
  */
 
+#include <ctype.h>
 #include <stdlib.h>
 
 #include <rte_kvargs.h>
@@ -437,9 +438,23 @@ eth_dev_devargs_tokenise(struct rte_kvargs *arglist, const char *str_in)
 			break;
 
 		case 3: /* Parsing list */
-			if (*letter == ']')
-				state = 2;
-			else if (*letter == '\0')
+			if (*letter == ']') {
+				/* Multiple representor case has ']' dual meaning, first end of
+				 * individual pfvf list and other end of consolidated list of
+				 * representors.
+				 * Complete multiple representors list to be considered as one
+				 * pair value.
+				 */
+				if ((strcmp("representor", pair->key) == 0) &&
+				    ((*(letter + 2) == 'p' && *(letter + 3) == 'f')   ||
+				     (*(letter + 2) == 'v' && *(letter + 3) == 'f')   ||
+				     (*(letter + 2) == 's' && *(letter + 3) == 'f')   ||
+				     (*(letter + 2) == 'c' && isdigit(*(letter + 3))) ||
+				     (*(letter + 2) == '[' && isdigit(*(letter + 3)))))
+					state = 3;
+				else
+					state = 2;
+			} else if (*letter == '\0')
 				return -EINVAL;
 			break;
 		}
@@ -447,15 +462,55 @@ eth_dev_devargs_tokenise(struct rte_kvargs *arglist, const char *str_in)
 	}
 }
 
-int
-rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_da)
+static int
+eth_dev_tokenise_representor_list(char *p_val, struct rte_eth_devargs *eth_devargs,
+				  uint8_t nb_da)
 {
-	struct rte_kvargs args;
+	struct rte_eth_devargs *eth_da;
+	char da_val[BUFSIZ];
+	char delim[] = "]";
+	int devargs = 0;
+	int result = 0;
+	char *token;
+
+	token = strtok(&p_val[1], delim);
+	while (token != NULL) {
+		eth_da = &eth_devargs[devargs];
+		memset(eth_da, 0, sizeof(*eth_da));
+		snprintf(da_val, BUFSIZ, "%s%c", (token[0] == ',') ? ++token : token, ']');
+		/* Parse the tokenised devarg value */
+		result = rte_eth_devargs_parse_representor_ports(da_val, eth_da);
+		if (result < 0)
+			goto parse_cleanup;
+		devargs++;
+		if (devargs > nb_da) {
+			RTE_ETHDEV_LOG(ERR,
+				       "Devargs parsed %d > max array size %d\n",
+				       devargs, nb_da);
+			result = -1;
+			goto parse_cleanup;
+		}
+		token = strtok(NULL, delim);
+	}
+
+	result = devargs;
+
+parse_cleanup:
+	return result;
+
+}
+
+int
+rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_devargs,
+		      uint8_t nb_da)
+{
+	struct rte_eth_devargs *eth_da;
 	struct rte_kvargs_pair *pair;
+	struct rte_kvargs args;
+	bool dup_rep = false;
+	int devargs = 0;
 	unsigned int i;
 	int result = 0;
-
-	memset(eth_da, 0, sizeof(*eth_da));
 
 	result = eth_dev_devargs_tokenise(&args, dargs);
 	if (result < 0)
@@ -464,18 +519,41 @@ rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_da)
 	for (i = 0; i < args.count; i++) {
 		pair = &args.pairs[i];
 		if (strcmp("representor", pair->key) == 0) {
-			if (eth_da->type != RTE_ETH_REPRESENTOR_NONE) {
-				RTE_LOG(ERR, EAL, "duplicated representor key: %s\n",
-					dargs);
+			if (dup_rep) {
+				RTE_ETHDEV_LOG(ERR, "Duplicated representor key: %s\n",
+						    pair->value);
 				result = -1;
 				goto parse_cleanup;
 			}
-			result = rte_eth_devargs_parse_representor_ports(
-					pair->value, eth_da);
-			if (result < 0)
-				goto parse_cleanup;
+
+			if (pair->value[0] == '[' && !isdigit(pair->value[1])) {
+				/* Multiple representor list case */
+				devargs = eth_dev_tokenise_representor_list(pair->value,
+									    eth_devargs, nb_da);
+				if (devargs < 0)
+					goto parse_cleanup;
+			} else {
+				/* Single representor case */
+				eth_da = &eth_devargs[devargs];
+				memset(eth_da, 0, sizeof(*eth_da));
+				result =
+					rte_eth_devargs_parse_representor_ports(pair->value,
+										eth_da);
+				if (result < 0)
+					goto parse_cleanup;
+				devargs++;
+				if (devargs > nb_da) {
+					RTE_ETHDEV_LOG(ERR,
+						       "Devargs parsed %d > max array size %d\n",
+						       devargs, nb_da);
+					result = -1;
+					goto parse_cleanup;
+				}
+			}
+			dup_rep = true;
 		}
 	}
+	result = devargs;
 
 parse_cleanup:
 	free(args.str);
