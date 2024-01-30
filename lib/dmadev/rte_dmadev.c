@@ -141,10 +141,9 @@ dma_fp_data_prepare(void)
 	 */
 	size = dma_devices_max * sizeof(struct rte_dma_fp_object) +
 		RTE_CACHE_LINE_SIZE;
-	ptr = malloc(size);
+	ptr = rte_zmalloc("", size, RTE_CACHE_LINE_SIZE);
 	if (ptr == NULL)
 		return -ENOMEM;
-	memset(ptr, 0, size);
 
 	rte_dma_fp_objs = RTE_PTR_ALIGN(ptr, RTE_CACHE_LINE_SIZE);
 	for (i = 0; i < dma_devices_max; i++)
@@ -162,10 +161,9 @@ dma_dev_data_prepare(void)
 		return 0;
 
 	size = dma_devices_max * sizeof(struct rte_dma_dev);
-	rte_dma_devices = malloc(size);
+	rte_dma_devices = rte_zmalloc("", size, RTE_CACHE_LINE_SIZE);
 	if (rte_dma_devices == NULL)
 		return -ENOMEM;
-	memset(rte_dma_devices, 0, size);
 
 	return 0;
 }
