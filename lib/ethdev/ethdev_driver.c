@@ -446,16 +446,20 @@ eth_dev_devargs_tokenise(struct rte_kvargs *arglist, const char *str_in)
 				 * pair value.
 				 */
 				if ((strcmp("representor", pair->key) == 0) &&
+				    (*(letter + 1) != '\0' && *(letter + 2) != '\0' &&
+				     *(letter + 3) != '\0')			    &&
 				    ((*(letter + 2) == 'p' && *(letter + 3) == 'f')   ||
 				     (*(letter + 2) == 'v' && *(letter + 3) == 'f')   ||
 				     (*(letter + 2) == 's' && *(letter + 3) == 'f')   ||
 				     (*(letter + 2) == 'c' && isdigit(*(letter + 3))) ||
-				     (*(letter + 2) == '[' && isdigit(*(letter + 3)))))
+				     (*(letter + 2) == '[' && isdigit(*(letter + 3))) ||
+				     (isdigit(*(letter + 2)))))
 					state = 3;
 				else
 					state = 2;
-			} else if (*letter == '\0')
+			} else if (*letter == '\0') {
 				return -EINVAL;
+			}
 			break;
 		}
 		letter++;
@@ -463,48 +467,123 @@ eth_dev_devargs_tokenise(struct rte_kvargs *arglist, const char *str_in)
 }
 
 static int
+devargs_parse_representor_ports(struct rte_eth_devargs *eth_devargs, char
+				*da_val, uint8_t da_idx, uint8_t nb_da)
+{
+	struct rte_eth_devargs *eth_da;
+	int result = 0;
+
+	if (da_idx + 1 > nb_da) {
+		RTE_ETHDEV_LOG(ERR, "Devargs parsed %d > max array size %d\n",
+			       da_idx + 1, nb_da);
+		result = -1;
+		goto parse_cleanup;
+	}
+	eth_da = &eth_devargs[da_idx];
+	memset(eth_da, 0, sizeof(*eth_da));
+	RTE_ETHDEV_LOG(DEBUG, "	  Devargs idx %d value %s\n", da_idx, da_val);
+	result = rte_eth_devargs_parse_representor_ports(da_val, eth_da);
+
+parse_cleanup:
+	return result;
+}
+
+static int
 eth_dev_tokenise_representor_list(char *p_val, struct rte_eth_devargs *eth_devargs,
 				  uint8_t nb_da)
 {
-	struct rte_eth_devargs *eth_da;
-	char da_val[BUFSIZ];
-	char delim[] = "]";
-	int devargs = 0;
-	int result = 0;
-	char *token;
+	int result = 0, len = 0, devargs = 0;
+	char da_val[BUFSIZ], str[BUFSIZ];
+	bool is_rep_portid_list = true;
+	int i = 0, j = 0;
+	char *pos;
 
-	token = strtok(&p_val[1], delim);
-	while (token != NULL) {
-		eth_da = &eth_devargs[devargs];
-		memset(eth_da, 0, sizeof(*eth_da));
-		snprintf(da_val, BUFSIZ, "%s%c", (token[0] == ',') ? ++token : token, ']');
-		/* Parse the tokenised devarg value */
-		result = rte_eth_devargs_parse_representor_ports(da_val, eth_da);
-		if (result < 0)
-			goto parse_cleanup;
-		devargs++;
-		if (devargs > nb_da) {
-			RTE_ETHDEV_LOG(ERR,
-				       "Devargs parsed %d > max array size %d\n",
-				       devargs, nb_da);
-			result = -1;
-			goto parse_cleanup;
-		}
-		token = strtok(NULL, delim);
+	pos = p_val;
+	/* Length of consolidated list */
+	while (*pos++ != '\0') {
+		len++;
+		if (isalpha(*pos))
+			is_rep_portid_list = false;
 	}
 
+	/* List of representor portIDs i.e.[1,2,3] should be considered as single representor case*/
+	if (is_rep_portid_list) {
+		devargs = devargs_parse_representor_ports(eth_devargs, p_val, 0, 1);
+		if (devargs < 0)
+			return devargs;
+
+		devargs++;
+		return devargs;
+	}
+
+	memset(str, 0, BUFSIZ);
+	/* Remove the exterior [] of the consolidated list */
+	strncpy(str, &p_val[1], len - 2);
+	while (1) {
+		if (str[i] == '\0') {
+			if (da_val[0] != '\0') {
+				result =
+					devargs_parse_representor_ports(eth_devargs, da_val,
+									 devargs, nb_da);
+				if (result < 0)
+					goto parse_cleanup;
+
+				devargs++;
+			}
+			break;
+		}
+		if (str[i] == ',' || str[i] == '[') {
+			if (str[i] == ',') {
+				if (da_val[0] != '\0') {
+					da_val[j + 1] = '\0';
+					result =
+						devargs_parse_representor_ports(eth_devargs,
+										da_val,
+										 devargs, nb_da);
+					if (result < 0)
+						goto parse_cleanup;
+
+					devargs++;
+					j = 0;
+					memset(da_val, 0, BUFSIZ);
+				}
+			}
+
+			if (str[i] == '[') {
+				while (str[i] != ']' || isalpha(str[i + 1])) {
+					da_val[j] = str[i];
+					j++;
+					i++;
+				}
+				da_val[j] = ']';
+				da_val[j + 1] = '\0';
+				result =
+					devargs_parse_representor_ports(eth_devargs,
+									da_val,
+									 devargs, nb_da);
+				if (result < 0)
+					goto parse_cleanup;
+
+				devargs++;
+				j = 0;
+				memset(da_val, 0, BUFSIZ);
+			}
+		} else {
+			da_val[j] = str[i];
+			j++;
+		}
+		i++;
+	}
 	result = devargs;
 
 parse_cleanup:
 	return result;
-
 }
 
 int
 rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_devargs,
 		      uint8_t nb_da)
 {
-	struct rte_eth_devargs *eth_da;
 	struct rte_kvargs_pair *pair;
 	struct rte_kvargs args;
 	bool dup_rep = false;
@@ -526,7 +605,8 @@ rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_devargs,
 				goto parse_cleanup;
 			}
 
-			if (pair->value[0] == '[' && !isdigit(pair->value[1])) {
+			RTE_ETHDEV_LOG(DEBUG, "\nDevarg pattern: %s\n", pair->value);
+			if (pair->value[0] == '[') {
 				/* Multiple representor list case */
 				devargs = eth_dev_tokenise_representor_list(pair->value,
 									    eth_devargs, nb_da);
@@ -534,25 +614,16 @@ rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_devargs,
 					goto parse_cleanup;
 			} else {
 				/* Single representor case */
-				eth_da = &eth_devargs[devargs];
-				memset(eth_da, 0, sizeof(*eth_da));
-				result =
-					rte_eth_devargs_parse_representor_ports(pair->value,
-										eth_da);
-				if (result < 0)
+				devargs = devargs_parse_representor_ports(eth_devargs, pair->value,
+									  0, 1);
+				if (devargs < 0)
 					goto parse_cleanup;
 				devargs++;
-				if (devargs > nb_da) {
-					RTE_ETHDEV_LOG(ERR,
-						       "Devargs parsed %d > max array size %d\n",
-						       devargs, nb_da);
-					result = -1;
-					goto parse_cleanup;
-				}
 			}
 			dup_rep = true;
 		}
 	}
+	RTE_ETHDEV_LOG(DEBUG, "Total devargs parsed %d\n", devargs);
 	result = devargs;
 
 parse_cleanup:
