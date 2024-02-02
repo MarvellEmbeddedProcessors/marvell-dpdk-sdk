@@ -1858,6 +1858,7 @@ struct nix_get_lf_stats_req {
 
 struct nix_lf_stats_rsp {
 	struct mbox_msghdr hdr;
+	uint16_t __io pcifunc;
 	struct {
 		uint64_t __io octs;
 		uint64_t __io ucast;
