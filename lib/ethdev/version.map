@@ -294,8 +294,8 @@ EXPERIMENTAL {
 	rte_mtr_meter_profile_get;
 
  	# added in 23.07
-	rte_eth_dev_is_valid_rxq;
-	rte_eth_dev_is_valid_txq;
+	rte_eth_rx_queue_is_valid;
+	rte_eth_tx_queue_is_valid;
 
 	# added in 24.03
 	rte_eth_tx_queue_count;
