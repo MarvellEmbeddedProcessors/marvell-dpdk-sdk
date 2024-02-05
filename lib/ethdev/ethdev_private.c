@@ -276,6 +276,7 @@ eth_dev_fp_ops_setup(struct rte_eth_fp_ops *fpo,
 	fpo->tx_pkt_prepare = dev->tx_pkt_prepare;
 	fpo->rx_queue_count = dev->rx_queue_count;
 	fpo->rx_descriptor_status = dev->rx_descriptor_status;
+	fpo->tx_queue_count = dev->tx_queue_count;
 	fpo->tx_descriptor_status = dev->tx_descriptor_status;
 
 	fpo->rxq.data = dev->data->rx_queues;

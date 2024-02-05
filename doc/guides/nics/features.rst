@@ -951,6 +951,16 @@ management (see :doc:`../prog_guide/power_man` for more details).
 
 * **[implements] eth_dev_ops**: ``get_monitor_addr``
 
+.. _nic_features_tx_queue_used_count:
+
+Tx queue count
+--------------
+
+Supports to get the number of used descriptors of a Tx queue.
+
+* **[implements] eth_dev_ops**: ``tx_queue_count``.
+* **[related] API**: ``rte_eth_tx_queue_count()``.
+
 .. _nic_features_other:
 
 Other dev ops not represented by a Feature

@@ -475,6 +475,9 @@ RTE_TRACE_POINT_REGISTER(rte_eth_trace_cman_config_set,
 RTE_TRACE_POINT_REGISTER(rte_eth_trace_cman_config_get,
 	lib.ethdev.cman_config_get)
 
+RTE_TRACE_POINT_REGISTER(rte_eth_trace_tx_queue_count,
+	lib.ethdev.tx_queue_count)
+
 RTE_TRACE_POINT_REGISTER(rte_flow_trace_copy,
 	lib.ethdev.flow.copy)
 

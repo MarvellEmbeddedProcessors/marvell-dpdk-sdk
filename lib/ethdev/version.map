@@ -292,6 +292,9 @@ EXPERIMENTAL {
 	rte_flow_get_q_aged_flows;
 	rte_mtr_meter_policy_get;
 	rte_mtr_meter_profile_get;
+
+	# added in 24.03
+	rte_eth_tx_queue_count;
 };
 
 INTERNAL {

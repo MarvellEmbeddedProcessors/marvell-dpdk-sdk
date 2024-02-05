@@ -6495,6 +6495,80 @@ rte_eth_tx_buffer(uint16_t port_id, uint16_t queue_id,
 __rte_experimental
 int rte_eth_buffer_split_get_supported_hdr_ptypes(uint16_t port_id, uint32_t *ptypes, int num);
 
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
+ *
+ * Get the number of used descriptors of a Tx queue
+ *
+ * This function retrieves the number of used descriptors of a transmit queue.
+ * Applications can use this API in the fast path to inspect Tx queue occupancy and take
+ * appropriate actions based on the available free descriptors.
+ * An example action could be implementing the Random Early Discard (RED).
+ *
+ * Since it's a fast-path function, no check is performed on port_id and
+ * tx_queue_id. The caller must therefore ensure that the port is enabled
+ * and the queue is configured and running.
+ *
+ * @param port_id
+ *   The port identifier of the device.
+ * @param tx_queue_id
+ *   The index of the transmit queue.
+ *   The value must be in the range [0, nb_tx_queue - 1] previously supplied
+ *   to rte_eth_dev_configure().
+ * @return
+ *  The number of used descriptors in the specific queue, or:
+ *   - (-ENODEV) if *port_id* is invalid. Enabled only when RTE_ETHDEV_DEBUG_TX is enabled
+ *   - (-EINVAL) if *queue_id* is invalid. Enabled only when RTE_ETHDEV_DEBUG_TX is enabled
+ *   - (-ENOTSUP) if the device does not support this function.
+ *
+ * @note This function is designed for fast-path use.
+ */
+__rte_experimental
+static inline int
+rte_eth_tx_queue_count(uint16_t port_id, uint16_t tx_queue_id)
+{
+	struct rte_eth_fp_ops *fops;
+	void *qd;
+	int rc;
+
+#ifdef RTE_ETHDEV_DEBUG_TX
+	if (port_id >= RTE_MAX_ETHPORTS || !rte_eth_dev_is_valid_port(port_id)) {
+		RTE_ETHDEV_LOG_LINE(ERR, "Invalid port_id=%u", port_id);
+		rc = -ENODEV;
+		rte_eth_trace_tx_queue_count(port_id, tx_queue_id, rc);
+		return rc;
+	}
+
+	rc = -EINVAL;
+	if (tx_queue_id >= RTE_MAX_QUEUES_PER_PORT) {
+		RTE_ETHDEV_LOG_LINE(ERR, "Invalid Tx queue_id=%u for port_id=%u",
+				    tx_queue_id, port_id);
+		rte_eth_trace_tx_queue_count(port_id, tx_queue_id, rc);
+		return rc;
+	}
+#endif
+
+	/* Fetch pointer to Tx queue data */
+	fops = &rte_eth_fp_ops[port_id];
+	qd = fops->txq.data[tx_queue_id];
+
+#ifdef RTE_ETHDEV_DEBUG_TX
+	if (qd == NULL) {
+		RTE_ETHDEV_LOG_LINE(ERR, "Invalid Tx queue_id=%u for port_id=%u",
+				    tx_queue_id, port_id);
+		rte_eth_trace_tx_queue_count(port_id, tx_queue_id, rc);
+		return rc;
+	}
+#endif
+	if (fops->tx_queue_count == NULL)
+		return -ENOTSUP;
+
+	rc = fops->tx_queue_count(qd);
+	rte_eth_trace_tx_queue_count(port_id, tx_queue_id, rc);
+
+	return rc;
+}
 #ifdef __cplusplus
 }
 #endif

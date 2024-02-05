@@ -56,6 +56,9 @@ typedef int (*eth_rx_descriptor_status_t)(void *rxq, uint16_t offset);
 /** @internal Check the status of a Tx descriptor */
 typedef int (*eth_tx_descriptor_status_t)(void *txq, uint16_t offset);
 
+/** @internal Get number of used descriptors on a transmit queue. */
+typedef int (*eth_tx_queue_count_t)(void *txq);
+
 /**
  * @internal
  * Structure used to hold opaque pointers to internal ethdev Rx/Tx
@@ -108,7 +111,9 @@ struct rte_eth_fp_ops {
 	eth_tx_descriptor_status_t tx_descriptor_status;
 	/** Tx queues data. */
 	struct rte_ethdev_qdata txq;
-	uintptr_t reserved2[3];
+	/** Get the number of used Tx descriptors. */
+	eth_tx_queue_count_t tx_queue_count;
+	uintptr_t reserved2[2];
 	/**@}*/
 
 } __rte_cache_aligned;
