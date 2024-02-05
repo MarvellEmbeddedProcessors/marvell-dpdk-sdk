@@ -385,8 +385,9 @@ sdp_lbk_id_update(struct plt_pci_device *pci_dev, struct nix *nix)
 		nix->sdp_link = true;
 		break;
 	case PCI_DEVID_CNXK_RVU_AF_VF:
-	case PCI_DEVID_CNXK_RVU_ESWITCH_VF:
 		nix->lbk_link = true;
+		break;
+	case PCI_DEVID_CNXK_RVU_ESWITCH_VF:
 		nix->esw_link = true;
 		break;
 	default:
