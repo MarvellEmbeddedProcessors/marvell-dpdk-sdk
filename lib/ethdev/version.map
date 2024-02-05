@@ -293,6 +293,10 @@ EXPERIMENTAL {
 	rte_mtr_meter_policy_get;
 	rte_mtr_meter_profile_get;
 
+ 	# added in 23.07
+	rte_eth_dev_is_valid_rxq;
+	rte_eth_dev_is_valid_txq;
+
 	# added in 24.03
 	rte_eth_tx_queue_count;
 };
