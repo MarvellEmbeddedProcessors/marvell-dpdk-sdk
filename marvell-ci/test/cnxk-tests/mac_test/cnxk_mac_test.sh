@@ -55,9 +55,9 @@ fi
 IS_CN10K=$?
 
 if [[ $IS_CN10K -ne 0 ]]; then
-	MAX_MTU=16358
+	MAX_MTU=16350
 else
-	MAX_MTU=9190
+	MAX_MTU=9182
 fi
 
 function sig_handler()
