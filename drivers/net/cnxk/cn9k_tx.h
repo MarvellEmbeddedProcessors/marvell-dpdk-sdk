@@ -157,7 +157,7 @@ cn9k_nix_prefree_seg_vec(struct rte_mbuf **mbufs, struct cn9k_eth_txq *txq,
 		w0 |= aura << 20;
 
 		if ((w0 & BIT_ULL(19)) == 0)
-			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, &cookie, 1, 0);
+			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 	}
 	*senddesc01_w0 = vsetq_lane_u64(w0, *senddesc01_w0, 0);
 
@@ -186,7 +186,7 @@ cn9k_nix_prefree_seg_vec(struct rte_mbuf **mbufs, struct cn9k_eth_txq *txq,
 		w0 |= aura << 20;
 
 		if ((w0 & BIT_ULL(19)) == 0)
-			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, &cookie, 1, 0);
+			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 	}
 	*senddesc01_w0 = vsetq_lane_u64(w0, *senddesc01_w0, 1);
 
@@ -215,7 +215,7 @@ cn9k_nix_prefree_seg_vec(struct rte_mbuf **mbufs, struct cn9k_eth_txq *txq,
 		w0 |= aura << 20;
 
 		if ((w0 & BIT_ULL(19)) == 0)
-			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, &cookie, 1, 0);
+			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 	}
 	*senddesc23_w0 = vsetq_lane_u64(w0, *senddesc23_w0, 0);
 
@@ -244,7 +244,7 @@ cn9k_nix_prefree_seg_vec(struct rte_mbuf **mbufs, struct cn9k_eth_txq *txq,
 		w0 |= aura << 20;
 
 		if ((w0 & BIT_ULL(19)) == 0)
-			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, &cookie, 1, 0);
+			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 	}
 	*senddesc23_w0 = vsetq_lane_u64(w0, *senddesc23_w0, 1);
 #ifndef RTE_LIBRTE_MEMPOOL_DEBUG
@@ -515,7 +515,7 @@ cn9k_nix_xmit_prepare(struct cn9k_eth_txq *txq,
 #ifdef RTE_LIBRTE_MEMPOOL_DEBUG
 		/* Mark mempool object as "put" since it is freed by NIX */
 		if (!send_hdr->w0.df)
-			RTE_MEMPOOL_CHECK_COOKIES(m->pool, (void **)&m, 1, 0);
+			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 #else
 		RTE_SET_USED(cookie);
 #endif
@@ -639,10 +639,14 @@ cn9k_nix_prepare_mseg(struct cn9k_eth_txq *txq,
 	/* Mark mempool object as "put" since it is freed by NIX */
 #ifdef RTE_LIBRTE_MEMPOOL_DEBUG
 	if (!(sg_u & (1ULL << 55)))
-		RTE_MEMPOOL_CHECK_COOKIES(m->pool, (void **)&m, 1, 0);
+		RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 	rte_io_wmb();
 #else
 	RTE_SET_USED(cookie);
+#endif
+#ifdef RTE_ENABLE_ASSERT
+	m->next = NULL;
+	m->nb_segs = 1;
 #endif
 	m = m_next;
 	if (!m)
@@ -653,6 +657,7 @@ cn9k_nix_prepare_mseg(struct cn9k_eth_txq *txq,
 		m_next = m->next;
 		sg_u = sg_u | ((uint64_t)m->data_len << (i << 4));
 		*slist = rte_mbuf_data_iova(m);
+		cookie = RTE_MBUF_DIRECT(m) ? m : rte_mbuf_from_indirect(m);
 		/* Set invert df if buffer is not to be freed by H/W */
 		if (flags & NIX_TX_OFFLOAD_MBUF_NOFF_F) {
 			sg_u |= (cn9k_nix_prefree_seg(m, txq, send_hdr, NULL) << (i + 55));
@@ -662,7 +667,7 @@ cn9k_nix_prepare_mseg(struct cn9k_eth_txq *txq,
 		/* Mark mempool object as "put" since it is freed by NIX */
 #ifdef RTE_LIBRTE_MEMPOOL_DEBUG
 		if (!(sg_u & (1ULL << (i + 55))))
-			RTE_MEMPOOL_CHECK_COOKIES(m->pool, (void **)&m, 1, 0);
+			RTE_MEMPOOL_CHECK_COOKIES(cookie->pool, (void **)&cookie, 1, 0);
 		rte_io_wmb();
 #endif
 		slist++;
@@ -678,6 +683,9 @@ cn9k_nix_prepare_mseg(struct cn9k_eth_txq *txq,
 			sg_u = sg->u;
 			slist++;
 		}
+#ifdef RTE_ENABLE_ASSERT
+		m->next = NULL;
+#endif
 		m = m_next;
 	} while (nb_segs);
 
@@ -691,6 +699,9 @@ done:
 	segdw += (off >> 1) + 1 + !!(flags & NIX_TX_OFFLOAD_TSTAMP_F);
 	send_hdr->w0.sizem1 = segdw - 1;
 
+#ifdef RTE_ENABLE_ASSERT
+	rte_io_wmb();
+#endif
 	return segdw;
 }
 
@@ -907,6 +918,10 @@ cn9k_nix_prepare_mseg_vec_list(struct cn9k_eth_txq *txq,
 	RTE_SET_USED(cookie);
 #endif
 
+#ifdef RTE_ENABLE_ASSERT
+	m->next = NULL;
+	m->nb_segs = 1;
+#endif
 	m = m_next;
 	/* Fill mbuf segments */
 	do {
@@ -937,6 +952,9 @@ cn9k_nix_prepare_mseg_vec_list(struct cn9k_eth_txq *txq,
 			sg_u = sg->u;
 			slist++;
 		}
+#ifdef RTE_ENABLE_ASSERT
+		m->next = NULL;
+#endif
 		m = m_next;
 	} while (nb_segs);
 
@@ -952,6 +970,9 @@ cn9k_nix_prepare_mseg_vec_list(struct cn9k_eth_txq *txq,
 		 !!(flags & NIX_TX_OFFLOAD_TSTAMP_F);
 	send_hdr->w0.sizem1 = segdw - 1;
 
+#ifdef RTE_ENABLE_ASSERT
+	rte_io_wmb();
+#endif
 	return segdw;
 }
 
