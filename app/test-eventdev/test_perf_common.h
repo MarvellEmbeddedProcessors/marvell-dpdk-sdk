@@ -105,9 +105,8 @@ struct perf_elt {
 	const uint8_t port = w->port_id;\
 	const uint8_t prod_timer_type = \
 		opt->prod_type == EVT_PROD_TYPE_EVENT_TIMER_ADPTR;\
-	const uint8_t prod_crypto_type = \
-		opt->prod_type == EVT_PROD_TYPE_EVENT_CRYPTO_ADPTR;\
 	uint8_t *const sched_type_list = &t->sched_type_list[0];\
+	const enum evt_prod_type prod_type = opt->prod_type;\
 	struct rte_mempool *const pool = t->pool;\
 	const uint8_t nb_stages = t->opt->nb_stages;\
 	const uint8_t laststage = nb_stages - 1;\
@@ -216,9 +215,9 @@ perf_handle_crypto_vector_ev(struct rte_event *ev, struct perf_elt **pe,
 }
 
 static __rte_always_inline int
-perf_process_last_stage(struct rte_mempool *const pool, uint8_t prod_type,
-		struct rte_event *const ev, struct worker_data *const w,
-		void *bufs[], int const buf_sz, uint8_t count)
+perf_process_last_stage(struct rte_mempool *const pool, enum evt_prod_type prod_type,
+			struct rte_event *const ev, struct worker_data *const w,
+			void *bufs[], int const buf_sz, uint8_t count)
 {
 	void *to_free_in_bulk;
 
@@ -260,9 +259,9 @@ perf_process_last_stage(struct rte_mempool *const pool, uint8_t prod_type,
 }
 
 static __rte_always_inline uint8_t
-perf_process_last_stage_latency(struct rte_mempool *const pool, uint8_t prod_crypto_type,
-		struct rte_event *const ev, struct worker_data *const w,
-		void *bufs[], int const buf_sz, uint8_t count)
+perf_process_last_stage_latency(struct rte_mempool *const pool, enum evt_prod_type prod_type,
+				struct rte_event *const ev, struct worker_data *const w,
+				void *bufs[], int const buf_sz, uint8_t count)
 {
 	uint64_t latency;
 	struct perf_elt *pe;
@@ -274,7 +273,7 @@ perf_process_last_stage_latency(struct rte_mempool *const pool, uint8_t prod_cry
 	rte_atomic_thread_fence(__ATOMIC_RELEASE);
 	w->processed_pkts++;
 
-	if (prod_crypto_type) {
+	if (prod_type == EVT_PROD_TYPE_EVENT_CRYPTO_ADPTR) {
 		struct rte_crypto_op *op = ev->event_ptr;
 		struct rte_mbuf *m;
 
@@ -292,6 +291,8 @@ perf_process_last_stage_latency(struct rte_mempool *const pool, uint8_t prod_cry
 			to_free_in_bulk = op->asym->modex.result.data;
 		}
 		rte_crypto_op_free(op);
+	} else if (prod_type == EVT_PROD_TYPE_EVENT_DMA_ADPTR) {
+		return count;
 	} else {
 		pe = ev->event_ptr;
 		to_free_in_bulk = pe;

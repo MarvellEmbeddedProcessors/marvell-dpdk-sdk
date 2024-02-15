@@ -49,7 +49,8 @@ perf_atq_worker(void *arg, const int enable_fwd_latency)
 			continue;
 		}
 
-		if (prod_crypto_type && (ev.event_type == RTE_EVENT_TYPE_CRYPTODEV)) {
+		if ((prod_type == EVT_PROD_TYPE_EVENT_CRYPTO_ADPTR) &&
+		    (ev.event_type == RTE_EVENT_TYPE_CRYPTODEV)) {
 			if (perf_handle_crypto_ev(&ev, &pe, enable_fwd_latency))
 				continue;
 		}
@@ -62,11 +63,11 @@ perf_atq_worker(void *arg, const int enable_fwd_latency)
 		/* last stage in pipeline */
 		if (unlikely(stage == laststage)) {
 			if (enable_fwd_latency)
-				cnt = perf_process_last_stage_latency(pool, prod_crypto_type,
+				cnt = perf_process_last_stage_latency(pool, prod_type,
 					&ev, w, bufs, sz, cnt);
 			else
-				cnt = perf_process_last_stage(pool, prod_crypto_type, &ev, w,
-					 bufs, sz, cnt);
+				cnt = perf_process_last_stage(pool, prod_type, &ev, w,
+					bufs, sz, cnt);
 		} else {
 			atq_fwd_event(&ev, sched_type_list, nb_stages);
 			do {
@@ -99,7 +100,8 @@ perf_atq_worker_burst(void *arg, const int enable_fwd_latency)
 		}
 
 		for (i = 0; i < nb_rx; i++) {
-			if (prod_crypto_type && (ev[i].event_type == RTE_EVENT_TYPE_CRYPTODEV)) {
+			if ((prod_type == EVT_PROD_TYPE_EVENT_CRYPTO_ADPTR) &&
+			    (ev[i].event_type == RTE_EVENT_TYPE_CRYPTODEV)) {
 				if (perf_handle_crypto_ev(&ev[i], &pe, enable_fwd_latency))
 					continue;
 			}
@@ -116,9 +118,9 @@ perf_atq_worker_burst(void *arg, const int enable_fwd_latency)
 			if (unlikely(stage == laststage)) {
 				if (enable_fwd_latency)
 					cnt = perf_process_last_stage_latency(pool,
-						prod_crypto_type, &ev[i], w, bufs, sz, cnt);
+						prod_type, &ev[i], w, bufs, sz, cnt);
 				else
-					cnt = perf_process_last_stage(pool, prod_crypto_type,
+					cnt = perf_process_last_stage(pool, prod_type,
 						&ev[i], w, bufs, sz, cnt);
 
 				ev[i].op = RTE_EVENT_OP_RELEASE;
@@ -149,7 +151,7 @@ perf_atq_worker_vector(void *arg, const int enable_fwd_latency)
 
 	RTE_SET_USED(sz);
 	RTE_SET_USED(cnt);
-	RTE_SET_USED(prod_crypto_type);
+	RTE_SET_USED(prod_type);
 
 	while (t->done == false) {
 		deq = rte_event_dequeue_burst(dev, port, &ev, 1, 0);
