@@ -12756,6 +12756,23 @@ test_tls_1_3_record_proto_display_list(void)
 }
 
 static int
+test_dtls_1_2_record_proto_sg_opt_padding_corrupt(void)
+{
+	struct tls_record_test_flags flags = {
+		.opt_padding = 8,
+		.padding_corruption = true,
+		.nb_segs_in_mbuf = 4,
+		.tls_version = RTE_SECURITY_VERSION_DTLS_1_2
+	};
+	struct crypto_testsuite_params *ts_params = &testsuite_params;
+	struct rte_cryptodev_info dev_info;
+
+	rte_cryptodev_info_get(ts_params->valid_devs[0], &dev_info);
+
+	return test_tls_record_proto_all(&flags);
+}
+
+static int
 test_tls_1_3_record_proto_corrupt_pkt(void)
 {
 	struct tls_record_test_flags flags = {
@@ -18160,6 +18177,10 @@ static struct unit_test_suite dtls12_record_proto_testsuite  = {
 			"DTLS record SG mode with optional padding > max range",
 			ut_setup_security, ut_teardown,
 			test_dtls_1_2_record_proto_sg_opt_padding_max),
+		TEST_CASE_NAMED_ST(
+			"DTLS record SG mode with padding corruption",
+			ut_setup_security, ut_teardown,
+			test_dtls_1_2_record_proto_sg_opt_padding_corrupt),
 		TEST_CASES_END() /**< NULL terminate unit test array */
 	}
 };
