@@ -21,6 +21,22 @@ pick_tx_func(struct rte_eth_dev *eth_dev,
 }
 
 #if defined(RTE_ARCH_ARM64)
+static int
+cn9k_nix_tx_queue_count(void *tx_queue)
+{
+	struct cn9k_eth_txq *txq = (struct cn9k_eth_txq *)tx_queue;
+
+	return cnxk_nix_tx_queue_count(txq->fc_mem, txq->sqes_per_sqb_log2);
+}
+
+static int
+cn9k_nix_tx_queue_sec_count(void *tx_queue)
+{
+	struct cn9k_eth_txq *txq = (struct cn9k_eth_txq *)tx_queue;
+
+	return cnxk_nix_tx_queue_sec_count(txq->fc_mem, txq->sqes_per_sqb_log2, txq->cpt_fc);
+}
+
 static void
 cn9k_eth_set_tx_tmplt_func(struct rte_eth_dev *eth_dev)
 {
@@ -88,8 +104,15 @@ void
 cn9k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
 {
 #if defined(RTE_ARCH_ARM64)
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+
 	cn9k_eth_set_tx_blk_func(eth_dev);
 	cn9k_eth_set_tx_tmplt_func(eth_dev);
+
+	if (dev->tx_offloads & RTE_ETH_TX_OFFLOAD_SECURITY)
+		eth_dev->tx_queue_count = cn9k_nix_tx_queue_sec_count;
+	else
+		eth_dev->tx_queue_count = cn9k_nix_tx_queue_count;
 
 	rte_atomic_thread_fence(__ATOMIC_RELEASE);
 #else
