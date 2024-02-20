@@ -472,6 +472,13 @@ soc_thunderxt83 = {
     'part_number': '0xa3'
 }
 
+soc_v2 = {
+    'description': 'Arm Neoverse V2',
+    'implementer': '0x41',
+    'part_number': '0xd4f',
+    'numa': true
+}
+
 '''
 Start of SoCs list
 generic:         Generic un-optimized build for armv8 aarch64 execution mode.
@@ -495,6 +502,7 @@ stingray:        Broadcom Stingray
 thunderx2:       Marvell ThunderX2 T99
 thunderxt88:     Marvell ThunderX T88
 thunderxt83:     Marvell ThunderX T83
+v2:              Arm Neoverse V2
 End of SoCs list
 '''
 # The string above is included in the documentation, keep it in sync with the
@@ -521,6 +529,7 @@ socs = {
     'thunderx2': soc_thunderx2,
     'thunderxt88': soc_thunderxt88,
     'thunderxt83': soc_thunderxt83,
+    'v2': soc_v2,
 }
 
 dpdk_conf.set('RTE_ARCH_ARM', 1)
