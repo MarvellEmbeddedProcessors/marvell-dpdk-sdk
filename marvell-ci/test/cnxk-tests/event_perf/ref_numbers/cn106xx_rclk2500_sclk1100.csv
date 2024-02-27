@@ -2,14 +2,14 @@ L2FWD_EVENT (atomic queue) output in packets per second
 cores, RESULT
 1, 7314495
 8, 44187476
-16, 85869138
+16, 80869138
 
 ------------------------------------------------------------------------
 L3FWD_EVENT (ordered queue) output in packets per second
 cores, RESULT
 1, 7495352
 8, 44160021
-16, 85651417
+16, 80651417
 
 ------------------------------------------------------------------------
 PERF_ATQ (parallel queue) output in packets per second
