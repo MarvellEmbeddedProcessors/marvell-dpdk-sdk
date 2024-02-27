@@ -20,10 +20,10 @@ pick_tx_func(struct rte_eth_dev *eth_dev,
 			eth_dev->tx_pkt_burst;
 }
 
-void
-cn10k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
+static void
+cn10k_eth_set_tx_tmplt_func(struct rte_eth_dev *eth_dev)
 {
-#if defined(RTE_ARCH_ARM64)
+#if defined(RTE_ARCH_ARM64) && !defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 
 	const eth_tx_burst_t nix_eth_tx_burst[NIX_TX_OFFLOAD_MAX] = {
@@ -63,8 +63,39 @@ cn10k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
 		if (dev->tx_offloads & RTE_ETH_TX_OFFLOAD_MULTI_SEGS)
 			pick_tx_func(eth_dev, nix_eth_tx_vec_burst_mseg);
 	}
+#else
+	RTE_SET_USED(eth_dev);
+#endif
+}
 
-	rte_mb();
+static void
+cn10k_eth_set_tx_blk_func(struct rte_eth_dev *eth_dev)
+{
+#if defined(RTE_ARCH_ARM64) && defined(CNXK_DIS_TMPLT_FUNC)
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+
+	if (dev->scalar_ena || dev->tx_mark)
+		eth_dev->tx_pkt_burst = cn10k_nix_xmit_pkts_all_offload;
+	else
+		eth_dev->tx_pkt_burst = cn10k_nix_xmit_pkts_vec_all_offload;
+
+	if (eth_dev->data->dev_started)
+		rte_eth_fp_ops[eth_dev->data->port_id].tx_pkt_burst = eth_dev->tx_pkt_burst;
+#else
+	RTE_SET_USED(eth_dev);
+#endif
+}
+
+void
+cn10k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
+{
+#if defined(RTE_ARCH_ARM64)
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+
+	cn10k_eth_set_tx_blk_func(eth_dev);
+	cn10k_eth_set_tx_tmplt_func(eth_dev);
+
+	rte_atomic_thread_fence(__ATOMIC_RELEASE);
 #else
 	RTE_SET_USED(eth_dev);
 #endif

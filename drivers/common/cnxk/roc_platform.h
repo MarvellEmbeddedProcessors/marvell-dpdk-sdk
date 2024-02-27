@@ -71,6 +71,11 @@
 #define PLT_ETHER_ADDR_LEN RTE_ETHER_ADDR_LEN
 #endif
 
+#define PLT_DISABLE_TEMPLATE_FUNC 0
+#if PLT_DISABLE_TEMPLATE_FUNC
+#define CNXK_DIS_TMPLT_FUNC
+#endif
+
 /* Cast to specific datatypes */
 #define PLT_PTR_CAST(val) ((void *)(val))
 #define PLT_U64_CAST(val) ((uint64_t)(val))
