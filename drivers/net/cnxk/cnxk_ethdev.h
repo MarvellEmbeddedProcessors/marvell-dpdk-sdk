@@ -472,7 +472,7 @@ cnxk_nix_tx_queue_count(uint64_t *mem, uint16_t sqes_per_sqb_log2)
 {
 	uint64_t val;
 
-	val = rte_atomic_load_explicit(mem, rte_memory_order_relaxed);
+	val = rte_atomic_load_explicit((RTE_ATOMIC(uint64_t *))mem, rte_memory_order_relaxed);
 	val = (val << sqes_per_sqb_log2) - val;
 
 	return (val & 0xFFFF);
@@ -483,9 +483,10 @@ cnxk_nix_tx_queue_sec_count(uint64_t *mem, uint16_t sqes_per_sqb_log2, uint64_t 
 {
 	uint64_t sq_cnt, sec_cnt, val;
 
-	sq_cnt = rte_atomic_load_explicit(mem, rte_memory_order_relaxed);
+	sq_cnt = rte_atomic_load_explicit((RTE_ATOMIC(uint64_t *))mem, rte_memory_order_relaxed);
 	sq_cnt = (sq_cnt << sqes_per_sqb_log2) - sq_cnt;
-	sec_cnt = rte_atomic_load_explicit(sec_fc, rte_memory_order_relaxed);
+	sec_cnt = rte_atomic_load_explicit((RTE_ATOMIC(uint64_t *))sec_fc,
+					   rte_memory_order_relaxed);
 	val = RTE_MAX(sq_cnt, sec_cnt);
 
 	return (val & 0xFFFF);

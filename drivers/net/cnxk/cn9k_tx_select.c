@@ -20,6 +20,7 @@ pick_tx_func(struct rte_eth_dev *eth_dev,
 			eth_dev->tx_pkt_burst;
 }
 
+#if defined(RTE_ARCH_ARM64)
 static int
 cn9k_nix_tx_queue_count(void *tx_queue)
 {
@@ -35,6 +36,7 @@ cn9k_nix_tx_queue_sec_count(void *tx_queue)
 
 	return cnxk_nix_tx_queue_sec_count(txq->fc_mem, txq->sqes_per_sqb_log2, txq->cpt_fc);
 }
+#endif
 
 static void
 cn9k_eth_set_tx_tmplt_func(struct rte_eth_dev *eth_dev)
