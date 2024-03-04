@@ -423,6 +423,18 @@ Runtime Config Options
    With the above configuration, driver would enable packet inject from ARM cores
    to crypto to process and send back in Rx path.
 
+- ``NPC MCAM Aging poll frequency in seconds`` (default ``10``)
+
+   Poll frequency for aging control thread can be specified by
+   ``aging_poll_freq`` ``devargs`` parameter.
+
+   For example::
+
+      -a 0002:01:00.2,aging_poll_freq=50
+
+   With the above configuration, driver would poll for aging flows every 50
+   seconds.
+
 .. note::
 
    Above devarg parameters are configurable per device, user needs to pass the
@@ -600,18 +612,6 @@ Runtime Config Options for inline device
 
    With the above configuration, driver would poll for soft expiry events every
    1000 usec.
-
-- ``NPC MCAM Aging poll frequency in seconds`` (default ``10``)
-
-   Poll frequency for aging control thread can be specified by
-   ``aging_poll_freq`` ``devargs`` parameter.
-
-   For example::
-
-      -a 0002:01:00.2,aging_poll_freq=50
-
-   With the above configuration, driver would poll for aging flows every 50
-   seconds.
 
 - ``Rx Inject Enable inbound inline IPsec for second pass`` (default ``0``)
 
