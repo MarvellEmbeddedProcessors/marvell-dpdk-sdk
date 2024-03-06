@@ -132,8 +132,9 @@ implementer_cavium = {
             'flags': flags_part_number_thunderx
         },
         '0xa3': {
+            'march': 'armv8-a',
+            'march_features': ['crc', 'crypto'],
             'mcpu': 'thunderxt83',
-            'compiler_options': ['-march=armv8-a+crc'],
             'flags': flags_part_number_thunderx
         },
         '0xaf': {
@@ -629,26 +630,36 @@ if update_flags
 
     machine_args = [] # Clear previous machine args
 
-    candidate_mcpu = ''
-    support_mcpu = false
-    if part_number_config.has_key('mcpu')
-        mcpu = part_number_config['mcpu']
-        if (cc.has_argument('-mcpu=' + mcpu))
-            candidate_mcpu = mcpu
-            support_mcpu = true
-        endif
+    march_features = []
+    if part_number_config.has_key('march_features')
+        march_features += part_number_config['march_features']
+    endif
+    if soc_config.has_key('extra_march_features')
+        march_features += soc_config['extra_march_features']
     endif
 
-    # probe supported archs and their features
+    candidate_mcpu = ''
     candidate_march = ''
-    supported_marchs = ['armv9-a', 'armv8.6-a', 'armv8.5-a', 'armv8.4-a',
-                        'armv8.3-a', 'armv8.2-a', 'armv8.1-a', 'armv8-a']
-    if part_number_config.has_key('march')
-        if part_number_config.get('force_march', false) or support_mcpu
-            if cc.has_argument('-march=' +  part_number_config['march'])
-                candidate_march = part_number_config['march']
+
+    if (part_number_config.has_key('mcpu') and
+        cc.has_argument('-mcpu=' + part_number_config['mcpu']))
+        candidate_mcpu = '-mcpu=' + part_number_config['mcpu']
+        foreach feature: march_features
+            if cc.has_argument('+'.join([candidate_mcpu, feature]))
+                candidate_mcpu = '+'.join([candidate_mcpu, feature])
+            else
+                warning('The compiler does not support feature @0@'
+                    .format(feature))
             endif
+        endforeach
+        machine_args += candidate_mcpu
+    elif part_number_config.has_key('march')
+        # probe supported archs and their features
+        if part_number_config.get('force_march', false)
+            candidate_march = part_number_config['march']
         else
+            supported_marchs = ['armv9-a', 'armv8.6-a', 'armv8.5-a', 'armv8.4-a', 'armv8.3-a',
+                                'armv8.2-a', 'armv8.1-a', 'armv8-a']
             check_compiler_support = false
             foreach supported_march: supported_marchs
                 if supported_march == part_number_config['march']
@@ -662,19 +673,14 @@ if update_flags
                     break
                 endif
             endforeach
+            if (part_number_config.has_key('fallback_march') and
+                candidate_march != part_number_config['march'] and
+                cc.has_argument('-march=' + part_number_config['fallback_march']))
+                    candidate_march = part_number_config['fallback_march']
+            endif
         endif
 
         if candidate_march != part_number_config['march']
-            if part_number_config.has_key('fallback_march') and not support_mcpu
-                fallback_march = part_number_config['fallback_march']
-                foreach supported_march: supported_marchs
-                    if (supported_march == fallback_march
-                        and cc.has_argument('-march=' + supported_march))
-                        candidate_march = supported_march
-                        break
-                    endif
-                endforeach
-            endif
             warning('Configuration march version is @0@, not supported.'
                     .format(part_number_config['march']))
             if candidate_march != ''
@@ -682,19 +688,8 @@ if update_flags
             endif
         endif
 
-        if candidate_march == '' and candidate_mcpu == ''
-            error('No suitable ARM march/mcpu version found.')
-        endif
-
         if candidate_march != ''
             candidate_march = '-march=' + candidate_march
-            march_features = []
-            if part_number_config.has_key('march_features')
-                march_features += part_number_config['march_features']
-            endif
-            if soc_config.has_key('extra_march_features')
-                march_features += soc_config['extra_march_features']
-            endif
             foreach feature: march_features
                 if cc.has_argument('+'.join([candidate_march, feature]))
                     candidate_march = '+'.join([candidate_march, feature])
@@ -707,15 +702,14 @@ if update_flags
         endif
     endif
 
-    if candidate_mcpu != ''
-        candidate_mcpu = '-mcpu=' + candidate_mcpu
-        machine_args += candidate_mcpu
+    if candidate_mcpu == '' and candidate_march == ''
+        error('No suitable ARM march/mcpu version found.')
     endif
 
     # apply supported compiler options
     if part_number_config.has_key('compiler_options')
         foreach flag: part_number_config['compiler_options']
-            if cc.has_argument(flag)
+            if cc.has_multi_arguments(machine_args + [flag])
                 machine_args += flag
             else
                 warning('Configuration compiler option ' +
