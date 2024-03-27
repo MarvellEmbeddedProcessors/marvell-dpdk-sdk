@@ -282,7 +282,7 @@ cnxk_ae_modex_prep(struct rte_crypto_op *op, struct roc_ae_buf_ptr *meta_buf,
 	struct rte_crypto_mod_op_param mod_op;
 	uint64_t total_key_len;
 	union cpt_inst_w4 w4;
-	size_t base_len;
+	uint32_t base_len;
 	uint32_t dlen;
 	uint8_t *dptr;
 
@@ -290,11 +290,8 @@ cnxk_ae_modex_prep(struct rte_crypto_op *op, struct roc_ae_buf_ptr *meta_buf,
 
 	base_len = mod_op.base.length;
 	if (unlikely(base_len > mod_len)) {
-		cnxk_ae_modex_param_normalize(&mod_op.base.data, &base_len);
-		if (unlikely(base_len > mod_len)) {
-			op->status = RTE_CRYPTO_OP_STATUS_INVALID_ARGS;
-			return -ENOTSUP;
-		}
+		op->status = RTE_CRYPTO_OP_STATUS_INVALID_ARGS;
+		return -ENOTSUP;
 	}
 
 	total_key_len = mod_len + exp_len;
