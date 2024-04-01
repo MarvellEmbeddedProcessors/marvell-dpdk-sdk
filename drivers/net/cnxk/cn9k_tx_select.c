@@ -86,8 +86,6 @@ void
 cn9k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
 {
 #if defined(RTE_ARCH_ARM64)
-	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-
 	cn9k_eth_set_tx_blk_func(eth_dev);
 	cn9k_eth_set_tx_tmplt_func(eth_dev);
 
