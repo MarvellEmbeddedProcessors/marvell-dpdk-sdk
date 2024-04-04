@@ -1099,6 +1099,7 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	struct rte_mbuf *tx_pkts = NULL;
 	struct rte_mbuf *rx_pkts = NULL;
 	uint16_t sa_hi = 0, sa_lo = 0;
+	uint64_t userdata;
 	int ret = 0;
 
 	nb_tx = 1;
@@ -1219,6 +1220,7 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	conf.protocol = RTE_SECURITY_PROTOCOL_IPSEC;
 	memcpy(&conf.ipsec, &sa_data.ipsec_xform, sizeof(struct rte_security_ipsec_xform));
 	conf.crypto_xform = &sa_data.xform.aead;
+	conf.userdata = (void *)(uint64_t)(alg);
 	ret = rte_security_session_update(sec_ctx, in_ses, &conf);
 	if (ret) {
 		printf("Security session update failed inbound\n");
@@ -1264,6 +1266,15 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	if (rx_pkts->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED ||
 	    !(rx_pkts->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
 		printf("\nSecurity offload failed\n");
+		ret = -1;
+		goto out;
+	}
+
+	/* Check for userdata match */
+	userdata = *rte_security_dynfield(rx_pkts);
+	if (userdata != alg) {
+		printf("\nDecrypted packet userdata mismatch %lx != %x\n",
+		       userdata, alg);
 		ret = -1;
 		goto out;
 	}
