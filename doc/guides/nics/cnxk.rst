@@ -444,6 +444,19 @@ Runtime Config Options
    With the above configuration, driver would poll for aging flows every 50
    seconds.
 
+- ``Disable custom meta aura feature`` (default ``0``)
+
+   Custom meta aura i.e 1:N meta aura is enabled for second pass traffic by default when
+   ``inl_cpt_channel`` devarg is provided. Provide an option to disable the custom
+   meta aura feature by setting devarg ``custom_meta_aura_dis`` to ``1``.
+
+   For example::
+
+     -a 0002:02:00.0,custom_meta_aura_dis=1
+
+   With the above configuration, driver would disable custom meta aura feature for
+   ``0002:02:00.0`` ethdev.
+
 .. note::
 
    Above devarg parameters are configurable per device, user needs to pass the
