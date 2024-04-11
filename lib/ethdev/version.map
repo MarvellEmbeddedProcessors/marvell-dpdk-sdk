@@ -298,6 +298,7 @@ EXPERIMENTAL {
 	rte_eth_tx_queue_is_valid;
 
 	# added in 24.03
+	__rte_eth_trace_tx_queue_count;
 	rte_eth_tx_queue_count;
 };
 
