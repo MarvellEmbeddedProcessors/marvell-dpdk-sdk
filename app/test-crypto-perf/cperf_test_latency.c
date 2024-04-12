@@ -47,7 +47,8 @@ cperf_latency_test_free(struct cperf_latency_ctx *ctx)
 		return;
 
 	if (ctx->sess != NULL) {
-		if (ctx->options->op_type == CPERF_ASYM_MODEX)
+		if (ctx->options->op_type == CPERF_ASYM_MODEX ||
+				ctx->options->op_type == CPERF_ASYM_SM2)
 			rte_cryptodev_asym_session_free(ctx->dev_id, ctx->sess);
 #ifdef RTE_LIB_SECURITY
 		else if (ctx->options->op_type == CPERF_PDCP ||

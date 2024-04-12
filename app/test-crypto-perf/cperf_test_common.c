@@ -154,7 +154,7 @@ cperf_alloc_common_memory(const struct cperf_options *options,
 		sizeof(struct rte_crypto_sym_op);
 	uint16_t crypto_op_private_size;
 
-	if (options->op_type == CPERF_ASYM_MODEX) {
+	if (options->op_type == CPERF_ASYM_MODEX || options->op_type == CPERF_ASYM_SM2) {
 		snprintf(pool_name, RTE_MEMPOOL_NAMESIZE, "perf_asym_op_pool%u",
 			 rte_socket_id());
 		*pool = rte_crypto_op_pool_create(
