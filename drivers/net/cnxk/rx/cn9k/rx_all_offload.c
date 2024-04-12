@@ -20,8 +20,7 @@ cn9k_nix_recv_pkts_all_offload(void *rx_queue, struct rte_mbuf **rx_pkts, uint16
 uint16_t __rte_noinline __rte_hot
 cn9k_nix_recv_pkts_vec_all_offload(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts)
 {
-	return cn9k_nix_recv_pkts_vector(
-		rx_queue, rx_pkts, pkts,
+	return cn9k_nix_recv_pkts_vector(rx_queue, rx_pkts, pkts,
 		NIX_RX_OFFLOAD_RSS_F | NIX_RX_OFFLOAD_PTYPE_F | NIX_RX_OFFLOAD_CHECKSUM_F |
 			NIX_RX_OFFLOAD_MARK_UPDATE_F |
 			NIX_RX_OFFLOAD_VLAN_STRIP_F | NIX_RX_OFFLOAD_SECURITY_F |
@@ -41,8 +40,7 @@ cn9k_nix_recv_pkts_all_offload_tst(void *rx_queue, struct rte_mbuf **rx_pkts, ui
 uint16_t __rte_noinline __rte_hot
 cn9k_nix_recv_pkts_vec_all_offload_tst(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts)
 {
-	return cn9k_nix_recv_pkts_vector(
-		rx_queue, rx_pkts, pkts,
+	return cn9k_nix_recv_pkts_vector(rx_queue, rx_pkts, pkts,
 		NIX_RX_OFFLOAD_RSS_F | NIX_RX_OFFLOAD_PTYPE_F | NIX_RX_OFFLOAD_CHECKSUM_F |
 			NIX_RX_OFFLOAD_MARK_UPDATE_F | NIX_RX_OFFLOAD_TSTAMP_F |
 			NIX_RX_OFFLOAD_VLAN_STRIP_F | NIX_RX_OFFLOAD_SECURITY_F |

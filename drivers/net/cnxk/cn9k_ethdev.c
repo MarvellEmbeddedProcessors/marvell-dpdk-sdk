@@ -703,11 +703,11 @@ cn9k_rx_descriptor_dump(const struct rte_eth_dev *eth_dev, uint16_t qid,
 	uint32_t head = rxq->head;
 	struct nix_cqe_hdr_s *cq;
 	uint16_t count = 0;
-	int availble_pkts;
+	int available_pkts;
 
-	availble_pkts = cn9k_nix_rx_avail_get(rxq);
+	available_pkts = cn9k_nix_rx_avail_get(rxq);
 
-	if ((offset + num - 1) >= availble_pkts) {
+	if ((offset + num - 1) >= available_pkts) {
 		plt_err("Invalid BD num=%u\n", num);
 		return -EINVAL;
 	}

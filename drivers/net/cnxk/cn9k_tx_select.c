@@ -20,10 +20,11 @@ pick_tx_func(struct rte_eth_dev *eth_dev,
 			eth_dev->tx_pkt_burst;
 }
 
+#if defined(RTE_ARCH_ARM64)
 static void
 cn9k_eth_set_tx_tmplt_func(struct rte_eth_dev *eth_dev)
 {
-#if defined(RTE_ARCH_ARM64) && !defined(CNXK_DIS_TMPLT_FUNC)
+#if !defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 
 	const eth_tx_burst_t nix_eth_tx_burst[NIX_TX_OFFLOAD_MAX] = {
@@ -81,6 +82,7 @@ cn9k_eth_set_tx_blk_func(struct rte_eth_dev *eth_dev)
 	RTE_SET_USED(eth_dev);
 #endif
 }
+#endif
 
 void
 cn9k_eth_set_tx_function(struct rte_eth_dev *eth_dev)

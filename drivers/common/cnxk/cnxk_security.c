@@ -588,26 +588,6 @@ cnxk_ot_ipsec_outb_sa_valid(struct roc_ot_ipsec_outb_sa *sa)
 	return !!sa->w2.s.valid;
 }
 
-static inline int
-ipsec_xfrm_verify(struct rte_security_ipsec_xform *ipsec_xfrm,
-		  struct rte_crypto_sym_xform *crypto_xfrm)
-{
-	if (crypto_xfrm->next == NULL)
-		return -EINVAL;
-
-	if (ipsec_xfrm->direction == RTE_SECURITY_IPSEC_SA_DIR_INGRESS) {
-		if (crypto_xfrm->type != RTE_CRYPTO_SYM_XFORM_AUTH ||
-		    crypto_xfrm->next->type != RTE_CRYPTO_SYM_XFORM_CIPHER)
-			return -EINVAL;
-	} else {
-		if (crypto_xfrm->type != RTE_CRYPTO_SYM_XFORM_CIPHER ||
-		    crypto_xfrm->next->type != RTE_CRYPTO_SYM_XFORM_AUTH)
-			return -EINVAL;
-	}
-
-	return 0;
-}
-
 uint8_t
 cnxk_ipsec_ivlen_get(enum rte_crypto_cipher_algorithm c_algo,
 		     enum rte_crypto_auth_algorithm a_algo,
