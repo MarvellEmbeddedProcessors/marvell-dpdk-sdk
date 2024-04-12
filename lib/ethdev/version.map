@@ -318,7 +318,7 @@ EXPERIMENTAL {
 	rte_flow_calc_table_hash;
 
 	# added in 24.03
-	rte_eth_tx_queue_count;
+	__rte_eth_trace_tx_queue_count;
 };
 
 INTERNAL {
