@@ -15,8 +15,7 @@ cn10k_nix_xmit_pkts_all_offload(void *tx_queue, struct rte_mbuf **tx_pkts, uint1
 {
 	uint64_t cmd[8 + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];
 
-	return cn10k_nix_xmit_pkts_mseg(
-		tx_queue, NULL, tx_pkts, pkts, cmd,
+	return cn10k_nix_xmit_pkts_mseg(tx_queue, NULL, tx_pkts, pkts, cmd,
 		NIX_TX_OFFLOAD_L3_L4_CSUM_F | NIX_TX_OFFLOAD_OL3_OL4_CSUM_F |
 			NIX_TX_OFFLOAD_VLAN_QINQ_F | NIX_TX_OFFLOAD_MBUF_NOFF_F |
 			NIX_TX_OFFLOAD_TSO_F | NIX_TX_OFFLOAD_TSTAMP_F | NIX_TX_OFFLOAD_SECURITY_F |
@@ -28,8 +27,7 @@ cn10k_nix_xmit_pkts_vec_all_offload(void *tx_queue, struct rte_mbuf **tx_pkts, u
 {
 	uint64_t cmd[8 + CNXK_NIX_TX_MSEG_SG_DWORDS - 2];
 
-	return cn10k_nix_xmit_pkts_vector(
-		tx_queue, NULL, tx_pkts, pkts, cmd,
+	return cn10k_nix_xmit_pkts_vector(tx_queue, NULL, tx_pkts, pkts, cmd,
 		NIX_TX_OFFLOAD_L3_L4_CSUM_F | NIX_TX_OFFLOAD_OL3_OL4_CSUM_F |
 			NIX_TX_OFFLOAD_VLAN_QINQ_F | NIX_TX_OFFLOAD_MBUF_NOFF_F |
 			NIX_TX_OFFLOAD_TSO_F | NIX_TX_OFFLOAD_TSTAMP_F | NIX_TX_OFFLOAD_SECURITY_F |

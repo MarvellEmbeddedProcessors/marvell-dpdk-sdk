@@ -19,7 +19,7 @@ pick_rx_func(struct rte_eth_dev *eth_dev,
 		rte_eth_fp_ops[eth_dev->data->port_id].rx_pkt_burst =
 			eth_dev->rx_pkt_burst;
 
-	rte_atomic_thread_fence(__ATOMIC_RELEASE);
+	rte_atomic_thread_fence(rte_memory_order_release);
 }
 
 static uint16_t __rte_noinline __rte_hot __rte_unused
@@ -29,10 +29,11 @@ cn10k_nix_flush_rx(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pkts)
 	return cn10k_nix_flush_recv_pkts(rx_queue, rx_pkts, pkts, flags);
 }
 
+#if defined(RTE_ARCH_ARM64)
 static void
 cn10k_eth_set_rx_tmplt_func(struct rte_eth_dev *eth_dev)
 {
-#if defined(RTE_ARCH_ARM64) && !defined(CNXK_DIS_TMPLT_FUNC)
+#if !defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 
 	const eth_rx_burst_t nix_eth_rx_burst[NIX_RX_OFFLOAD_MAX] = {
@@ -149,6 +150,7 @@ cn10k_eth_set_rx_blk_func(struct rte_eth_dev *eth_dev)
 	RTE_SET_USED(eth_dev);
 #endif
 }
+#endif
 
 void
 cn10k_eth_set_rx_function(struct rte_eth_dev *eth_dev)
@@ -157,7 +159,7 @@ cn10k_eth_set_rx_function(struct rte_eth_dev *eth_dev)
 	cn10k_eth_set_rx_blk_func(eth_dev);
 	cn10k_eth_set_rx_tmplt_func(eth_dev);
 
-	rte_atomic_thread_fence(__ATOMIC_RELEASE);
+	rte_atomic_thread_fence(rte_memory_order_release);
 #else
 	RTE_SET_USED(eth_dev);
 #endif

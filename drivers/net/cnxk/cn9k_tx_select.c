@@ -36,12 +36,11 @@ cn9k_nix_tx_queue_sec_count(void *tx_queue)
 
 	return cnxk_nix_tx_queue_sec_count(txq->fc_mem, txq->sqes_per_sqb_log2, txq->cpt_fc);
 }
-#endif
 
 static void
 cn9k_eth_set_tx_tmplt_func(struct rte_eth_dev *eth_dev)
 {
-#if defined(RTE_ARCH_ARM64) && !defined(CNXK_DIS_TMPLT_FUNC)
+#if !defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 
 	const eth_tx_burst_t nix_eth_tx_burst[NIX_TX_OFFLOAD_MAX] = {
@@ -99,6 +98,7 @@ cn9k_eth_set_tx_blk_func(struct rte_eth_dev *eth_dev)
 	RTE_SET_USED(eth_dev);
 #endif
 }
+#endif
 
 void
 cn9k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
@@ -114,7 +114,7 @@ cn9k_eth_set_tx_function(struct rte_eth_dev *eth_dev)
 	else
 		eth_dev->tx_queue_count = cn9k_nix_tx_queue_count;
 
-	rte_atomic_thread_fence(__ATOMIC_RELEASE);
+	rte_atomic_thread_fence(rte_memory_order_release);
 #else
 	RTE_SET_USED(eth_dev);
 #endif
