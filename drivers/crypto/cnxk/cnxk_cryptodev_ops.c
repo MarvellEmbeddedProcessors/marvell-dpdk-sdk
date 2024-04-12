@@ -505,7 +505,8 @@ cnxk_cpt_qp_depth_used(void *qptr)
 
 	pend_q = &qp->pend_q;
 
-	fc.u64[0] = rte_atomic_load_explicit(qp->lmtline.fc_addr, rte_memory_order_relaxed);
+	fc.u64[0] = rte_atomic_load_explicit((RTE_ATOMIC(uint64_t)*)(qp->lmtline.fc_addr),
+					     rte_memory_order_relaxed);
 
 	return RTE_MAX(pending_queue_infl_cnt(pend_q->head, pend_q->tail, pend_q->pq_mask),
 		       fc.s.qsize);
