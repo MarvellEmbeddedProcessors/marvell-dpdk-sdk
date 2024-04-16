@@ -238,12 +238,11 @@ odm_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge *
 		   const struct rte_dma_sge *dst, uint16_t nb_src, uint16_t nb_dst, uint64_t flags)
 {
 	uint16_t pending_submit_len, pending_submit_cnt, iring_head, ins_ring_head;
+	uint16_t iring_sz_available, i, nb, num_words;
 	uint64_t cmd[ODM_IRING_ENTRY_SIZE_MAX];
 	struct odm_dev *odm = dev_private;
 	uint32_t s_sz = 0, d_sz = 0;
-	uint16_t iring_sz_available;
 	uint64_t *iring_head_ptr;
-	int i, nb, num_words;
 	struct odm_queue *vq;
 	union odm_instr_hdr_s hdr = {
 		.s.ct = ODM_HDR_CT_CW_NC,
@@ -281,12 +280,16 @@ odm_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge *
 		return -ENOSPC;
 
 	if ((iring_head + num_words) >= max_iring_words) {
-		int words_avail = max_iring_words - iring_head;
+		uint16_t words_avail = max_iring_words - iring_head;
+		uint16_t words_pend = num_words - words_avail;
+
+		if (unlikely(words_avail + words_pend > ODM_IRING_ENTRY_SIZE_MAX))
+			return -ENOSPC;
 
 		odm_dmadev_fill_sg(cmd, src, dst, nb_src, nb_dst, &hdr);
 		rte_memcpy((void *)&iring_head_ptr[iring_head], (void *)cmd, words_avail * 8);
-		iring_head = num_words - words_avail;
-		rte_memcpy((void *)iring_head_ptr, (void *)&cmd[words_avail], iring_head * 8);
+		rte_memcpy((void *)iring_head_ptr, (void *)&cmd[words_avail], words_pend * 8);
+		iring_head = words_pend;
 	} else {
 		odm_dmadev_fill_sg(&iring_head_ptr[iring_head], src, dst, nb_src, nb_dst, &hdr);
 		iring_head += num_words;
