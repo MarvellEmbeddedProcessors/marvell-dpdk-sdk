@@ -435,7 +435,8 @@ odm_dmadev_completed(void *dev_private, uint16_t vchan, const uint16_t nb_cpls, 
 
 	for (cnt = 0; cnt < nb_cpls; cnt++) {
 		cmpl_ptr = RTE_PTR_ADD(base_addr, cring_head * sizeof(cmpl));
-		cmpl.u = rte_atomic_load_explicit(cmpl_ptr, rte_memory_order_relaxed);
+		cmpl.u = rte_atomic_load_explicit((RTE_ATOMIC(uint32_t) *)cmpl_ptr,
+						  rte_memory_order_relaxed);
 		if (!cmpl.s.valid)
 			break;
 
@@ -448,7 +449,8 @@ odm_dmadev_completed(void *dev_private, uint16_t vchan, const uint16_t nb_cpls, 
 		/* Clear instruction extra space */
 		vq->extra_ins_sz[cring_head] = 0;
 
-		rte_atomic_store_explicit(cmpl_ptr, cmpl_zero.u, rte_memory_order_relaxed);
+		rte_atomic_store_explicit((RTE_ATOMIC(uint32_t) *)cmpl_ptr, cmpl_zero.u,
+					  rte_memory_order_relaxed);
 		cring_head = (cring_head + 1) % cring_max_entry;
 	}
 
@@ -500,7 +502,8 @@ odm_dmadev_completed_status(void *dev_private, uint16_t vchan, const uint16_t nb
 
 	for (cnt = 0; cnt < nb_cpls; cnt++) {
 		cmpl_ptr = RTE_PTR_ADD(base_addr, cring_head * sizeof(cmpl));
-		cmpl.u = rte_atomic_load_explicit(cmpl_ptr, rte_memory_order_relaxed);
+		cmpl.u = rte_atomic_load_explicit((RTE_ATOMIC(uint32_t) *)cmpl_ptr,
+						  rte_memory_order_relaxed);
 		if (!cmpl.s.valid)
 			break;
 
@@ -515,7 +518,8 @@ odm_dmadev_completed_status(void *dev_private, uint16_t vchan, const uint16_t nb
 		/* Clear instruction extra space */
 		vq->extra_ins_sz[cring_head] = 0;
 
-		rte_atomic_store_explicit(cmpl_ptr, cmpl_zero.u, rte_memory_order_relaxed);
+		rte_atomic_store_explicit((RTE_ATOMIC(uint32_t) *)cmpl_ptr, cmpl_zero.u,
+					  rte_memory_order_relaxed);
 		cring_head = (cring_head + 1) % cring_max_entry;
 	}
 
