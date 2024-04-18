@@ -139,6 +139,7 @@ npc_aged_flows_get(void *args)
 	uint64_t hit_status[MCAM_ARR_SIZE] = {0};
 	uint64_t mcam_ids[MCAM_ARR_SIZE] = {0};
 	struct npc_age_flow_list_head *list;
+	uint64_t timeout, sleep = 10 * 1000;
 	struct npc_age_flow_entry *fl_iter;
 	struct roc_npc *roc_npc = args;
 	struct npc *npc = roc_npc_to_npc_priv(roc_npc);
@@ -197,7 +198,12 @@ npc_aged_flows_get(void *args)
 		plt_seqcount_write_end(&flow_age->seq_cnt);
 
 lbl_sleep:
-		sleep(flow_age->aging_poll_freq);
+		timeout = 0;
+		do {
+			plt_delay_us(sleep);
+			timeout += sleep;
+		} while (!flow_age->aged_flows_get_thread_exit &&
+			 timeout < (flow_age->aging_poll_freq * 1000 * 1000));
 	}
 
 	return 0;
