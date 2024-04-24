@@ -8,6 +8,7 @@
 #define MAX_PKT_LEN  1500
 
 struct ipsec_session_data {
+	uint32_t spi;
 	struct {
 		uint8_t data[32];
 	} key;
@@ -134,4 +135,13 @@ struct ipsec_session_data conf_aes_128_gcm = {
 		},
 	},
 };
+
+enum pkt_type {
+	PKT_TYPE_PLAIN_IPV4 = 1,
+	PKT_TYPE_IPSEC_IPV4,
+	PKT_TYPE_PLAIN_IPV6,
+	PKT_TYPE_IPSEC_IPV6,
+	PKT_TYPE_INVALID
+};
+
 #endif
