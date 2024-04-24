@@ -16,6 +16,16 @@ test_dir = meson.current_build_dir()
 # Test executable
 test_exec='cnxk_ipsec_msns'
 
+if meson.is_cross_build()
+        soc_type = meson.get_cross_property('platform', '')
+else
+        soc_type = platform
+endif
+
+if soc_type == 'cn9k'
+        cflags += ['-DMSNS_CN9K']
+endif
+
 # Copy the required scripts to build directory.
 run_command(copy_data, test_script)
 
