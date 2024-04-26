@@ -440,6 +440,20 @@ function ae_modex_perf()
 	crypto_perf_common "$optype" "--devtype $DEVTYPE --ptest throughput --optype $optype --pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --silent --csv-friendly"
 }
 
+function ae_sm2_perf()
+{
+	local optype="sm2"
+	local asymoptype="sign"
+	local algostr="sm2-sign"
+	BUFSIZE=(64)
+	BUFFERSZ="64"
+	NUMOPS=100000
+	crypto_perf_common "$algostr" "--devtype $DEVTYPE --ptest throughput --optype $optype --pool-sz $POOLSZ --buffer-sz $BUFFERSZ --total-ops $NUMOPS --burst-sz $BURSTSZ --asym-op $asymoptype --silent --csv-friendly"
+	BUFSIZE=(64 384 1504)
+	BUFFERSZ="64,384,1504"
+	NUMOPS=10000000
+}
+
 echo "Starting crypto perf application"
 
 trap "sig_handler ERR" ERR
@@ -468,6 +482,7 @@ aead_ipsec_perf
 zuc_eia3_perf
 zuc_eea3_perf
 ae_modex_perf
+ae_sm2_perf
 
 if [[ $IS_CN103 -ne 0 ]] || [[ $PART_106B0 == "B0" ]]; then
 	aead_tls12_perf
