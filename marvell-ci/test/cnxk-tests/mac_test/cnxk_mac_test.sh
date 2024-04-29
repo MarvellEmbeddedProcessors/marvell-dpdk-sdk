@@ -146,8 +146,9 @@ function macfltr_pkt_test_verify()
 		ts=`date +%s`
 		if (( $ts > $start_ts ))
 		then
-			echo "Timeout unable to received $EXPECTED_CNT packets"
-			cleanup_interface
+			echo "Timeout: packets expected $1 packets rcvd $tx_count"
+			macfltr_cleanup
+			macfltr_cleanup_interface
 			exit 1
 		fi
 
@@ -198,7 +199,8 @@ function check_port_status()
 		if (( $ts > $start_ts ))
 		then
 			echo "Timeout port is down"
-			cleanup_interface
+			macfltr_cleanup
+			macfltr_cleanup_interface
 			exit 1
 		fi
 		echo "link status $link_status"
