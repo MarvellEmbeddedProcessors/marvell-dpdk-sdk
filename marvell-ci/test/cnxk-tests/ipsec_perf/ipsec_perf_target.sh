@@ -34,6 +34,8 @@ TPMD_TX_PREFIX="tpmd_tx"
 
 ! $(cat /proc/device-tree/compatible | grep -q "cn10k")
 IS_CN10K=$?
+DTC=$(tr -d '\0' </proc/device-tree/model | awk '{print $2}')
+CORE_NUM=16
 
 function get_system_info()
 {
@@ -120,7 +122,12 @@ fi
 get_system_info
 
 if [[ $IS_CN10K -ne 0 ]]; then
-	HW="106xx"
+	if [[ $DTC == "CN103XX" ]]; then
+		HW="103xx"
+		CORE_NUM=7
+	else
+		HW="106xx"
+	fi
 	CDEV_VF=$(lspci -d :a0f3 | head -1 | awk -e '{ print $1 }')
 	INLINE_DEV=0002:1d:00.0
 	mkdir -p ref_numbers/cn10k
@@ -257,7 +264,7 @@ function run_test()
 
 function run_ipsec_secgw()
 {
-	local config="(0,0,16),(1,0,16)"
+	local config="(0,0,$CORE_NUM),(1,0,$CORE_NUM)"
 
 	echo "ipsec-secgw outb"
 	if [[ $Y -ge 2 ]]; then
@@ -275,7 +282,7 @@ function run_ipsec_secgw()
 					;;
 				4)
 					# Inline Protocol Poll Mode
-					run_test '$env -f ${CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
+					run_test '$env -f ${CFG[$Y]} --transfer-mode poll --config="(0,0,$CORE_NUM)" --cryptodev_mask 0 -l'
 					;;
 				5)
 					# Inline Protocol Event Vector Perf Mode (Single-SA)
@@ -283,7 +290,7 @@ function run_ipsec_secgw()
 					;;
 				6)
 					# Inline Protocol Poll Perf Mode (Single-SA)
-					run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
+					run_test '$env -f ${IP_PERF_CFG[$perf_cfg]} --transfer-mode poll --config="(0,0,$CORE_NUM)" --cryptodev_mask 0 -l --single-sa 0'
 					;;
 			esac
 		else
@@ -297,7 +304,7 @@ function run_ipsec_secgw()
 
 function run_ipsec_secgw_inb()
 {
-	local config="(0,0,16),(1,0,16)"
+	local config="(0,0,$CORE_NUM),(1,0,$CORE_NUM)"
 
 	echo "ipsec-secgw inb"
 
@@ -316,7 +323,7 @@ function run_ipsec_secgw_inb()
 					;;
 				4)
 					# Inline Protocol Poll Mode
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,$CORE_NUM)" --cryptodev_mask 0 -l'
 					;;
 				5)
 					# Inline Protocol Event Vector Perf Mode (Single-SA)
@@ -324,7 +331,7 @@ function run_ipsec_secgw_inb()
 					;;
 				6)
 					# Inline Protocol Poll Perf Mode (Single-SA)
-					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,16)" --cryptodev_mask 0 -l --single-sa 0'
+					run_test '$env -f ${IP_IB_CFG[$Y]} --transfer-mode poll --config="(0,0,$CORE_NUM)" --cryptodev_mask 0 -l --single-sa 0'
 					;;
 			esac
 		else
@@ -379,11 +386,16 @@ exec_testpmd_cmd_gen()
 
 function pmd_tx_launch()
 {
+	if [[ $DTC == "CN103XX" ]]; then
+		CORE_MASK="0x38"
+	else
+		CORE_MASK="0x3800"
+	fi
 	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
 		exec_testpmd_cmd_gen "launch_tx_outb" $TPMD_TX_PREFIX $X
 	else
 		testpmd_launch "$TPMD_TX_PREFIX" \
-			"-c 0x3800 -a $LIF1" \
+			"-c $CORE_MASK -a $LIF1" \
 			"--nb-cores=2 --forward-mode=txonly --tx-ip=192.168.$X.1,192.168.$X.2"
 		testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
 		testpmd_cmd $TPMD_TX_PREFIX "set flow_ctrl rx off 0"
@@ -396,17 +408,25 @@ function pmd_tx_launch()
 
 function pmd_tx_launch_for_inb()
 {
+	if [[ $DTC == "CN103XX" ]]; then
+		CORE_MASK1="0xF8"
+		CORE_MASK2="0x38"
+	else
+		CORE_MASK1="0xF800"
+		CORE_MASK2="0x3800"
+	fi
+
 	local pcap=$SCRIPTPATH/pcap/enc_$1_$2.pcap
 	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
 		exec_testpmd_cmd_gen "launch_tx_inb" $TPMD_TX_PREFIX $pcap
 	else
 		if [[ $Y -gt 4 ]]; then
 			testpmd_launch "$TPMD_TX_PREFIX" \
-			"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
+			"-c $CORE_MASK1 --vdev net_pcap0,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
 			"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx"
 		else
 			testpmd_launch "$TPMD_TX_PREFIX" \
-			"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
+			"-c $CORE_MASK2 --vdev net_pcap0,rx_pcap=$pcap,infinite_rx=1 -a $LIF1" \
 			"--nb-cores=2 --no-flush-rx"
 		fi
 		testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
@@ -420,11 +440,16 @@ function pmd_tx_launch_for_inb()
 
 function pmd_rx_launch()
 {
+	if [[ $DTC == "CN103XX" ]]; then
+		C_MSK="0x70"
+	else
+		C_MSK="0x700"
+	fi
 	if [[ $WITH_GEN_BOARD -eq 1 && $Y -ge 2 ]]; then
 		exec_testpmd_cmd_gen "launch_rx" $TPMD_RX_PREFIX
 	else
 		testpmd_launch "$TPMD_RX_PREFIX" \
-			"-c 0x700 -a $LIF4" \
+			"-c $C_MSK -a $LIF4" \
 			"--nb-cores=2 --forward-mode=rxonly"
 		testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
 		testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
