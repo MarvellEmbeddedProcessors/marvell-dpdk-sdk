@@ -18,6 +18,7 @@
 #include "cperf.h"
 #include "cperf_options.h"
 #include "cperf_test_vector_parsing.h"
+#include "cperf_test_common.h"
 #include "cperf_test_throughput.h"
 #include "cperf_test_latency.h"
 #include "cperf_test_verify.h"
@@ -204,7 +205,7 @@ cperf_initialize_cryptodev(struct cperf_options *opts, uint8_t *enabled_cdevs)
 
 		rte_cryptodev_info_get(cdev_id, &cdev_info);
 
-		if (opts->op_type == CPERF_ASYM_MODEX || opts->op_type == CPERF_ASYM_SM2) {
+		if (cperf_is_asym_test(opts)) {
 			if ((cdev_info.feature_flags &
 			     RTE_CRYPTODEV_FF_ASYMMETRIC_CRYPTO) == 0)
 				continue;
@@ -291,7 +292,7 @@ cperf_initialize_cryptodev(struct cperf_options *opts, uint8_t *enabled_cdevs)
 			return -ENOTSUP;
 		}
 
-		if (opts->op_type == CPERF_ASYM_MODEX || opts->op_type == CPERF_ASYM_SM2)
+		if (cperf_is_asym_test(opts))
 			ret = create_asym_op_pool_socket(socket_id,
 							 sessions_needed);
 		else
@@ -302,7 +303,7 @@ cperf_initialize_cryptodev(struct cperf_options *opts, uint8_t *enabled_cdevs)
 
 		qp_conf.mp_session = session_pool_socket[socket_id].sess_mp;
 
-		if (opts->op_type == CPERF_ASYM_MODEX || opts->op_type == CPERF_ASYM_SM2)
+		if (cperf_is_asym_test(opts))
 			qp_conf.mp_session = NULL;
 
 		ret = rte_cryptodev_configure(cdev_id, &conf);
