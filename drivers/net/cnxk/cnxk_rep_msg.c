@@ -373,7 +373,7 @@ notify_rep_dev_ready(cnxk_rep_msg_ready_data_t *rdata, void *data,
 		goto fail;
 	}
 
-	for (i = 0; i < rdata->nb_ports / 2; i++) {
+	for (i = 0; i < rdata->nb_ports; i++) {
 		rep_id = UINT16_MAX;
 		rc = cnxk_rep_state_update(eswitch_dev, rdata->data[i], &rep_id);
 		if (rc) {
