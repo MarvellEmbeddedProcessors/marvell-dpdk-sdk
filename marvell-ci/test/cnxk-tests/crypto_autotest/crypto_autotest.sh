@@ -10,7 +10,7 @@ CNXK_MEMPOOL_DEVICE=$(lspci -d :a0fb | tail -1 | awk -e '{ print $1 }')
 CNXK_EAL_VDEV_OPENSSL="--vdev crypto_openssl"
 
 CN10K_CRYPTO_DEVICE="0002:20:00.1"
-CN10K_EAL_ARGS="-a $CN10K_CRYPTO_DEVICE,max_qps_limit=4,rx_inj_lf=1 -a $CNXK_MEMPOOL_DEVICE"
+CN10K_EAL_ARGS="-a $CN10K_CRYPTO_DEVICE,max_qps_limit=4,rx_inject_qp=1 -a $CNXK_MEMPOOL_DEVICE"
 CN10K_EAL_ARGS+=" --log-level=7"
 
 CN9K_CRYPTO_DEVICE="0002:10:00.1"

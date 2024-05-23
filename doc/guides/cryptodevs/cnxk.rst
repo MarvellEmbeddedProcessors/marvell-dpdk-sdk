@@ -190,11 +190,11 @@ Runtime Config Options
 - ``LF ID for RX injection in case of fallback mechanism`` (default ``60``)
 
    LF ID for RX Injection in fallback mechanism of security.
-   Can be configured during runtime by using ``rx_inj_lf`` ``devargs`` parameter.
+   Can be configured during runtime by using ``rx_inject_qp`` ``devargs`` parameter.
 
    For example::
 
-      -a 0002:20:00.1,rx_inj_lf=20
+      -a 0002:20:00.1,rx_inject_qp=20
 
    With the above configuration, LF 20 will be used by the device for RX Injection
    in security in fallback mechanism secnario.

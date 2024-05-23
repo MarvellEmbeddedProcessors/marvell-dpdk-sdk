@@ -9,7 +9,7 @@
 #define CNXK_MAX_QPS_LIMIT     "max_qps_limit"
 #define CNXK_MAX_QPS_LIMIT_MIN 1
 #define CNXK_MAX_QPS_LIMIT_MAX (ROC_CPT_MAX_LFS - 1)
-#define CNXK_RX_INJ_LF	       "rx_inj_lf"
+#define CNXK_RX_INJ_LF	       "rx_inject_qp"
 
 static int
 parse_rx_inj_lf(const char *key, const char *value, void *extra_args)
