@@ -493,6 +493,11 @@ cn10k_sso_fp_blk_fns_set(struct rte_eventdev *event_dev)
 	}
 	event_dev->txa_enqueue = cn10k_sso_hws_tx_adptr_enq_seg_all_offload;
 	event_dev->txa_enqueue_same_dest = cn10k_sso_hws_tx_adptr_enq_seg_all_offload;
+	if (dev->tx_offloads & (NIX_TX_OFFLOAD_OL3_OL4_CSUM_F | NIX_TX_OFFLOAD_VLAN_QINQ_F |
+				NIX_TX_OFFLOAD_TSO_F | NIX_TX_OFFLOAD_TSTAMP_F)) {
+		event_dev->txa_enqueue = cn10k_sso_hws_tx_adptr_enq_seg_all_offload_tst;
+		event_dev->txa_enqueue_same_dest = cn10k_sso_hws_tx_adptr_enq_seg_all_offload_tst;
+	}
 #else
 	RTE_SET_USED(event_dev);
 #endif
