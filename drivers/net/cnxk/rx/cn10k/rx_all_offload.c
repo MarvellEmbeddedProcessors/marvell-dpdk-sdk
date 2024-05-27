@@ -16,7 +16,7 @@ cn10k_nix_recv_pkts_all_offload(void *rx_queue, struct rte_mbuf **rx_pkts, uint1
 	return cn10k_nix_recv_pkts(rx_queue, rx_pkts, pkts,
 				   NIX_RX_OFFLOAD_RSS_F | NIX_RX_OFFLOAD_PTYPE_F |
 					   NIX_RX_OFFLOAD_CHECKSUM_F |
-					   NIX_RX_OFFLOAD_MARK_UPDATE_F | NIX_RX_OFFLOAD_TSTAMP_F |
+					   NIX_RX_OFFLOAD_MARK_UPDATE_F |
 					   NIX_RX_OFFLOAD_VLAN_STRIP_F | NIX_RX_OFFLOAD_SECURITY_F |
 					   NIX_RX_MULTI_SEG_F | NIX_RX_REAS_F);
 }
@@ -26,7 +26,7 @@ cn10k_nix_recv_pkts_vec_all_offload(void *rx_queue, struct rte_mbuf **rx_pkts, u
 {
 	return cn10k_nix_recv_pkts_vector(rx_queue, rx_pkts, pkts,
 		NIX_RX_OFFLOAD_RSS_F | NIX_RX_OFFLOAD_PTYPE_F | NIX_RX_OFFLOAD_CHECKSUM_F |
-			NIX_RX_OFFLOAD_MARK_UPDATE_F | NIX_RX_OFFLOAD_TSTAMP_F |
+			NIX_RX_OFFLOAD_MARK_UPDATE_F |
 			NIX_RX_OFFLOAD_VLAN_STRIP_F | NIX_RX_OFFLOAD_SECURITY_F |
 			NIX_RX_MULTI_SEG_F | NIX_RX_REAS_F,
 		NULL, NULL, 0, 0);

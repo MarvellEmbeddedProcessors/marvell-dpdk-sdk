@@ -86,6 +86,13 @@ cn9k_eth_set_tx_blk_func(struct rte_eth_dev *eth_dev)
 {
 #if defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+	struct cn9k_eth_txq *txq;
+	int i;
+
+	for (i = 0; i < eth_dev->data->nb_tx_queues; i++) {
+		txq = (struct cn9k_eth_txq *)eth_dev->data->tx_queues[i];
+		txq->tx_offload_flags = dev->tx_offload_flags;
+	}
 
 	if (dev->scalar_ena || dev->tx_mark)
 		eth_dev->tx_pkt_burst = cn9k_nix_xmit_pkts_all_offload;
