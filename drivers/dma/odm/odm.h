@@ -73,10 +73,6 @@ extern int odm_logtype;
 #define odm_debug(fmt, args...)                                                                    \
 	rte_log(RTE_LOG_DEBUG, odm_logtype, "%s(): %u " fmt "\n", __func__, __LINE__, ##args)
 
-#define ODM_MEMZONE_FLAGS                                                                          \
-	(RTE_MEMZONE_1GB | RTE_MEMZONE_16MB | RTE_MEMZONE_16GB | RTE_MEMZONE_256MB |               \
-	 RTE_MEMZONE_512MB | RTE_MEMZONE_4GB | RTE_MEMZONE_SIZE_HINT_ONLY)
-
 /*
  * Structure odm_instr_hdr_s for ODM
  *

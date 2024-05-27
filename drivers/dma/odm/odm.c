@@ -154,7 +154,7 @@ odm_vchan_setup(struct odm_dev *odm, int vchan, int nb_desc)
 	isize = RTE_ALIGN_CEIL(nb_desc * ODM_IRING_ENTRY_SIZE_MAX * 8, 1024);
 	isize = RTE_MIN(isize, ODM_IRING_MAX_SIZE);
 	snprintf(name, sizeof(name), "vq%d_iring%d", odm->vfid, vchan);
-	mz = rte_memzone_reserve_aligned(name, isize, 0, ODM_MEMZONE_FLAGS, 1024);
+	mz = rte_memzone_reserve_aligned(name, isize, SOCKET_ID_ANY, 0, 1024);
 	if (mz == NULL)
 		return -ENOMEM;
 	vq->iring_mz = mz;
@@ -164,7 +164,7 @@ odm_vchan_setup(struct odm_dev *odm, int vchan, int nb_desc)
 	max_nb_desc = (isize / (ODM_IRING_ENTRY_SIZE_MIN * 8));
 	csize = RTE_ALIGN_CEIL(max_nb_desc * sizeof(union odm_cmpl_ent_s), 1024);
 	snprintf(name, sizeof(name), "vq%d_cring%d", odm->vfid, vchan);
-	mz = rte_memzone_reserve_aligned(name, csize, 0, ODM_MEMZONE_FLAGS, 1024);
+	mz = rte_memzone_reserve_aligned(name, csize, SOCKET_ID_ANY, 0, 1024);
 	if (mz == NULL) {
 		rc = -ENOMEM;
 		goto iring_free;
