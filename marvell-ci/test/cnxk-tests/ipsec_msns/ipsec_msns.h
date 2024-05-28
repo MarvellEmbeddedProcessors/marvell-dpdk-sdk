@@ -136,6 +136,57 @@ struct ipsec_session_data conf_aes_128_gcm = {
 	},
 };
 
+struct ipsec_session_data conf_aes_256_gcm = {
+	.key = {
+		.data = {
+			0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+			0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83,
+			0x08,
+			0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c,
+			0x6d, 0x6a, 0x8f, 0x94, 0x67, 0x30, 0x83,
+			0x08,
+		},
+	},
+	.ipsec_xform = {
+		.spi = 0xa5f8,
+		.salt = 0xbebafeca,
+		.options.esn = 0,
+		.options.udp_encap = 0,
+		.options.copy_dscp = 0,
+		.options.copy_flabel = 0,
+		.options.copy_df = 0,
+		.options.dec_ttl = 0,
+		.options.ecn = 0,
+		.options.stats = 0,
+		.options.tunnel_hdr_verify = 0,
+		.options.ip_csum_enable = 0,
+		.options.l4_csum_enable = 0,
+		.direction = RTE_SECURITY_IPSEC_SA_DIR_EGRESS,
+		.proto = RTE_SECURITY_IPSEC_SA_PROTO_ESP,
+		.mode = RTE_SECURITY_IPSEC_SA_MODE_TUNNEL,
+		.tunnel.type = RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+		.replay_win_sz = 0,
+	},
+
+	.aead = true,
+
+	.xform = {
+		.aead = {
+			.next = NULL,
+			.type = RTE_CRYPTO_SYM_XFORM_AEAD,
+			.aead = {
+				.op = RTE_CRYPTO_AEAD_OP_ENCRYPT,
+				.algo = RTE_CRYPTO_AEAD_AES_GCM,
+				.key.length = 32,
+				.iv.length = 12,
+				.iv.offset = 0,
+				.digest_length = 16,
+				.aad_length = 12,
+			},
+		},
+	},
+};
+
 enum pkt_type {
 	PKT_TYPE_PLAIN_IPV4 = 1,
 	PKT_TYPE_IPSEC_IPV4,
