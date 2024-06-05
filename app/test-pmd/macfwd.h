@@ -14,6 +14,7 @@ do_macfwd(struct rte_mbuf *pkts_burst[], uint16_t nb_rx,
 	uint64_t tx_offloads;
 	struct rte_mbuf  *mb;
 	struct rte_port *txp = &ports[fs->tx_port];
+	uint16_t nb_prep;
 	uint16_t i;
 
 	tx_offloads = txp->dev_conf.txmode.offloads;
@@ -39,6 +40,15 @@ do_macfwd(struct rte_mbuf *pkts_burst[], uint16_t nb_rx,
 		mb->l3_len = sizeof(struct rte_ipv4_hdr);
 		mb->vlan_tci = txp->tx_vlan_id;
 		mb->vlan_tci_outer = txp->tx_vlan_id_outer;
+	}
+
+	nb_prep = rte_eth_tx_prepare(fs->tx_port, fs->tx_queue, pkts_burst, nb_rx);
+	if (nb_prep != nb_rx) {
+		fprintf(stderr,
+			"Preparing packet burst to transmit failed: %s\n",
+			rte_strerror(rte_errno));
+		fs->fwd_dropped += (nb_rx - nb_prep);
+		rte_pktmbuf_free_bulk(&pkts_burst[nb_prep], nb_rx - nb_prep);
 	}
 }
 
