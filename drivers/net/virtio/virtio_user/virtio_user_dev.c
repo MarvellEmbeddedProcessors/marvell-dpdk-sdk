@@ -224,6 +224,14 @@ virtio_user_start_device(struct virtio_user_dev *dev)
 	if (ret < 0)
 		goto error;
 
+	/* Step 5: Enable CQ
+	 * If backend was VHOST-VDPA, then enable CQ to handle control plane
+	 */
+	if (dev->backend_type == VIRTIO_USER_BACKEND_VHOST_VDPA && dev->scvq) {
+		ret = dev->ops->cvq_enable(dev, 1);
+		if (ret < 0)
+			goto error;
+	}
 	dev->started = true;
 
 	pthread_mutex_unlock(&dev->mutex);
@@ -266,6 +274,12 @@ int virtio_user_stop_device(struct virtio_user_dev *dev)
 		}
 	}
 
+	/* Stop CQ */
+	if (dev->scvq) {
+		ret = dev->ops->cvq_enable(dev, 0);
+		if (ret < 0)
+			goto err;
+	}
 	dev->started = false;
 
 out:
