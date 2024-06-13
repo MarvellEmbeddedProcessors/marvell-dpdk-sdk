@@ -78,6 +78,7 @@ setup_host()
 	echo 2 > /sys/bus/pci/devices/${host_pf}/sriov_numvfs
 
 	host_vf=$(lspci -Dd :ba03 | head -1 | awk '{ print $1 }')
+	modprobe vfio
 	echo 1 > /sys/module/vfio/parameters/enable_unsafe_noiommu_mode
 	$VFIO_DEVBIND -b vfio-pci $host_vf
 }
