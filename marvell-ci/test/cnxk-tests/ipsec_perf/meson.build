@@ -74,12 +74,16 @@ run_command(copy_data, 'ref_numbers/cn10k/rclk2500_sclk1100.103xx.ip_p.outb')
 run_command(copy_data, 'ref_numbers/cn10k/rclk2500_sclk1100.103xx.ip_p.inb')
 run_command(copy_data, 'ref_numbers/cn10k/rclk2500_sclk1100.103xx.ip_p_ss.outb')
 run_command(copy_data, 'ref_numbers/cn10k/rclk2500_sclk1100.103xx.ip_p_ss.inb')
+run_command(copy_data, 'ref_numbers/cn10k/rclk2500_sclk1100.106xx.ip_p_msns.inb')
 run_command(copy_data, 'pcap/enc_aes-cbc_sha1-hmac_64.pcap')
 run_command(copy_data, 'pcap/enc_aes-cbc_sha1-hmac_380.pcap')
 run_command(copy_data, 'pcap/enc_aes-cbc_sha1-hmac_1410.pcap')
 run_command(copy_data, 'pcap/enc_aes-gcm_64.pcap')
 run_command(copy_data, 'pcap/enc_aes-gcm_380.pcap')
 run_command(copy_data, 'pcap/enc_aes-gcm_1410.pcap')
+run_command(copy_data, 'pcap/enc_aes-gcm_msns_64.pcap')
+run_command(copy_data, 'pcap/enc_aes-gcm_msns_380.pcap')
+run_command(copy_data, 'pcap/enc_aes-gcm_msns_1410.pcap')
 # Add the meson test
 test(test_name,
     cnxk_test_script_wrapper,

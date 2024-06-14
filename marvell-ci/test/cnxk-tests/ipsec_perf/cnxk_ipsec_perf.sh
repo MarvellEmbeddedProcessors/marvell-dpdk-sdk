@@ -96,6 +96,7 @@ CFG=(
 	"ep0_inline_protocol_ob_sp.cfg"
 	"ep0_inline_protocol_ob_sp.cfg"
 	"ep0_inline_protocol_ob_sp.cfg"
+	""
 )
 
 #Inline Protocol inbound specific config files
@@ -110,6 +111,7 @@ IP_IB_CFG=(
 	"ep0_inline_protocol_ib_sp.cfg"
 	"ep0_inline_protocol_ib_sp.cfg"
 	"ep0_inline_protocol_ib_sp.cfg"
+	""
 )
 
 # Dual Port Inbound configs for Inline protocol
@@ -123,6 +125,7 @@ IP_IB_CFG_DP=(
 	"ep0_inline_protocol_ib_dp.cfg"
 	"ep0_inline_protocol_ib_dp.cfg"
 	"ep0_inline_protocol_ib_dp.cfg"
+	""
 )
 
 # Dual Port Outbound configs for Inline protocol
@@ -136,6 +139,7 @@ IP_OB_CFG_DP=(
 	"ep0_inline_protocol_ob_dp.cfg"
 	"ep0_inline_protocol_ob_dp.cfg"
 	"ep0_inline_protocol_ob_dp.cfg"
+	""
 )
 # Specific config files for Perf cases with Inline Protocol Single-SA
 IP_PERF_CFG=(
@@ -155,6 +159,7 @@ TYPE=(
 	"ip_p"
 	"ip_ev_ss"
 	"ip_p_ss"
+	"ip_p_msns"
 )
 
 TN=(
@@ -167,6 +172,7 @@ TN=(
 	"Inline Protocol: Poll Mode"
 	"Inline Protocol: Event Vector Perf Mode (Single-SA)"
 	"Inline Protocol: Poll Perf Mode (Single-SA)"
+	"Inline Protocol: Poll Perf Mode (Ipsec-Msns)"
 )
 
 NB_TYPES=${#TYPE[@]}
@@ -275,7 +281,7 @@ fi
 function is_inline_proto_test()
 {
 	local type=${TYPE[$Y]}
-	local ip_tests=(ip ip_ev ip_p ip_ev_ss ip_p_ss)
+	local ip_tests=(ip ip_ev ip_p ip_ev_ss ip_p_ss ip_p_msns)
 
 	[[ " ${ip_tests[*]} " =~ " $type " ]]
 }
@@ -283,9 +289,17 @@ function is_inline_proto_test()
 function is_single_sa_test()
 {
 	local type=${TYPE[$Y]}
-	local sa_tests=(ip_ev_ss ip_p_ss)
+	local sa_tests=(ip_ev_ss ip_p_ss ip_p_msns)
 
 	[[ " ${sa_tests[*]} " =~ " $type " ]]
+}
+
+function is_ipsec_msns_test()
+{
+	local type=${TYPE[$Y]}
+	local msns_tests=(ip_p_msns)
+
+	[[ " ${msns_tests[*]} " =~ " $type " ]]
 }
 
 function supported_by_9k()
@@ -300,7 +314,7 @@ function run_test()
 {
 	local cmd=$1
 	touch $IPSEC_LOG
-	eval "nohup $1 >> $IPSEC_LOG 2>&1 &"
+	eval "stdbuf -o0 nohup $1 >> $IPSEC_LOG 2>&1 &"
 	PT1="IPSEC: entering main loop on lcore"
 	PT2="IPSEC: Launching event mode worker"
 
@@ -466,14 +480,51 @@ function run_ipsec_secgw_inb()
 	sleep $WS
 }
 
+function run_ipsec_msns()
+{
+	echo "ipsec-msns poll mode performance test"
+
+	# Find the cnxk_ipsec_msns application
+	if [[ -f $CNXKTESTPATH/../ipsec_msns/cnxk_ipsec_msns ]]; then
+		# This is running from build directory
+		MSNS_BIN=$CNXKTESTPATH/../ipsec_msns/cnxk_ipsec_msns
+	elif [[ -f $CNXKTESTPATH/../../cnxk_ipsec_msns ]]; then
+		# This is running from install directory
+		MSNS_BIN=$CNXKTESTPATH/../../cnxk_ipsec_msns
+	else
+		MSNS_BIN=$(which cnxk_ipsec_msns)
+
+		if [[ -z $MSNS_BIN ]]; then
+			echo "cnxk_ipsec_msns not found !!"
+			exit 1
+		fi
+	fi
+
+	if [[ $IS_CN10K -ne 0 ]]; then
+		local env="$MSNS_BIN -c 0x3 -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- --portmask 0x1"
+		IS_RXPPS_TXTPMD=1
+		run_test '$env --testmode 5 --num-sas 8'
+	fi
+	sleep $WS
+}
+
+
 function ipsec_exit()
 {
-	killall -q dpdk-ipsec-secgw | echo "ipsec_exit: killed dpdk-ipsec-secgw"
+	if is_ipsec_msns_test; then
+		killall -q cnxk_ipsec_msns | echo "ipsec_exit: killed cnxk_ipsec_msns"
+		# Wait until the process is killed
+		while (ps -ef | grep cnxk_ipsec_msns | grep -q $IPSEC_PREFIX); do
+			continue
+		done
+	else
+		killall -q dpdk-ipsec-secgw | echo "ipsec_exit: killed dpdk-ipsec-secgw"
+		# Wait until the process is killed
+		while (ps -ef | grep dpdk-ipsec-secgw | grep -q $IPSEC_PREFIX); do
+			continue
+		done
+	fi
 
-	# Wait until the process is killed
-	while (ps -ef | grep dpdk-ipsec-secgw | grep -q $IPSEC_PREFIX); do
-		continue
-	done
 	sleep 7
 }
 
@@ -554,7 +605,13 @@ function pmd_tx_launch_for_inb()
 		C_MSK_I="0xF800"
 		C_MSK="0x3800"
 	fi
-	local pcap=$CNXKTESTPATH/pcap/enc_$1_$2.pcap
+
+	if is_ipsec_msns_test; then
+		local pcap=$CNXKTESTPATH/pcap/enc_$1_msns_$2.pcap
+	else
+		local pcap=$CNXKTESTPATH/pcap/enc_$1_$2.pcap
+	fi
+
 	if [[ $WITH_GEN_BOARD -eq 1 ]] && is_inline_proto_test; then
 		exec_testpmd_cmd_gen "launch_tx_inb" $TPMD_TX_PREFIX $pcap
 	else
@@ -803,9 +860,15 @@ function inb_perf()
 			if [[ $tcnt -gt 1 ]]; then
 				# Restart ipsec-secgw
 				ipsec_exit
-				echo "Restart ipsec-secgw"
 				IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
-				run_ipsec_secgw_inb
+				if is_ipsec_msns_test; then
+					echo "Restart cnxk_ipsec_msns"
+					IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
+					run_ipsec_msns
+				else
+					echo "Restart ipsec-secgw"
+					run_ipsec_secgw_inb
+				fi
 			fi
 			start_testpmd
 			pmd_rx_dry_run
@@ -959,15 +1022,19 @@ function check_ref_files()
 		if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k $type; then
 			continue
 		fi
-		outb="$FPATH.$type.outb"
-		if [[ ! -f $outb ]]; then
-			echo "File $outb not present"
-			exit 1
-		fi
-
 		inb="$FPATH.$type.inb"
 		if [[ ! -f $inb ]]; then
 			echo "File $inb not present"
+			exit 1
+		fi
+
+		if [[ $type = "ip_p_msns" ]]; then
+			continue
+		fi
+
+		outb="$FPATH.$type.outb"
+		if [[ ! -f $outb ]]; then
+			echo "File $outb not present"
 			exit 1
 		fi
 	done
@@ -1011,9 +1078,22 @@ while [[ $Y -lt $NB_TYPES ]]; do
 	echo ""
 	echo "Test: ${TN[$Y]}"
 	echo "----------------------"
-	# Outbound
 	sleep $WS
 
+	# Ipsec_msns perf
+	if [[ ${TYPE[$Y]} = "ip_p_msns" ]] && [[ $DTC != "CN103XX" ]]; then
+		X=1
+		IPSEC_LOG=ipsec_msns_"$X"_inb_"$Y"_1.log
+		run_ipsec_msns
+		pmd_rx_launch
+		aes_gcm_inb
+		quit_testpmd "$TPMD_RX_PREFIX"
+		ipsec_exit
+		((++Y))
+		continue;
+	fi
+
+	# Outbound
 	# aes-cbc sha1-hmac
 
 	# Select perf config file for Inline protocol Single-SA perf tests
