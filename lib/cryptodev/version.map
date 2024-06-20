@@ -99,6 +99,7 @@ EXPERIMENTAL {
 	rte_cryptodev_get_auth_algo_string;
 	rte_cryptodev_get_cipher_algo_string;
 	rte_cryptodev_queue_pair_event_error_query;
+	rte_cryptodev_queue_pair_reset;
 };
 
 INTERNAL {
