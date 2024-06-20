@@ -25,6 +25,9 @@ typedef uint16_t (*enqueue_pkt_burst_t)(void *qp,
 		struct rte_crypto_op **ops,	uint16_t nb_ops);
 /**< Enqueue packets for processing on queue pair of a device. */
 
+typedef uint32_t (*crypto_qp_depth_used_t)(void *qp);
+/**< Get used descriptor depth in a queue pair of a device. */
+
 /**
  * @internal
  * Structure used to hold opaque pointers to internal ethdev Rx/Tx
@@ -48,8 +51,10 @@ struct rte_crypto_fp_ops {
 	dequeue_pkt_burst_t dequeue_burst;
 	/** Internal queue pair data pointers. */
 	struct rte_cryptodev_qpdata qp;
+	/** Get the number of used queue pair descriptors. */
+	crypto_qp_depth_used_t qp_depth_used;
 	/** Reserved for future ops. */
-	uintptr_t reserved[3];
+	uintptr_t reserved[2];
 } __rte_cache_aligned;
 
 extern struct rte_crypto_fp_ops rte_crypto_fp_ops[RTE_CRYPTO_MAX_DEVS];
