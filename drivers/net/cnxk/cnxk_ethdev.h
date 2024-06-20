@@ -406,6 +406,13 @@ struct cnxk_eth_dev {
 
 	/* Inject packets */
 	struct cnxk_ethdev_inj_cfg inj_cfg;
+
+	/* SSO event dev */
+	void *evdev_priv;
+
+	/* SSO event dev ptp  */
+	void (*cnxk_sso_ptp_tstamp_cb)
+	     (uint16_t port_id, uint16_t flags, bool ptp_en);
 };
 
 struct cnxk_eth_rxq_sp {
