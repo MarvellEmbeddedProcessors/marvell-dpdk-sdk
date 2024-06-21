@@ -463,7 +463,7 @@ exit:
 
 int
 cpt_lfs_alloc(struct dev *dev, uint8_t eng_grpmsk, uint8_t blkaddr, bool inl_dev_sso,
-	      bool ctx_ilen_valid, uint8_t ctx_ilen, bool rxc_ena, uint16_t rx_inj_lf)
+	      bool ctx_ilen_valid, uint8_t ctx_ilen, bool rxc_ena, uint16_t rx_inject_qp)
 {
 	struct cpt_lf_alloc_req_msg *req;
 	struct mbox *mbox = mbox_get(dev->mbox);
@@ -491,7 +491,7 @@ cpt_lfs_alloc(struct dev *dev, uint8_t eng_grpmsk, uint8_t blkaddr, bool inl_dev
 	req->ctx_ilen = ctx_ilen;
 	if (rxc_ena) {
 		req->rxc_ena = 1;
-		req->rxc_ena_lf_id = rx_inj_lf;
+		req->rxc_ena_lf_id = rx_inject_qp;
 	}
 
 	rc = mbox_process(mbox);
@@ -590,7 +590,7 @@ cpt_iq_init(struct roc_cpt_lf *lf)
 }
 
 int
-roc_cpt_dev_configure(struct roc_cpt *roc_cpt, int nb_lf, bool rxc_ena, uint16_t rx_inj_lf)
+roc_cpt_dev_configure(struct roc_cpt *roc_cpt, int nb_lf, bool rxc_ena, uint16_t rx_inject_qp)
 {
 	struct cpt *cpt = roc_cpt_to_cpt_priv(roc_cpt);
 	uint8_t blkaddr[ROC_CPT_MAX_BLKS];
@@ -635,7 +635,7 @@ roc_cpt_dev_configure(struct roc_cpt *roc_cpt, int nb_lf, bool rxc_ena, uint16_t
 	}
 
 	rc = cpt_lfs_alloc(&cpt->dev, eng_grpmsk, blkaddr[blknum], false, ctx_ilen_valid, ctx_ilen,
-			   rxc_ena, rx_inj_lf);
+			   rxc_ena, rx_inject_qp);
 	if (rc)
 		goto lfs_detach;
 
