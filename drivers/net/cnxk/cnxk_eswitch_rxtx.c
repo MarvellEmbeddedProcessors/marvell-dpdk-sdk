@@ -50,8 +50,7 @@ nix_cn9k_xmit_one(uint64_t *cmd, void *lmt_addr, const plt_iova_t io_addr, uint1
 }
 
 static __rte_always_inline uint16_t
-cnxk_eswitch_prepare_mseg(struct rte_mbuf *m, union nix_send_sg_s *sg, uint64_t *cmd, uint64_t len,
-			  uint8_t off)
+cnxk_eswitch_prepare_mseg(struct rte_mbuf *m, union nix_send_sg_s *sg, uint64_t *cmd, uint8_t off)
 {
 	union nix_send_sg_s l_sg;
 	struct rte_mbuf *m_next;
@@ -66,7 +65,6 @@ cnxk_eswitch_prepare_mseg(struct rte_mbuf *m, union nix_send_sg_s *sg, uint64_t 
 
 	dlen = m->data_len;
 	l_sg.u |= dlen;
-	len -= dlen;
 	nb_segs = m->nb_segs - 1;
 	m_next = m->next;
 	m->next = NULL;
@@ -84,7 +82,6 @@ cnxk_eswitch_prepare_mseg(struct rte_mbuf *m, union nix_send_sg_s *sg, uint64_t 
 		m_next = m->next;
 		iova = rte_mbuf_data_iova(m);
 		dlen = m->data_len;
-		len -= dlen;
 
 		nb_segs--;
 		m->next = NULL;
@@ -193,7 +190,7 @@ cnxk_eswitch_dev_tx_burst(struct cnxk_eswitch_dev *eswitch_dev, uint16_t qid,
 			send_hdr->w0.df = 1;
 		}
 
-		segdw = cnxk_eswitch_prepare_mseg(m, sg, cmd, len, off);
+		segdw = cnxk_eswitch_prepare_mseg(m, sg, cmd, off);
 		send_hdr->w0.sizem1 = segdw - 1;
 
 		plt_esw_dbg("Transmitting pkt %d (%p) vlan tci %x on sq %d esw qid %d", pkt,
