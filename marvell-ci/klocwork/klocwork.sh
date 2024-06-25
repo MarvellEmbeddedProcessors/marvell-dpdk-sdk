@@ -73,7 +73,7 @@ meson $BUILD_DIR --cross-file $CROSS_FILE
 
 rm -rf .kwlp .kwps
 kwcheck create
-kwcheck set license.host=llic5-02.marvell.com license.port=33138
+kwcheck set license.host=llic5-01.marvell.com license.port=33138
 
 # List of directories to ignore in klocwork checks
 IGNORE_FILES=""
@@ -100,5 +100,3 @@ echo "#########################################################################"
 echo "Klocwork CNXK Issues: $CNXK_ISSUES"
 echo "Klocwork Report : $PWD/kwreport-detailed.txt"
 echo "#########################################################################"
-
-
