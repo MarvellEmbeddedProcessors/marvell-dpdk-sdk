@@ -191,7 +191,7 @@ cn9k_sso_process_tstamp(uint64_t u64, uint64_t mbuf,
 		/* Extracting tstamp, if PTP enabled*/
 		tstamp_ptr = *(uint64_t *)(((struct nix_wqe_hdr_s *)u64) +
 					   CNXK_SSO_WQE_SG_PTR);
-		cn9k_nix_mbuf_to_tstamp((struct rte_mbuf *)mbuf, tstamp, true,
+		cn9k_nix_mbuf_to_tstamp((struct rte_mbuf *)mbuf, tstamp, !!tstamp,
 					(uint64_t *)tstamp_ptr);
 	}
 }
