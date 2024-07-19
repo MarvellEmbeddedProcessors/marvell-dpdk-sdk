@@ -11,6 +11,7 @@
 #include <rte_udp.h>
 
 #include "test.h"
+#include "test_cryptodev.h"
 #include "test_cryptodev_security_ipsec.h"
 
 #define IV_LEN_MAX 16
@@ -1104,9 +1105,12 @@ test_ipsec_stats_verify(void *ctx,
 			enum rte_security_ipsec_sa_direction dir)
 {
 	struct rte_security_stats stats = {0};
-	int ret = TEST_SUCCESS;
+	int retries = 0, ret = TEST_SUCCESS;
 
 	if (flags->stats_success) {
+stats_get:
+		ret = TEST_SUCCESS;
+
 		if (rte_security_session_stats_get(ctx, sess, &stats) < 0)
 			return TEST_FAILED;
 
@@ -1118,6 +1122,12 @@ test_ipsec_stats_verify(void *ctx,
 			if (stats.ipsec.ipackets != 1 ||
 			    stats.ipsec.ierrors != 0)
 				ret = TEST_FAILED;
+		}
+
+		if (ret == TEST_FAILED && retries < TEST_STATS_RETRIES) {
+			retries++;
+			rte_delay_ms(1);
+			goto stats_get;
 		}
 	}
 

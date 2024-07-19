@@ -17,6 +17,7 @@
 #define MAX_NUM_OPS_INFLIGHT            (4096)
 #define MIN_NUM_OPS_INFLIGHT            (128)
 #define DEFAULT_NUM_OPS_INFLIGHT        (128)
+#define TEST_STATS_RETRIES              (100)
 
 #define MAX_NUM_QPS_PER_QAT_DEVICE      (2)
 #define DEFAULT_NUM_QPS_PER_QAT_DEVICE  (2)
