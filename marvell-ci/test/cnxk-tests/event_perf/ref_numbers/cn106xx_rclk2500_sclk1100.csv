@@ -28,7 +28,7 @@ cores, RESULT
 ------------------------------------------------------------------------
 GW_MODE_NO_PREF (atomic queue) output in packets per second
 cores, RESULT
-1, 5.087
+1, 4.829
 8, 31.616
 16, 61.556
 
