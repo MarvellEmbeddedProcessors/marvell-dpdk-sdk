@@ -168,10 +168,12 @@ cn9k_sso_tx_tag_flush(uint64_t base)
 static __rte_always_inline void
 cn9k_wqe_to_mbuf(uint64_t wqe, const uint64_t mbuf, uint8_t port_id,
 		 const uint32_t tag, const uint32_t flags,
-		 const void *const lookup_mem)
+		 const void *const lookup_mem,
+		 struct cnxk_timesync_info *tstamp)
 {
 	const uint64_t mbuf_init = 0x100010000ULL | RTE_PKTMBUF_HEADROOM |
-				   (flags & NIX_RX_OFFLOAD_TSTAMP_F ? 8 : 0);
+				   ((flags & NIX_RX_OFFLOAD_TSTAMP_F &&
+				     (!!tstamp)) ? 8 : 0);
 
 	cn9k_nix_cqe_to_mbuf((struct nix_cqe_hdr_s *)wqe, tag,
 			     (struct rte_mbuf *)mbuf, lookup_mem,
@@ -210,7 +212,7 @@ cn9k_sso_hws_post_process(uint64_t *u64, uint64_t mbuf, const uint32_t flags,
 
 		u64[0] = CNXK_CLR_SUB_EVENT(u64[0]);
 		cn9k_wqe_to_mbuf(u64[1], mbuf, port, u64[0] & 0xFFFFF, flags,
-				 lookup_mem);
+				 lookup_mem, tstamp[port]);
 		if (flags & NIX_RX_OFFLOAD_TSTAMP_F)
 			cn9k_sso_process_tstamp(u64[1], mbuf, tstamp[port]);
 		u64[1] = mbuf;

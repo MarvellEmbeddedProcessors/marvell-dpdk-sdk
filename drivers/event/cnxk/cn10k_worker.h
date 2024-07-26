@@ -16,10 +16,11 @@
 static __rte_always_inline void
 cn10k_wqe_to_mbuf(uint64_t wqe, const uint64_t __mbuf, uint8_t port_id,
 		  const uint32_t tag, const uint32_t flags,
-		  const void *const lookup_mem, uintptr_t cpth, uintptr_t sa_base)
+		  const void *const lookup_mem, uintptr_t cpth, uintptr_t sa_base,
+		  struct cnxk_timesync_info *tstamp)
 {
 	const uint64_t mbuf_init = 0x100010000ULL | RTE_PKTMBUF_HEADROOM |
-				   (flags & NIX_RX_OFFLOAD_TSTAMP_F ? 8 : 0);
+				   ((flags & NIX_RX_OFFLOAD_TSTAMP_F && (!!tstamp)) ? 8 : 0);
 	struct rte_mbuf *mbuf = (struct rte_mbuf *)__mbuf;
 
 	cn10k_nix_cqe_to_mbuf((struct nix_cqe_hdr_s *)wqe, tag,
@@ -183,7 +184,7 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 
 			const uint64_t mbuf_init =
 				0x100010000ULL | RTE_PKTMBUF_HEADROOM |
-				(flags & NIX_RX_OFFLOAD_TSTAMP_F ? 8 : 0);
+				((flags & NIX_RX_OFFLOAD_TSTAMP_F && (!!ws->tstamp[port])) ? 8 : 0);
 			struct rte_mbuf *m;
 			uint64_t iova = 0;
 			uint8_t loff = 0;
@@ -220,7 +221,7 @@ cn10k_sso_hws_post_process(struct cn10k_sso_hws *ws, uint64_t *u64,
 
 		u64[0] = CNXK_CLR_SUB_EVENT(u64[0]);
 		cn10k_wqe_to_mbuf(u64[1], mbuf, port, u64[0] & 0xFFFFF, flags,
-				  ws->lookup_mem, cpth, sa_base);
+				  ws->lookup_mem, cpth, sa_base, ws->tstamp[port]);
 		if (flags & NIX_RX_OFFLOAD_TSTAMP_F)
 			cn10k_sso_process_tstamp(u64[1], mbuf,
 						 ws->tstamp[port]);
