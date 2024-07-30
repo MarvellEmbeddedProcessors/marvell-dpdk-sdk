@@ -17,6 +17,7 @@ struct roc_model {
 #define ROC_MODEL_CN96xx_A0    BIT_ULL(0)
 #define ROC_MODEL_CN96xx_B0    BIT_ULL(1)
 #define ROC_MODEL_CN96xx_C0    BIT_ULL(2)
+#define ROC_MODEL_CN96xx_D0    BIT_ULL(3)
 #define ROC_MODEL_CNF95xx_A0   BIT_ULL(4)
 #define ROC_MODEL_CNF95xx_B0   BIT_ULL(6)
 #define ROC_MODEL_CNF95xxMM_A0 BIT_ULL(8)
@@ -54,8 +55,8 @@ struct roc_model {
 #define ROC_MODEL_CN96xx_Ax (ROC_MODEL_CN96xx_A0 | ROC_MODEL_CN96xx_B0)
 #define ROC_MODEL_CN98xx_Ax (ROC_MODEL_CN98xx_A0 | ROC_MODEL_CN98xx_A1)
 #define ROC_MODEL_CN9K                                                         \
-	(ROC_MODEL_CN96xx_Ax | ROC_MODEL_CN96xx_C0 | ROC_MODEL_CNF95xx_A0 |    \
-	 ROC_MODEL_CNF95xx_B0 | ROC_MODEL_CNF95xxMM_A0 |                       \
+	(ROC_MODEL_CN96xx_Ax | ROC_MODEL_CN96xx_C0 | ROC_MODEL_CN96xx_D0      |\
+	 ROC_MODEL_CNF95xx_A0 | ROC_MODEL_CNF95xx_B0 | ROC_MODEL_CNF95xxMM_A0 |\
 	 ROC_MODEL_CNF95xxO_A0 | ROC_MODEL_CNF95xxN_A0 | ROC_MODEL_CN98xx_Ax | \
 	 ROC_MODEL_CNF95xxN_A1 | ROC_MODEL_CNF95xxN_B0)
 #define ROC_MODEL_CNF9K                                                        \
@@ -212,6 +213,12 @@ static inline uint64_t
 roc_model_is_cn96_cx(void)
 {
 	return (roc_model->flag & ROC_MODEL_CN96xx_C0);
+}
+
+static inline uint64_t
+roc_model_is_cn96_dx(void)
+{
+	return (roc_model->flag & ROC_MODEL_CN96xx_D0);
 }
 
 static inline uint64_t
