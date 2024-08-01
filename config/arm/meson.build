@@ -430,6 +430,17 @@ soc_cn10k = {
     'sve_acle': false
 }
 
+soc_cn20k = {
+    'description' : 'Marvell OCTEON 20',
+    'implementer' : '0x41',
+    'flags': [
+        ['RTE_MAX_LCORE', 42],
+        ['RTE_MAX_NUMA_NODES', 1]
+    ],
+    'part_number': '0xd8e',
+    'numa': false
+}
+
 soc_dpaa = {
     'description': 'NXP DPAA',
     'implementer': '0x41',
@@ -616,6 +627,7 @@ cdx:             AMD CDX
 centriq2400:     Qualcomm Centriq 2400
 cn9k:            Marvell OCTEON 9
 cn10k:           Marvell OCTEON 10
+cn20k:           Marvell OCTEON 20
 dpaa:            NXP DPAA
 emag:            Ampere eMAG
 ft2000plus:      Phytium FT-2000+
@@ -651,6 +663,7 @@ socs = {
     'centriq2400': soc_centriq2400,
     'cn9k': soc_cn9k,
     'cn10k' : soc_cn10k,
+    'cn20k' : soc_cn20k,
     'dpaa': soc_dpaa,
     'emag': soc_emag,
     'ft2000plus': soc_ft2000plus,
