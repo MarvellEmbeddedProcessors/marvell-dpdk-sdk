@@ -435,7 +435,8 @@ soc_cn20k = {
     'implementer' : '0x41',
     'flags': [
         ['RTE_MAX_LCORE', 42],
-        ['RTE_MAX_NUMA_NODES', 1]
+        ['RTE_MAX_NUMA_NODES', 1],
+        ['RTE_MEMPOOL_ALIGN', 128]
     ],
     'part_number': '0xd8e',
     'numa': false
