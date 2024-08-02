@@ -457,6 +457,19 @@ Runtime Config Options
    With the above configuration, driver would disable custom meta aura feature for
    ``0002:02:00.0`` ethdev.
 
+- ``Enable custom sa for inbound inline IPsec`` (default ``0``)
+
+   Custom SA for inbound inline IPsec can be enabled by specifying ``custom_inb_sa``
+   ``devargs`` parameter. This option needs to be given to both ethdev and inline
+   device.
+
+   For example::
+
+      -a 0002:02:00.0,custom_inb_sa=1
+
+   With the above configuration, inline inbound IPsec post processing should be done
+   by the application.
+
 .. note::
 
    Above devarg parameters are configurable per device, user needs to pass the
@@ -655,6 +668,18 @@ Runtime Config Options for inline device
 
    With the above configuration, driver would enable packet inject from ARM cores
    to crypto to process and send back in Rx path.
+
+- ``Enable custom sa for inbound inline IPsec`` (default ``0``)
+
+   Custom SA for inbound inline IPsec can be enabled by specifying ``custom_inb_sa``
+   ``devargs`` parameter with both inline device and ethdev.
+
+   For example::
+
+      -a 0002:1d:00.0,custom_inb_sa=1
+
+   With the above configuration, inline inbound IPsec post processing should be done
+   by the application.
 
 Port Representors
 -----------------
