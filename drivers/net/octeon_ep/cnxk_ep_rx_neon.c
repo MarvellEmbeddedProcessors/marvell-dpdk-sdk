@@ -4,39 +4,43 @@
 
 #include "cnxk_ep_rx.h"
 
-static __rte_always_inline uint32_t
-hadd(__m128i x)
-{
-	__m128i hi64 = _mm_shuffle_epi32(x, _MM_SHUFFLE(1, 0, 3, 2));
-	__m128i sum64 = _mm_add_epi32(hi64, x);
-	__m128i hi32 = _mm_shufflelo_epi16(sum64, _MM_SHUFFLE(1, 0, 3, 2));
-	__m128i sum32 = _mm_add_epi32(sum64, hi32);
-	return _mm_cvtsi128_si32(sum32);
-}
-
 static __rte_always_inline void
-cnxk_ep_process_pkts_vec_sse(struct rte_mbuf **rx_pkts, struct otx_ep_droq *droq, uint16_t new_pkts)
+cnxk_ep_process_pkts_vec_neon(struct rte_mbuf **rx_pkts, struct otx_ep_droq *droq,
+			      uint16_t new_pkts)
 {
+	const uint8x16_t mask0 = {0, 1, 0xff, 0xff, 0, 1, 0xff, 0xff,
+				  4, 5, 0xff, 0xff, 4, 5, 0xff, 0xff};
+	const uint8x16_t mask1 = {8,  9,  0xff, 0xff, 8,  9,  0xff, 0xff,
+				  12, 13, 0xff, 0xff, 12, 13, 0xff, 0xff};
 	struct rte_mbuf **recv_buf_list = droq->recv_buf_list;
-	uint32_t read_idx = droq->read_idx;
+	uint32_t pidx0, pidx1, pidx2, pidx3;
 	struct rte_mbuf *m0, *m1, *m2, *m3;
+	uint32_t read_idx = droq->read_idx;
 	uint16_t nb_desc = droq->nb_desc;
 	uint32_t idx0, idx1, idx2, idx3;
+	uint64x2_t s01, s23;
+	uint32x4_t bytes;
 	uint16_t pkts = 0;
-	__m128i bytes;
 
 	idx0 = read_idx;
-	bytes = _mm_setzero_si128();
+	s01 = vdupq_n_u64(0);
+	bytes = vdupq_n_u32(0);
 	while (pkts < new_pkts) {
-		const __m128i bswap_mask = _mm_set_epi8(0xFF, 0xFF, 12, 13, 0xFF, 0xFF, 8, 9, 0xFF,
-							0xFF, 4, 5, 0xFF, 0xFF, 0, 1);
-		const __m128i cpy_mask = _mm_set_epi8(0xFF, 0xFF, 9, 8, 0xFF, 0xFF, 9, 8, 0xFF,
-						      0xFF, 1, 0, 0xFF, 0xFF, 1, 0);
-		__m128i s01, s23;
-
 		idx1 = otx_ep_incr_index(idx0, 1, nb_desc);
 		idx2 = otx_ep_incr_index(idx1, 1, nb_desc);
 		idx3 = otx_ep_incr_index(idx2, 1, nb_desc);
+
+		if (new_pkts - pkts > 4) {
+			pidx0 = otx_ep_incr_index(idx3, 1, nb_desc);
+			pidx1 = otx_ep_incr_index(pidx0, 1, nb_desc);
+			pidx2 = otx_ep_incr_index(pidx1, 1, nb_desc);
+			pidx3 = otx_ep_incr_index(pidx2, 1, nb_desc);
+
+			rte_prefetch_non_temporal(cnxk_pktmbuf_mtod(recv_buf_list[pidx0], void *));
+			rte_prefetch_non_temporal(cnxk_pktmbuf_mtod(recv_buf_list[pidx1], void *));
+			rte_prefetch_non_temporal(cnxk_pktmbuf_mtod(recv_buf_list[pidx2], void *));
+			rte_prefetch_non_temporal(cnxk_pktmbuf_mtod(recv_buf_list[pidx3], void *));
+		}
 
 		m0 = recv_buf_list[idx0];
 		m1 = recv_buf_list[idx1];
@@ -44,24 +48,28 @@ cnxk_ep_process_pkts_vec_sse(struct rte_mbuf **rx_pkts, struct otx_ep_droq *droq
 		m3 = recv_buf_list[idx3];
 
 		/* Load packet size big-endian. */
-		s01 = _mm_set_epi32(cnxk_pktmbuf_mtod(m3, struct otx_ep_droq_info *)->length >> 48,
-				    cnxk_pktmbuf_mtod(m1, struct otx_ep_droq_info *)->length >> 48,
-				    cnxk_pktmbuf_mtod(m2, struct otx_ep_droq_info *)->length >> 48,
-				    cnxk_pktmbuf_mtod(m0, struct otx_ep_droq_info *)->length >> 48);
+		s01 = vsetq_lane_u32(cnxk_pktmbuf_mtod(m0, struct otx_ep_droq_info *)->length >> 48,
+				     s01, 0);
+		s01 = vsetq_lane_u32(cnxk_pktmbuf_mtod(m1, struct otx_ep_droq_info *)->length >> 48,
+				     s01, 1);
+		s01 = vsetq_lane_u32(cnxk_pktmbuf_mtod(m2, struct otx_ep_droq_info *)->length >> 48,
+				     s01, 2);
+		s01 = vsetq_lane_u32(cnxk_pktmbuf_mtod(m3, struct otx_ep_droq_info *)->length >> 48,
+				     s01, 3);
 		/* Convert to little-endian. */
-		s01 = _mm_shuffle_epi8(s01, bswap_mask);
-		/* Vertical add, consolidate outside loop */
-		bytes = _mm_add_epi32(bytes, s01);
+		s01 = vrev16q_u8(s01);
+
+		/* Vertical add, consolidate outside the loop. */
+		bytes += vaddq_u32(bytes, s01);
 		/* Segregate to packet length and data length. */
-		s23 = _mm_shuffle_epi32(s01, _MM_SHUFFLE(3, 3, 1, 1));
-		s01 = _mm_shuffle_epi8(s01, cpy_mask);
-		s23 = _mm_shuffle_epi8(s23, cpy_mask);
+		s23 = vqtbl1q_u8(s01, mask1);
+		s01 = vqtbl1q_u8(s01, mask0);
 
 		/* Store packet length and data length to mbuf. */
-		*(uint64_t *)&m0->pkt_len = ((rte_xmm_t)s01).u64[0];
-		*(uint64_t *)&m1->pkt_len = ((rte_xmm_t)s01).u64[1];
-		*(uint64_t *)&m2->pkt_len = ((rte_xmm_t)s23).u64[0];
-		*(uint64_t *)&m3->pkt_len = ((rte_xmm_t)s23).u64[1];
+		*(uint64_t *)&m0->pkt_len = vgetq_lane_u64(s01, 0);
+		*(uint64_t *)&m1->pkt_len = vgetq_lane_u64(s01, 1);
+		*(uint64_t *)&m2->pkt_len = vgetq_lane_u64(s23, 0);
+		*(uint64_t *)&m3->pkt_len = vgetq_lane_u64(s23, 1);
 
 		/* Reset rearm data. */
 		*(uint64_t *)&m0->rearm_data = droq->rearm_data;
@@ -81,11 +89,18 @@ cnxk_ep_process_pkts_vec_sse(struct rte_mbuf **rx_pkts, struct otx_ep_droq *droq
 	droq->pkts_pending -= new_pkts;
 	/* Stats */
 	droq->stats.pkts_received += new_pkts;
-	droq->stats.bytes_received += hadd(bytes);
+#if defined(RTE_ARCH_32)
+	droq->stats.bytes_received += vgetq_lane_u32(bytes, 0);
+	droq->stats.bytes_received += vgetq_lane_u32(bytes, 1);
+	droq->stats.bytes_received += vgetq_lane_u32(bytes, 2);
+	droq->stats.bytes_received += vgetq_lane_u32(bytes, 3);
+#else
+	droq->stats.bytes_received += vaddvq_u32(bytes);
+#endif
 }
 
 uint16_t __rte_noinline __rte_hot
-cnxk_ep_recv_pkts_sse(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
+cnxk_ep_recv_pkts_neon(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 {
 	struct otx_ep_droq *droq = (struct otx_ep_droq *)rx_queue;
 	uint16_t new_pkts, vpkts;
@@ -96,14 +111,14 @@ cnxk_ep_recv_pkts_sse(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkt
 
 	new_pkts = cnxk_ep_rx_pkts_to_process(droq, nb_pkts);
 	vpkts = RTE_ALIGN_FLOOR(new_pkts, CNXK_EP_OQ_DESC_PER_LOOP_SSE);
-	cnxk_ep_process_pkts_vec_sse(rx_pkts, droq, vpkts);
+	cnxk_ep_process_pkts_vec_neon(rx_pkts, droq, vpkts);
 	cnxk_ep_process_pkts_scalar(&rx_pkts[vpkts], droq, new_pkts - vpkts);
 
 	return new_pkts;
 }
 
 uint16_t __rte_noinline __rte_hot
-cn9k_ep_recv_pkts_sse(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
+cn9k_ep_recv_pkts_neon(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 {
 	struct otx_ep_droq *droq = (struct otx_ep_droq *)rx_queue;
 	uint16_t new_pkts, vpkts;
@@ -125,7 +140,7 @@ cn9k_ep_recv_pkts_sse(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkt
 
 	new_pkts = cnxk_ep_rx_pkts_to_process(droq, nb_pkts);
 	vpkts = RTE_ALIGN_FLOOR(new_pkts, CNXK_EP_OQ_DESC_PER_LOOP_SSE);
-	cnxk_ep_process_pkts_vec_sse(rx_pkts, droq, vpkts);
+	cnxk_ep_process_pkts_vec_neon(rx_pkts, droq, vpkts);
 	cnxk_ep_process_pkts_scalar(&rx_pkts[vpkts], droq, new_pkts - vpkts);
 
 	return new_pkts;

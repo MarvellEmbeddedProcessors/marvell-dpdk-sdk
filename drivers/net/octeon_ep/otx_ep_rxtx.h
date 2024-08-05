@@ -21,7 +21,7 @@
 
 /* SDP_LENGTH_S specifies packet length and is of 8-byte size */
 #define OTX_EP_INFO_SIZE 8
-#define DROQ_REFILL_THRESHOLD 16
+#define DROQ_REFILL_THRESHOLD  64
 #define OTX2_SDP_REQUEST_ISM   (0x1ULL << 63)
 
 typedef uint32_t (*otx_ep_check_pkt_count_t)(void *queue);
@@ -50,15 +50,11 @@ cnxk_ep_xmit_pkts_mseg(void *tx_queue, struct rte_mbuf **pkts, uint16_t nb_pkts)
 uint16_t
 cnxk_ep_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
 
-#ifdef RTE_ARCH_X86
 uint16_t
 cnxk_ep_recv_pkts_sse(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
 
-#ifdef CC_AVX2_SUPPORT
 uint16_t
 cnxk_ep_recv_pkts_avx(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
-#endif
-#endif
 
 uint16_t
 cnxk_ep_recv_pkts_mseg(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
@@ -66,15 +62,17 @@ cnxk_ep_recv_pkts_mseg(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budge
 uint16_t
 cn9k_ep_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
 
-#ifdef RTE_ARCH_X86
+uint16_t
+cnxk_ep_recv_pkts_neon(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkts);
+
 uint16_t
 cn9k_ep_recv_pkts_sse(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
 
-#ifdef CC_AVX2_SUPPORT
 uint16_t
 cn9k_ep_recv_pkts_avx(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);
-#endif
-#endif
+
+uint16_t
+cn9k_ep_recv_pkts_neon(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t nb_pkts);
 
 uint16_t
 cn9k_ep_recv_pkts_mseg(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t budget);

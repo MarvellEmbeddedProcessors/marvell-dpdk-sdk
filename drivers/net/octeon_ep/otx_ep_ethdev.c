@@ -96,6 +96,8 @@ otx_ep_set_rx_func(struct rte_eth_dev *eth_dev)
 		    rte_cpu_get_flag_enabled(RTE_CPUFLAG_AVX2) == 1)
 			eth_dev->rx_pkt_burst = &cnxk_ep_recv_pkts_avx;
 #endif
+#elif defined(RTE_ARCH_ARM64)
+		eth_dev->rx_pkt_burst = &cnxk_ep_recv_pkts_neon;
 #endif
 		if (otx_epvf->rx_offloads & RTE_ETH_RX_OFFLOAD_SCATTER)
 			eth_dev->rx_pkt_burst = &cnxk_ep_recv_pkts_mseg;
@@ -108,8 +110,9 @@ otx_ep_set_rx_func(struct rte_eth_dev *eth_dev)
 		    rte_cpu_get_flag_enabled(RTE_CPUFLAG_AVX2) == 1)
 			eth_dev->rx_pkt_burst = &cn9k_ep_recv_pkts_avx;
 #endif
+#elif defined(RTE_ARCH_ARM64)
+		eth_dev->rx_pkt_burst = &cn9k_ep_recv_pkts_neon;
 #endif
-
 		if (otx_epvf->rx_offloads & RTE_ETH_RX_OFFLOAD_SCATTER)
 			eth_dev->rx_pkt_burst = &cn9k_ep_recv_pkts_mseg;
 	} else {
@@ -254,6 +257,11 @@ otx_ep_dev_start(struct rte_eth_dev *eth_dev)
 
 	otx_ep_info("dev started\n");
 
+	for (q = 0; q < eth_dev->data->nb_rx_queues; q++)
+		eth_dev->data->rx_queue_state[q] = RTE_ETH_QUEUE_STATE_STARTED;
+	for (q = 0; q < eth_dev->data->nb_tx_queues; q++)
+		eth_dev->data->tx_queue_state[q] = RTE_ETH_QUEUE_STATE_STARTED;
+
 	return 0;
 }
 
@@ -262,8 +270,14 @@ static int
 otx_ep_dev_stop(struct rte_eth_dev *eth_dev)
 {
 	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
+	uint16_t i;
 
 	otx_epvf->fn_list.disable_io_queues(otx_epvf);
+
+	for (i = 0; i < eth_dev->data->nb_rx_queues; i++)
+		eth_dev->data->rx_queue_state[i] = RTE_ETH_QUEUE_STATE_STOPPED;
+	for (i = 0; i < eth_dev->data->nb_tx_queues; i++)
+		eth_dev->data->tx_queue_state[i] = RTE_ETH_QUEUE_STATE_STOPPED;
 
 	return 0;
 }
@@ -305,7 +319,6 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 	case PCI_DEVID_OCTEONTX_EP_VF:
 		otx_epvf->chip_id = dev_id;
 		ret = otx_ep_vf_setup_device(otx_epvf);
-		otx_epvf->fn_list.disable_io_queues(otx_epvf);
 		break;
 	case PCI_DEVID_CN9K_EP_NET_VF:
 	case PCI_DEVID_CN98XX_EP_NET_VF:
@@ -313,9 +326,6 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 	case PCI_DEVID_CNF95O_EP_NET_VF:
 		otx_epvf->chip_id = dev_id;
 		ret = otx2_ep_vf_setup_device(otx_epvf);
-		otx_epvf->fn_list.disable_io_queues(otx_epvf);
-		if (otx_ep_ism_setup(otx_epvf))
-			ret = -EINVAL;
 		break;
 	case PCI_DEVID_CN10KA_EP_NET_VF:
 	case PCI_DEVID_CN10KB_EP_NET_VF:
@@ -323,9 +333,6 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 	case PCI_DEVID_CNF10KB_EP_NET_VF:
 		otx_epvf->chip_id = dev_id;
 		ret = cnxk_ep_vf_setup_device(otx_epvf);
-		otx_epvf->fn_list.disable_io_queues(otx_epvf);
-		if (otx_ep_ism_setup(otx_epvf))
-			ret = -EINVAL;
 		break;
 	default:
 		otx_ep_err("Unsupported device\n");
@@ -334,6 +341,11 @@ otx_ep_chip_specific_setup(struct otx_ep_device *otx_epvf)
 
 	if (!ret)
 		otx_ep_info("OTX_EP dev_id[%d]\n", dev_id);
+	else
+		return ret;
+
+	if (dev_id != PCI_DEVID_OCTEONTX_EP_VF)
+		ret = otx_ep_ism_setup(otx_epvf);
 
 	return ret;
 }
@@ -350,8 +362,6 @@ otx_epdev_init(struct otx_ep_device *otx_epvf)
 		otx_ep_err("Chip specific setup failed\n");
 		goto setup_fail;
 	}
-
-	otx_epvf->fn_list.setup_device_regs(otx_epvf);
 
 	otx_epvf->eth_dev->tx_pkt_burst = &cnxk_ep_xmit_pkts;
 	otx_epvf->eth_dev->rx_pkt_burst = &otx_ep_recv_pkts;
@@ -402,6 +412,10 @@ otx_ep_dev_configure(struct rte_eth_dev *eth_dev)
 		otx_ep_err("invalid num queues\n");
 		return -EINVAL;
 	}
+
+	otx_epvf->fn_list.setup_device_regs(otx_epvf);
+	otx_epvf->fn_list.disable_io_queues(otx_epvf);
+
 	otx_ep_info("OTX_EP Device is configured with num_txq %d num_rxq %d\n",
 		    eth_dev->data->nb_rx_queues, eth_dev->data->nb_tx_queues);
 
@@ -642,6 +656,7 @@ otx_ep_dev_close(struct rte_eth_dev *eth_dev)
 
 	otx_epvf = OTX_EP_DEV(eth_dev);
 	otx_ep_mbox_send_dev_exit(eth_dev);
+	otx_ep_mbox_uninit(eth_dev);
 	otx_epvf->fn_list.disable_io_queues(otx_epvf);
 	num_queues = otx_epvf->nb_rx_queues;
 	for (q_no = 0; q_no < num_queues; q_no++) {
@@ -711,11 +726,22 @@ otx_ep_eth_dev_uninit(struct rte_eth_dev *eth_dev)
 		return 0;
 	}
 
+	otx_ep_mbox_uninit(eth_dev);
 	eth_dev->dev_ops = NULL;
 	eth_dev->rx_pkt_burst = NULL;
 	eth_dev->tx_pkt_burst = NULL;
 
 	return 0;
+}
+
+static void
+otx_epdev_event_callback(const char *device_name, enum rte_dev_event_type type,
+			 __rte_unused void *arg)
+{
+	if (type == RTE_DEV_EVENT_REMOVE)
+		otx_ep_info("Octeon epdev: %s has been removed!\n", device_name);
+
+	RTE_VERIFY(type != RTE_DEV_EVENT_REMOVE);
 }
 
 static int otx_ep_eth_dev_query_set_vf_mac(struct rte_eth_dev *eth_dev,
@@ -755,6 +781,7 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	struct rte_pci_device *pdev = RTE_ETH_DEV_TO_PCI(eth_dev);
 	struct otx_ep_device *otx_epvf = OTX_EP_DEV(eth_dev);
 	struct rte_ether_addr vf_mac_addr;
+	int ret = 0;
 
 	/* Single process support */
 	if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
@@ -792,8 +819,16 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 	otx_epvf->hw_addr = pdev->mem_resource[0].addr;
 	otx_epvf->pdev = pdev;
 
-	if (otx_epdev_init(otx_epvf))
-		return -ENOMEM;
+	if (rte_dev_event_callback_register(pdev->name, otx_epdev_event_callback, NULL)) {
+		otx_ep_err("Failed  to register a device event callback\n");
+			return -EINVAL;
+	}
+
+	if (otx_epdev_init(otx_epvf)) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+
 	if (otx_epvf->chip_id == PCI_DEVID_CN9K_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CN98XX_EP_NET_VF ||
 	    otx_epvf->chip_id == PCI_DEVID_CNF95N_EP_NET_VF ||
@@ -809,20 +844,27 @@ otx_ep_eth_dev_init(struct rte_eth_dev *eth_dev)
 		otx_ep_info("Using pkind %d.\n", otx_epvf->pkind);
 	} else {
 		otx_ep_err("Invalid chip id\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto exit;
 	}
 
-	if (otx_ep_mbox_version_check(eth_dev))
-		return -EINVAL;
+	if (otx_ep_mbox_init(eth_dev)) {
+		ret = -EINVAL;
+		goto exit;
+	}
 
 	if (otx_ep_eth_dev_query_set_vf_mac(eth_dev,
 				(struct rte_ether_addr *)&vf_mac_addr)) {
 		otx_ep_err("set mac addr failed\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto exit;
 	}
 	rte_ether_addr_copy(&vf_mac_addr, eth_dev->data->mac_addrs);
 
-	return 0;
+exit:
+	rte_dev_event_callback_unregister(pdev->name, otx_epdev_event_callback, NULL);
+
+	return ret;
 }
 
 static int
