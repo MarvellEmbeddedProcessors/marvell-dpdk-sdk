@@ -19,6 +19,9 @@
  * Device private data
  */
 struct cnxk_cpt_vf {
+	struct roc_cpt_lmtline rx_inj_lmtline;
+	uint16_t rx_inj_pf_func;
+	uint16_t *rx_chan_base;
 	struct roc_cpt cpt;
 	struct rte_cryptodev_capabilities crypto_caps[CNXK_CPT_MAX_CAPS];
 	struct rte_cryptodev_capabilities sec_ipsec_crypto_caps[CNXK_SEC_IPSEC_CRYPTO_MAX_CAPS];
@@ -26,6 +29,7 @@ struct cnxk_cpt_vf {
 	uint64_t cnxk_fpm_iova[ROC_AE_EC_ID_PMAX];
 	struct roc_ae_ec_group *ec_grp[ROC_AE_EC_ID_PMAX];
 	uint16_t max_qps_limit;
+	uint16_t rx_inject_qp;
 };
 
 uint64_t cnxk_cpt_default_ff_get(void);
