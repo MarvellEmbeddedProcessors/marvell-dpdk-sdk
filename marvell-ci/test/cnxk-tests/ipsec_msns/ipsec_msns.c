@@ -27,6 +27,7 @@
 
 #define NB_ETHPORTS_USED	 1
 #define MEMPOOL_CACHE_SIZE	 32
+#define MEMPOOL_PRV_AREA_SIZE	 128
 #define RTE_TEST_RX_DESC_DEFAULT 1024
 #define RTE_TEST_TX_DESC_DEFAULT 1024
 #define RTE_PORT_ALL		 (~(uint16_t)0x0)
@@ -50,7 +51,9 @@ enum test_mode {
 	EVENT_IPSEC_INBOUND_PERF,
 	EVENT_IPSEC_INB_OUTB_PERF,
 	EVENT_IPSEC_INB_LAOUTB_PERF,
-	POLL_IPSEC_INB_OUTB_PERF
+	POLL_IPSEC_INB_OUTB_PERF,
+	/* Verify the RTE PMD APIs */
+	IPSEC_RTE_PMD_CNXK_API_TEST
 };
 
 static struct rte_mempool *mbufpool[RTE_MAX_ETHPORTS];
@@ -204,6 +207,8 @@ ipsec_test_mode_to_string(enum test_mode testmode)
 		return "EVENT_IPSEC_INB_LAOUTB_PERF";
 	case POLL_IPSEC_INB_OUTB_PERF:
 		return "POLL_IPSEC_INB_OUTB_PERF";
+	case IPSEC_RTE_PMD_CNXK_API_TEST:
+		return "IPSEC_RTE_PMD_CNXK_API_TEST";
 	}
 	return NULL;
 }
@@ -993,7 +998,8 @@ init_pktmbuf_pool(uint32_t portid, unsigned int nb_mbuf)
 
 	if (mbufpool[portid] == NULL) {
 		snprintf(s, sizeof(s), "mbuf_pool_%d", portid);
-		mbufpool[portid] = rte_pktmbuf_pool_create(s, nb_mbuf, MEMPOOL_CACHE_SIZE, 128,
+		mbufpool[portid] = rte_pktmbuf_pool_create(s, nb_mbuf, MEMPOOL_CACHE_SIZE,
+							   MEMPOOL_PRV_AREA_SIZE,
 							   RTE_MBUF_DEFAULT_BUF_SIZE, socketid);
 		if (mbufpool[portid] == NULL) {
 			printf("Cannot init mbuf pool on socket %d\n", socketid);
@@ -1401,9 +1407,21 @@ print_usage(const char *name)
 {
 	printf("Invalid arguments\n");
 	printf("Usage: %s ", name);
-	printf("[--testmode <0/1/2/3/4>] [--pfc] [--portmask] [--nb-mbufs <count >]");
-	printf("[--num-sas <count>] [--softexp-en] [--softlimit <packet_count>]\n");
-	printf("[--inl-inb-oop] [--algo <aes_128_gcm|aes_256_gcm>]\n");
+	fprintf(stderr, "Usage: %s [--testmode <0-6> 0: IPSEC_MSNS\n"
+		"\t\t\t1: EVENT_IPSEC_INBOUND_MSNS_PERF\n"
+		"\t\t\t2: EVENT_IPSEC_INBOUND_PERF\n"
+		"\t\t\t3: EVENT_IPSEC_INB_OUTB_PERF\n"
+		"\t\t\t4: EVENT_IPSEC_INB_LAOUTB_PERF\n"
+		"\t\t\t5: POLL_IPSEC_INB_OUTB_PERF\n"
+		"\t\t\t6: IPSEC_RTE_PMD_CNXK_API_TEST]\n"
+		"[--pfc]"
+		"[--portmask]"
+		"[--nb-mbufs <count >]"
+		"[--num-sas <count>]"
+		"[--softexp-en]"
+		"[--softlimit <packet_count>]"
+		"[--inl-inb-oop]"
+		"[--algo <aes_128_gcm|aes_256_gcm>]\n", name);
 }
 
 static int
@@ -1419,7 +1437,8 @@ parse_args(int argc, char **argv)
 			if (testmode == EVENT_IPSEC_INBOUND_MSNS_PERF ||
 			    testmode == EVENT_IPSEC_INB_OUTB_PERF ||
 			    testmode == EVENT_IPSEC_INB_LAOUTB_PERF ||
-			    testmode == EVENT_IPSEC_INBOUND_PERF)
+			    testmode == EVENT_IPSEC_INBOUND_PERF ||
+			    testmode == IPSEC_RTE_PMD_CNXK_API_TEST)
 				event_en = true;
 			else if (testmode == POLL_IPSEC_INB_OUTB_PERF)
 				poll_mode = true;
@@ -1528,7 +1547,8 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 	}
 
 	/* Enable loopback mode for non perf test */
-	port_conf.lpbk_mode = (testmode == IPSEC_MSNS) ? 1 : 0;
+	port_conf.lpbk_mode = (testmode == IPSEC_MSNS || testmode == IPSEC_RTE_PMD_CNXK_API_TEST) ?
+			       1 : 0;
 
 	/* port configure */
 	ret = rte_eth_dev_configure(portid, nb_rx_queue, nb_tx_queue, &port_conf);
@@ -1756,6 +1776,333 @@ ut_teardown(void)
 		cnxk_sa_index_fini(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS);
 		cnxk_sa_index_fini(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS);
 	}
+}
+
+static void
+ipsec_inb_sa_init(struct rte_pmd_cnxk_ipsec_inb_sa *sa)
+{
+	size_t offset;
+
+	memset(sa, 0, sizeof(struct rte_pmd_cnxk_ipsec_inb_sa));
+
+	sa->w0.s.pkt_output = CPT_IE_OT_SA_PKT_OUTPUT_NO_FRAG;
+	sa->w0.s.pkt_format = CPT_IE_OT_SA_PKT_FMT_META;
+	sa->w0.s.pkind = CPT_IE_OT_CPT_PKIND;
+	sa->w0.s.et_ovrwr = 1;
+	sa->w2.s.l3hdr_on_err = 1;
+
+	offset = offsetof(struct rte_pmd_cnxk_ipsec_inb_sa, ctx);
+	sa->w0.s.hw_ctx_off = offset / 8;
+	sa->w0.s.ctx_push_size = sa->w0.s.hw_ctx_off + 1;
+	sa->w0.s.ctx_size = 2;
+	sa->w0.s.ctx_hdr_size = 1;
+	sa->w0.s.aop_valid = 1;
+}
+
+static void
+create_default_ipsec_flow(uint16_t port_id)
+{
+	struct rte_flow_action action[2];
+	struct rte_flow_item pattern[2];
+	struct rte_flow_attr attr = {0};
+	struct rte_flow_error err;
+	struct rte_flow *flow;
+	int ret;
+
+	/* Add the default rte_flow to enable SECURITY for all ESP packets */
+
+	pattern[0].type = RTE_FLOW_ITEM_TYPE_ESP;
+	pattern[0].spec = NULL;
+	pattern[0].mask = NULL;
+	pattern[0].last = NULL;
+	pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+	action[0].type = RTE_FLOW_ACTION_TYPE_SECURITY;
+	action[0].conf = NULL;
+	action[1].type = RTE_FLOW_ACTION_TYPE_END;
+	action[1].conf = NULL;
+
+	attr.ingress = 1;
+
+	ret = rte_flow_validate(port_id, &attr, pattern, action, &err);
+	if (ret)
+		return;
+
+	flow = rte_flow_create(port_id, &attr, pattern, action, &err);
+	if (flow == NULL)
+		return;
+
+	default_flow_no_msns[port_id] = flow;
+	printf("Created default flow enabling SECURITY for all ESP traffic on port %d\n",
+		port_id);
+}
+
+static void
+destroy_default_ipsec_flow(uint16_t portid)
+{
+	struct rte_flow_error err;
+	int ret;
+
+	if (!default_flow_no_msns[portid])
+		return;
+	ret = rte_flow_destroy(portid, default_flow_no_msns[portid], &err);
+	if (ret) {
+		printf("\nDefault flow rule destroy failed\n");
+		return;
+	}
+	default_flow_no_msns[portid] = NULL;
+}
+
+#define SA_COOKIE 0xAFAFAFAF
+static void
+pmd_cnxk_api_inb_session_fill(struct rte_pmd_cnxk_ipsec_inb_sa *sa)
+{
+	uint8_t *salt_key = sa->w8.s.salt;
+	uint32_t *tmp_salt;
+	uint64_t *tmp_key;
+	int i;
+
+	ipsec_inb_sa_init(sa);
+
+	sa->w0.s.count_glb_octets = 1;
+	sa->w0.s.count_glb_pkts = 1;
+	sa->w2.s.dir = CPT_IE_SA_DIR_INBOUND;
+	sa->w2.s.ipsec_protocol = CPT_IE_SA_PROTOCOL_ESP;
+	sa->w2.s.ipsec_mode = CPT_IE_SA_MODE_TUNNEL;
+	sa->w2.s.enc_type = CPT_IE_OT_SA_ENC_AES_GCM;
+	sa->w2.s.auth_type = CPT_IE_OT_SA_AUTH_NULL;
+
+	memcpy(salt_key, &sess_conf->ipsec_xform.salt, 4);
+	tmp_salt = (uint32_t *)salt_key;
+	*tmp_salt = rte_be_to_cpu_32(*tmp_salt);
+	sa->w2.s.spi = 1;
+
+	memcpy(sa->cipher_key, sess_conf->key.data, 16);
+	tmp_key = (uint64_t *)sa->cipher_key;
+	for (i = 0; i < (int)(CPT_CTX_MAX_CKEY_LEN / sizeof(uint64_t)); i++)
+		tmp_key[i] = rte_be_to_cpu_64(tmp_key[i]);
+
+	sa->w2.s.aes_key_len = CPT_IE_SA_AES_KEY_LEN_128;
+	sa->w1.s.cookie = SA_COOKIE;
+}
+
+static int
+pmd_cnxk_api_custom_inb_sa_verify(void)
+{
+	uint16_t lcore_id = rte_lcore_id();
+	struct lcore_cfg *info = &lcore_cfg[lcore_id];
+	unsigned int portid, nb_rx = 0, j;
+	unsigned int nb_sent = 0, nb_tx;
+	struct rte_mbuf *tx_pkts = NULL;
+	struct rte_mbuf *pkt;
+	struct rte_event ev;
+	uint32_t *data;
+	int rc;
+
+	nb_tx = 1;
+	portid = info->portid;
+	rc = init_traffic(mbufpool[portid], &tx_pkts, &pkt_ipv4_gcm128_spi1_cipher);
+	if (rc != 0)
+		return -1;
+
+	create_default_ipsec_flow(portid);
+	/* Start event dev */
+	ut_eventdev_start();
+
+	nb_sent = rte_eth_tx_burst(portid, 0, &tx_pkts, nb_tx);
+	if (nb_sent != nb_tx) {
+		printf("\nFailed to tx %u pkts", nb_tx);
+		rc = -1;
+		goto exit;
+	}
+
+	printf("Sent %u pkts\n", nb_sent);
+	rte_delay_ms(100);
+
+	/* Retry few times before giving up */
+	j = 0;
+	while (j++ < 10) {
+		/* Read packet from event queues */
+		nb_rx = rte_event_dequeue_burst(info->eventdev_id, info->event_port_id,
+						&ev, 1, 0);
+		if (nb_rx == 0) {
+			rte_pause();
+			continue;
+		}
+		switch (ev.event_type) {
+		case RTE_EVENT_TYPE_ETHDEV:
+			break;
+		default:
+			printf("Invalid event type %u", ev.event_type);
+			rc = -1;
+			goto exit;
+		}
+		pkt = ev.mbuf;
+		break;
+	}
+
+	printf("Recv %u pkts\n", nb_rx);
+	/* Check for minimum number of Rx packets expected */
+	if (nb_rx != nb_tx) {
+		printf("\nReceived less Rx pkts(%u) pkts\n", nb_rx);
+		rc = -1;
+		goto exit;
+	}
+	/* Get meta buffer pointer from WQE, mbuf + 128 is the WQE pointer */
+	data = (uint32_t *)(*(uint64_t *)RTE_PTR_ADD(pkt, 128 + 72));
+	if (data[1] != SA_COOKIE) {
+		printf("SA cookie is not matched in the meta packet\n");
+		rte_hexdump(stdout, NULL, data, pkt->pkt_len);
+		rc = -1;
+	}
+	rte_pktmbuf_free(pkt);
+exit:
+	destroy_default_ipsec_flow(portid);
+	return rc;
+}
+
+#define NB_INST		65
+#define CPT_RES_ALIGN	sizeof(union rte_pmd_cnxk_cpt_res_s)
+static int
+pmd_cnxk_api_inl_dev_inst_submit(void *cptr)
+{
+	struct ipsec_test_packet *pkt = &pkt_ipv4_gcm128_spi1_cipher;
+	struct rte_pmd_cnxk_cpt_q_stats stats, prev_stats;
+	union rte_pmd_cnxk_cpt_res_s res, *hw_res;
+	union roc_ot_ipsec_inb_param1 param1;
+	struct cpt_inst_s *inst_mem, *inst;
+	void *data_ptrs[NB_INST];
+	uint64_t timeout, pkts;
+	void *qptr, *dptr;
+	int rc = 0, i;
+
+	const union rte_pmd_cnxk_cpt_res_s res_init = {
+		.cn10k.compcode = CPT_COMP_NOT_DONE,
+	};
+
+	inst_mem = rte_malloc(NULL, NB_INST * sizeof(struct cpt_inst_s), 0);
+	if (inst_mem == NULL) {
+		printf("Could not allocate instruction memory\n");
+		return -ENOMEM;
+	}
+	rte_pmd_cnxk_cpt_q_stats_get(0, RTE_PMD_CNXK_CPT_Q_STATS_INL_DEV, &prev_stats, 0);
+	for (i = 0; i < NB_INST; i++) {
+		inst = RTE_PTR_ADD(inst_mem, i * sizeof(struct cpt_inst_s));
+
+		memset(inst, 0, sizeof(struct cpt_inst_s));
+		data_ptrs[i] = rte_zmalloc(NULL, MAX_PKT_LEN + CPT_RES_ALIGN, 0);
+		if (data_ptrs[i] == NULL) {
+			printf("Could not allocate memory for dptr\n");
+			rc = -ENOMEM;
+			goto exit;
+		}
+		hw_res = RTE_PTR_ALIGN_CEIL(data_ptrs[i], CPT_RES_ALIGN);
+
+		inst->w3.s.qord = 1;
+
+		dptr = RTE_PTR_ADD(hw_res, sizeof(union rte_pmd_cnxk_cpt_res_s));
+		memcpy(dptr, pkt->data, pkt->len);
+		inst->dptr = (uint64_t)((uintptr_t)dptr + RTE_ETHER_HDR_LEN);
+
+		inst->w7.s.egrp = CPT_DFLT_ENG_GRP_SE_IE;
+		inst->w7.s.ctx_val = 1;
+		inst->w7.s.cptr = (uint64_t)(uintptr_t)cptr;
+
+		inst->w4.s.opcode_major = CPT_IE_OT_MAJOR_OP_PROCESS_INBOUND_IPSEC | (1 << 6);
+		param1.u16 = 0;
+
+		/* Disable IP checksum verification by default */
+		param1.s.ip_csum_disable = 1;
+
+		/* Disable L4 checksum verification by default */
+		param1.s.l4_csum_disable = 1;
+
+		param1.s.esp_trailer_disable = 1;
+
+		inst->w4.s.param1 = param1.u16;
+		inst->w4.s.dlen = pkt->len - RTE_ETHER_HDR_LEN;
+
+		inst->res_addr = (uint64_t)hw_res;
+		__atomic_store_n(&hw_res->u64[0], res_init.u64[0], __ATOMIC_RELAXED);
+	}
+
+	timeout = rte_rdtsc() + rte_get_tsc_hz() * 60;
+
+	qptr = rte_pmd_cnxk_inl_dev_qptr_get();
+	if (rte_pmd_cnxk_inl_dev_submit(qptr, inst_mem, NB_INST) != NB_INST) {
+		printf("Couldn't submit CPT instructions to inline device\n");
+		rc = -1;
+		goto exit;
+	}
+	do {
+		hw_res = RTE_PTR_ALIGN_CEIL(data_ptrs[NB_INST - 1], CPT_RES_ALIGN);
+		res.u64[0] = __atomic_load_n(&hw_res->u64[0], __ATOMIC_RELAXED);
+	} while ((res.cn10k.compcode == CPT_COMP_NOT_DONE) && (rte_rdtsc() < timeout));
+
+	if (res.cn10k.compcode != CPT_COMP_GOOD  && res.cn10k.compcode != CPT_COMP_WARN) {
+		printf("res.compcode: %d\n", res.cn10k.compcode);
+		rc = -1;
+	} else {
+		rte_pmd_cnxk_cpt_q_stats_get(0, RTE_PMD_CNXK_CPT_Q_STATS_INL_DEV, &stats, 0);
+		pkts = stats.dec_pkts - prev_stats.dec_pkts;
+		if (pkts != NB_INST) {
+			printf("Inbound packet count: %u is not matched with queue counter: %lu\n",
+			       NB_INST, pkts);
+			rc = -1;
+		}
+	}
+exit:
+	i--;
+	for (; i >= 0; i--)
+		rte_free(data_ptrs[i]);
+	rte_free(inst_mem);
+
+	return rc;
+}
+
+#define CUSTOM_SA_SZ  512
+static int
+rte_pmd_cnxk_api_test(void)
+{
+	union rte_pmd_cnxk_ipsec_hw_sa *sa, sa_dptr;
+	uint16_t lcore_id = rte_lcore_id();
+	unsigned int portid;
+	int rc = 0;
+
+	portid = lcore_cfg[lcore_id].portid;
+	sa = rte_pmd_cnxk_hw_session_base_get(portid, true);
+	/* Get the SA for spi 1 */
+	sa = RTE_PTR_ADD(sa, CUSTOM_SA_SZ);
+	memset(sa, 0, CUSTOM_SA_SZ);
+
+	pmd_cnxk_api_inb_session_fill(&sa_dptr.inb);
+
+	/* Copy word0 from sa_dptr to populate ctx_push_sz ctx_size fields */
+	memcpy(sa, &sa_dptr.inb, 8);
+	sa_dptr.inb.w2.s.valid = 1;
+
+	rc = rte_pmd_cnxk_hw_sa_write(portid, sa, &sa_dptr, CUSTOM_SA_SZ, true);
+	if (rc) {
+		printf("Couldn't create the SA\n");
+		return rc;
+	}
+	/* Verify the inline device instruction submit API */
+	rc = pmd_cnxk_api_inl_dev_inst_submit(sa);
+	if (rc)
+		goto exit;
+
+	/* Verify the custom_inb_sa, driver wouldn't do the post processing
+	 * of inline IPsec inbound packet.
+	 */
+	rc = pmd_cnxk_api_custom_inb_sa_verify();
+
+exit:
+	/* Destroy the SA */
+	ipsec_inb_sa_init(&sa_dptr.inb);
+	if (rte_pmd_cnxk_hw_sa_write(portid, sa, &sa_dptr, CUSTOM_SA_SZ, true))
+		printf("Couldn't destroy the SA\n");
+
+	return rc;
 }
 
 static int
@@ -2556,60 +2903,6 @@ event_inb_worker(void *args)
 	return 0;
 }
 
-static void
-create_default_ipsec_flow(uint16_t port_id)
-{
-	struct rte_flow_action action[2];
-	struct rte_flow_item pattern[2];
-	struct rte_flow_attr attr = {0};
-	struct rte_flow_error err;
-	struct rte_flow *flow;
-	int ret;
-
-	/* Add the default rte_flow to enable SECURITY for all ESP packets */
-
-	pattern[0].type = RTE_FLOW_ITEM_TYPE_ESP;
-	pattern[0].spec = NULL;
-	pattern[0].mask = NULL;
-	pattern[0].last = NULL;
-	pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
-
-	action[0].type = RTE_FLOW_ACTION_TYPE_SECURITY;
-	action[0].conf = NULL;
-	action[1].type = RTE_FLOW_ACTION_TYPE_END;
-	action[1].conf = NULL;
-
-	attr.ingress = 1;
-
-	ret = rte_flow_validate(port_id, &attr, pattern, action, &err);
-	if (ret)
-		return;
-
-	flow = rte_flow_create(port_id, &attr, pattern, action, &err);
-	if (flow == NULL)
-		return;
-
-	default_flow_no_msns[port_id] = flow;
-	printf("Created default flow enabling SECURITY for all ESP traffic on port %d\n",
-		port_id);
-}
-
-static void
-destroy_default_ipsec_flow(uint16_t portid)
-{
-	struct rte_flow_error err;
-	int ret;
-
-	if (!default_flow_no_msns[portid])
-		return;
-	ret = rte_flow_destroy(portid, default_flow_no_msns[portid], &err);
-	if (ret) {
-		printf("\nDefault flow rule destroy failed\n");
-		return;
-	}
-	default_flow_no_msns[portid] = NULL;
-}
-
 static int
 outb_sa_exp_event_callback(uint16_t port_id, enum rte_eth_event_type type, void *param,
 			   void *ret_param)
@@ -3148,7 +3441,7 @@ out:
 int
 main(int argc, char **argv)
 {
-	int rc;
+	int rc = 0;
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -3163,55 +3456,49 @@ main(int argc, char **argv)
 	case EVENT_IPSEC_INBOUND_MSNS_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		rc = event_ipsec_inb_msns_perf();
-		if (rc) {
+		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
-			return rc;
-		}
 		break;
 	case EVENT_IPSEC_INBOUND_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		rc = event_ipsec_inb_perf();
-		if (rc) {
+		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
-			return rc;
-		}
 		break;
 	case EVENT_IPSEC_INB_OUTB_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		rc = ipsec_inb_outb_perf();
-		if (rc) {
+		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
-			return rc;
-		}
 		break;
 	case EVENT_IPSEC_INB_LAOUTB_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		if (rte_cryptodev_count() == 0) {
 			printf("No cryptodevs found\n");
-			return -1;
+			rc = -1;
 		}
 		rc = event_ipsec_inb_laoutb_perf();
-		if (rc) {
+		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
-			return rc;
-		}
 		break;
 	case POLL_IPSEC_INB_OUTB_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		rc = ipsec_inb_outb_perf();
-		if (rc) {
+		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
-			return rc;
-		}
 		break;
 	case IPSEC_MSNS:
 		rc = ut_ipsec_ipv4_burst_encap_decap();
-		if (rc) {
+		if (rc)
 			printf("TEST FAILED: ut_ipsec_ipv4_burst_encap_decap\n");
-			return rc;
-		}
+		break;
+	case IPSEC_RTE_PMD_CNXK_API_TEST:
+		printf("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
+		       ipsec_test_mode_to_string(testmode));
+		rc = rte_pmd_cnxk_api_test();
+		printf("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
 		break;
 	}
 	ut_teardown();
-	return 0;
+	return rc;
 }

@@ -30,6 +30,7 @@ while [[ ! -f $LOG ]]; do
 done
 echo "================================"
 
+sleep 1
 cat $LOG
 $VFIO_DEVBIND -u $IF0
 
@@ -74,4 +75,28 @@ if [[ $PART_106B0 == "B0" ]]; then
 	fi
 fi
 
-echo "TEST SUCCESSFUL"
+echo "CUSTOM SA ACT TEST SUCCESSFUL"
+
+$VFIO_DEVBIND -b vfio-pci $IF0
+$VFIO_DEVBIND -b vfio-pci 0002:1e:00.0
+timeout 15 stdbuf -o 0 ./cnxk_ipsec_msns \
+	-a 0002:02:00.0,custom_inb_sa=1 \
+	-a 0002:1d:00.0,custom_inb_sa=1 \
+	-a 0002:20:00.1 -a 0002:1e:00.0 -- --testmode 6 > $LOG &
+
+echo "================================"
+while [[ ! -f $LOG ]]; do
+	echo "Waiting for log"
+	sleep 1
+	continue
+done
+echo "================================"
+sleep 1
+cat $LOG
+$VFIO_DEVBIND -u $IF0
+TEST0=$(grep "Test IPSEC_RTE_PMD_CNXK_API_TEST" $LOG | awk '{print $3}')
+if [[ $TEST0 != "PASS" ]]; then
+	echo "Test IPSEC_RTE_PMD_CNXK_API_TEST FAILED"
+	exit 1
+fi
+echo "IPSEC_RTE_PMD_CNXK_API_TEST SUCCESSFUL"
