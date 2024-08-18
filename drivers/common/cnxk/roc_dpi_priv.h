@@ -17,6 +17,8 @@
 #define DPI_GET_REG_CFG 0x4
 #define DPI_QUEUE_OPEN_V2 0x5
 
+#define DPI_QUEUE_IDLE_TMO_MS 1E3
+
 typedef union dpi_mbox_msg_t {
 	uint64_t u[2];
 	struct dpi_mbox_message_s {

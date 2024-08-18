@@ -560,33 +560,6 @@ crypto_adapter_enq_op_fwd(struct prod_data *p)
 }
 
 static inline void
-dma_adapter_enq_op_new(struct prod_data *p)
-{
-	struct test_perf *t = p->t;
-	const uint32_t nb_flows = t->nb_flows;
-	const uint64_t nb_pkts = t->nb_pkts;
-	struct rte_event_dma_adapter_op *op;
-	struct evt_options *opt = t->opt;
-	uint32_t flow_counter = 0;
-	uint64_t count = 0;
-
-	if (opt->verbose_level > 1)
-		printf("%s(): lcore %d queue %d dma_dev_id %u dma_dev_vhcan_id %u\n",
-		       __func__, rte_lcore_id(), p->queue_id, p->da.dma_dev_id,
-		       p->da.vchan_id);
-
-	while (count < nb_pkts && t->done == false) {
-		op = p->da.dma_op[flow_counter++ % nb_flows];
-		while (rte_dma_copy_sg(op->dma_dev_id, op->vchan, op->src_seg,
-				       op->dst_seg, op->nb_src, op->nb_dst,
-				       op->flags) < 0 && t->done == false)
-			rte_pause();
-
-		count++;
-	}
-}
-
-static inline void
 dma_adapter_enq_op_fwd(struct prod_data *p)
 {
 	struct test_perf *t = p->t;
@@ -627,12 +600,9 @@ static inline int
 perf_event_dma_producer(void *arg)
 {
 	struct prod_data *p = arg;
-	struct evt_options *opt = p->t->opt;
 
-	if (opt->dma_adptr_mode == RTE_EVENT_DMA_ADAPTER_OP_NEW)
-		dma_adapter_enq_op_new(p);
-	else
-		dma_adapter_enq_op_fwd(p);
+	/* Only fwd mode is supported. */
+	dma_adapter_enq_op_fwd(p);
 
 	return 0;
 }
@@ -2042,8 +2012,9 @@ perf_dmadev_setup(struct evt_test *test, struct evt_options *opt)
 			.nb_desc = 1024,
 	};
 	struct test_perf *t = evt_test_priv(test);
-	uint8_t dma_dev_count, dma_dev_id;
+	uint8_t dma_dev_count, dma_dev_id = 0;
 	unsigned int elt_size;
+	int vchan_id;
 	int ret;
 
 	if (opt->prod_type != EVT_PROD_TYPE_EVENT_DMA_ADPTR)
@@ -2063,30 +2034,24 @@ perf_dmadev_setup(struct evt_test *test, struct evt_options *opt)
 		return -ENOMEM;
 	}
 
-	for (dma_dev_id = 0; dma_dev_id < dma_dev_count; dma_dev_id++) {
-		int vchan_id;
+	ret = rte_dma_configure(dma_dev_id, &conf);
+	if (ret) {
+		evt_err("Failed to configure dma dev (%u)", dma_dev_id);
+		goto err;
+	}
 
-		ret = rte_dma_configure(dma_dev_id, &conf);
+	for (vchan_id = 0; vchan_id < conf.nb_vchans; vchan_id++) {
+		ret = rte_dma_vchan_setup(dma_dev_id, vchan_id, &qconf);
 		if (ret) {
-			evt_err("Failed to configure dma dev (%u)", dma_dev_id);
+			evt_err("Failed to setup vchan on dma dev %u\n",
+				dma_dev_id);
 			goto err;
-		}
-
-		for (vchan_id = 0; vchan_id < conf.nb_vchans; vchan_id++) {
-			ret = rte_dma_vchan_setup(dma_dev_id, vchan_id, &qconf);
-			if (ret) {
-				evt_err("Failed to setup vchan on dma dev %u\n",
-					dma_dev_id);
-				goto err;
-			}
 		}
 	}
 
 	return 0;
 err:
-	for (dma_dev_id = 0; dma_dev_id < dma_dev_count; dma_dev_id++)
-		rte_dma_close(dma_dev_id);
-
+	rte_dma_close(dma_dev_id);
 	rte_mempool_free(t->da_op_pool);
 
 	return ret;
@@ -2095,7 +2060,7 @@ err:
 void
 perf_dmadev_destroy(struct evt_test *test, struct evt_options *opt)
 {
-	uint8_t dma_dev_id, dma_dev_count = rte_dma_count_avail();
+	uint8_t dma_dev_id = 0;
 	struct test_perf *t = evt_test_priv(test);
 	uint16_t port;
 
@@ -2120,10 +2085,8 @@ perf_dmadev_destroy(struct evt_test *test, struct evt_options *opt)
 
 	rte_event_dma_adapter_free(TEST_PERF_DA_ID);
 
-	for (dma_dev_id = 0; dma_dev_id < dma_dev_count; dma_dev_id++) {
-		rte_dma_stop(dma_dev_id);
-		rte_dma_close(dma_dev_id);
-	}
+	rte_dma_stop(dma_dev_id);
+	rte_dma_close(dma_dev_id);
 
 	rte_mempool_free(t->da_op_pool);
 }

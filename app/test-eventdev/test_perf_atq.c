@@ -332,16 +332,18 @@ perf_atq_eventdev_setup(struct evt_test *test, struct evt_options *opt)
 			}
 		}
 	} else if (opt->prod_type == EVT_PROD_TYPE_EVENT_DMA_ADPTR) {
-		uint8_t dma_dev_id, dma_dev_count;
+		uint8_t dma_dev_id = 0, dma_dev_count;
 
 		dma_dev_count = rte_dma_count_avail();
-		for (dma_dev_id = 0; dma_dev_id < dma_dev_count; dma_dev_id++) {
-			ret = rte_dma_start(dma_dev_id);
-			if (ret) {
-				evt_err("Failed to start dmadev %u",
-					dma_dev_id);
-				return ret;
-			}
+		if (dma_dev_count == 0) {
+			evt_err("No dma devices available\n");
+			return -ENODEV;
+		}
+
+		ret = rte_dma_start(dma_dev_id);
+		if (ret) {
+			evt_err("Failed to start dmadev %u", dma_dev_id);
+			return ret;
 		}
 	}
 

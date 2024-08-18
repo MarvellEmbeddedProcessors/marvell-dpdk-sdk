@@ -9,9 +9,6 @@
 
 #include <cn10k_eventdev.h>
 #include <cnxk_eventdev.h>
-#include <rte_mcslock.h>
-
-rte_mcslock_t *dpi_ml;
 
 static __plt_always_inline void
 __dpi_cpy_scalar(uint64_t *src, uint64_t *dst, uint8_t n)
@@ -284,14 +281,15 @@ cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t d
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpivf->total_pnum_words + CNXK_DPI_DW_PER_SINGLE_CMD,
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_DW_PER_SINGLE_CMD,
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
-		dpivf->total_pnum_words = 0;
+		dpi_conf->stats.submitted += dpi_conf->pending + 1;
+		dpi_conf->pnum_words = 0;
+		dpi_conf->pending = 0;
 	} else {
-		dpivf->total_pnum_words += CNXK_DPI_DW_PER_SINGLE_CMD;
+		dpi_conf->pnum_words += CNXK_DPI_DW_PER_SINGLE_CMD;
+		dpi_conf->pending++;
 	}
-
-	dpi_conf->stats.submitted += 1;
 
 	return dpi_conf->desc_idx++;
 }
@@ -339,14 +337,15 @@ cnxk_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge 
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpivf->total_pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
-		dpivf->total_pnum_words = 0;
+		dpi_conf->stats.submitted += dpi_conf->pending + 1;
+		dpi_conf->pnum_words = 0;
+		dpi_conf->pending = 0;
 	} else {
-		dpivf->total_pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+		dpi_conf->pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+		dpi_conf->pending++;
 	}
-
-	dpi_conf->stats.submitted += 1;
 
 	return dpi_conf->desc_idx++;
 }
@@ -384,14 +383,15 @@ cn10k_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t 
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpivf->total_pnum_words + CNXK_DPI_DW_PER_SINGLE_CMD,
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_DW_PER_SINGLE_CMD,
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
-		dpivf->total_pnum_words = 0;
+		dpi_conf->stats.submitted += dpi_conf->pending + 1;
+		dpi_conf->pnum_words = 0;
+		dpi_conf->pending = 0;
 	} else {
-		dpivf->total_pnum_words += CNXK_DPI_DW_PER_SINGLE_CMD;
+		dpi_conf->pnum_words += 8;
+		dpi_conf->pending++;
 	}
-
-	dpi_conf->stats.submitted += 1;
 
 	return dpi_conf->desc_idx++;
 }
@@ -426,14 +426,15 @@ cn10k_dmadev_copy_sg(void *dev_private, uint16_t vchan, const struct rte_dma_sge
 
 	if (flags & RTE_DMA_OP_FLAG_SUBMIT) {
 		rte_wmb();
-		plt_write64(dpivf->total_pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
+		plt_write64(dpi_conf->pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
 			    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
-		dpivf->total_pnum_words = 0;
+		dpi_conf->stats.submitted += dpi_conf->pending + 1;
+		dpi_conf->pnum_words = 0;
+		dpi_conf->pending = 0;
 	} else {
-		dpivf->total_pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+		dpi_conf->pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+		dpi_conf->pending++;
 	}
-
-	dpi_conf->stats.submitted += 1;
 
 	return dpi_conf->desc_idx++;
 }
@@ -457,7 +458,7 @@ cn10k_dma_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
 	struct cnxk_dpi_vf_s *dpivf;
 	struct cn10k_sso_hws *work;
 	uint16_t nb_src, nb_dst;
-	rte_mcslock_t ml_me;
+	rte_mcslock_t mcs_lock_me;
 	uint64_t hdr[4];
 	uint16_t count;
 	int rc;
@@ -485,7 +486,7 @@ cn10k_dma_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
 		     (ev[count].sched_type & DPI_HDR_TT_MASK) == RTE_SCHED_TYPE_ORDERED))
 			roc_sso_hws_head_wait(work->base);
 
-		rte_mcslock_lock(&dpi_ml, &ml_me);
+		rte_mcslock_lock(&dpivf->mcs_lock, &mcs_lock_me);
 		rc = __dpi_queue_write_sg(dpivf, hdr, src, dst, nb_src, nb_dst);
 		if (unlikely(rc)) {
 			rte_mcslock_unlock(&dpivf->mcs_lock, &mcs_lock_me);
@@ -566,14 +567,16 @@ cn9k_dma_adapter_dual_enqueue(void *ws, struct rte_event ev[], uint16_t nb_event
 
 		if (op->flags & RTE_DMA_OP_FLAG_SUBMIT) {
 			rte_wmb();
-			plt_write64(dpivf->total_pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
+			plt_write64(dpi_conf->pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
 				    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
-			dpivf->total_pnum_words = 0;
+			dpi_conf->stats.submitted += dpi_conf->pending + 1;
+			dpi_conf->pnum_words = 0;
+			dpi_conf->pending = 0;
 		} else {
-			dpivf->total_pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+			dpi_conf->pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+			dpi_conf->pending++;
 		}
-		dpi_conf->stats.submitted += 1;
-		rte_mcslock_unlock(&dpi_ml, &ml_me);
+		rte_mcslock_unlock(&dpivf->mcs_lock, &mcs_lock_me);
 	}
 
 	return count;
@@ -588,7 +591,7 @@ cn9k_dma_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
 	struct cnxk_dpi_vf_s *dpivf;
 	struct cn9k_sso_hws *work;
 	uint16_t nb_src, nb_dst;
-	rte_mcslock_t ml_me;
+	rte_mcslock_t mcs_lock_me;
 	uint64_t hdr[4];
 	uint16_t count;
 	int rc;
@@ -624,23 +627,25 @@ cn9k_dma_adapter_enqueue(void *ws, struct rte_event ev[], uint16_t nb_events)
 		if ((ev[count].sched_type & DPI_HDR_TT_MASK) == RTE_SCHED_TYPE_ORDERED)
 			roc_sso_hws_head_wait(work->base);
 
-		rte_mcslock_lock(&dpi_ml, &ml_me);
+		rte_mcslock_lock(&dpivf->mcs_lock, &mcs_lock_me);
 		rc = __dpi_queue_write_sg(dpivf, hdr, fptr, lptr, nb_src, nb_dst);
 		if (unlikely(rc)) {
-			rte_mcslock_unlock(&dpi_ml, &ml_me);
+			rte_mcslock_unlock(&dpivf->mcs_lock, &mcs_lock_me);
 			return rc;
 		}
 
 		if (op->flags & RTE_DMA_OP_FLAG_SUBMIT) {
 			rte_wmb();
-			plt_write64(dpivf->total_pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
+			plt_write64(dpi_conf->pnum_words + CNXK_DPI_CMD_LEN(nb_src, nb_dst),
 				    dpivf->rdpi.rbase + DPI_VDMA_DBELL);
-			dpivf->total_pnum_words = 0;
+			dpi_conf->stats.submitted += dpi_conf->pending + 1;
+			dpi_conf->pnum_words = 0;
+			dpi_conf->pending = 0;
 		} else {
-			dpivf->total_pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+			dpi_conf->pnum_words += CNXK_DPI_CMD_LEN(nb_src, nb_dst);
+			dpi_conf->pending++;
 		}
-		dpi_conf->stats.submitted += 1;
-		rte_mcslock_unlock(&dpi_ml, &ml_me);
+		rte_mcslock_unlock(&dpivf->mcs_lock, &mcs_lock_me);
 	}
 
 	return count;

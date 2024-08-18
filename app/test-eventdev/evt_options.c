@@ -151,6 +151,10 @@ evt_parse_dma_prod_type(struct evt_options *opt,
 			   const char *arg __rte_unused)
 {
 	opt->prod_type = EVT_PROD_TYPE_EVENT_DMA_ADPTR;
+
+	/* Only Forward mode is supported for DMA adapter. */
+	opt->dma_adptr_mode = RTE_EVENT_DMA_ADAPTER_OP_FORWARD;
+
 	return 0;
 }
 
@@ -161,8 +165,13 @@ evt_parse_dma_adptr_mode(struct evt_options *opt, const char *arg)
 	int ret;
 
 	ret = parser_read_uint8(&mode, arg);
-	opt->dma_adptr_mode = mode ? RTE_EVENT_DMA_ADAPTER_OP_FORWARD :
-					RTE_EVENT_DMA_ADAPTER_OP_NEW;
+	if (mode != RTE_EVENT_DMA_ADAPTER_OP_FORWARD) {
+		RTE_LOG(ERR, USER1, "DMA adapter is supported in forward mode only\n");
+		return -EINVAL;
+	}
+
+	opt->dma_adptr_mode = RTE_EVENT_DMA_ADAPTER_OP_FORWARD;
+
 	return ret;
 }
 
@@ -479,8 +488,7 @@ usage(char *program)
 		"\t--timer_tick_nsec  : timer tick interval in ns.\n"
 		"\t--max_tmo_nsec     : max timeout interval in ns.\n"
 		"\t--expiry_nsec      : event timer expiry ns.\n"
-		"\t--dma_adptr_mode   : 0 for OP_NEW mode (default) and\n"
-		"\t                     1 for OP_FORWARD mode.\n"
+		"\t--dma_adptr_mode   : 1 for OP_FORWARD mode (default).\n"
 		"\t--crypto_adptr_mode : 0 for OP_NEW mode (default) and\n"
 		"\t                      1 for OP_FORWARD mode.\n"
 		"\t--crypto_op_type   : 0 for SYM ops (default) and\n"

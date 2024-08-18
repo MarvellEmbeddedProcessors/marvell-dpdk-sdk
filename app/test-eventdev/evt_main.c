@@ -142,7 +142,7 @@ main(int argc, char **argv)
 	if (test->ops.dmadev_setup) {
 		if (test->ops.dmadev_setup(test, &opt)) {
 			evt_err("%s: dmadev setup failed", opt.test_name);
-			goto cryptodev_destroy;
+			goto dmadev_destroy;
 		}
 	}
 
@@ -206,6 +206,10 @@ eventdev_destroy:
 cryptodev_destroy:
 	if (test->ops.cryptodev_destroy)
 		test->ops.cryptodev_destroy(test, &opt);
+
+dmadev_destroy:
+	if (test->ops.dmadev_destroy)
+		test->ops.dmadev_destroy(test, &opt);
 
 ethdev_destroy:
 	if (test->ops.ethdev_destroy)

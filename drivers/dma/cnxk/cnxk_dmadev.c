@@ -282,12 +282,12 @@ cnxk_dmadev_start(struct rte_dma_dev *dev)
 	int i, j, rc = 0;
 	void *chunk;
 
-	dpivf->total_pnum_words = 0;
-
 	for (i = 0; i < dpivf->num_vchans; i++) {
 		dpi_conf = &dpivf->conf[i];
 		dpi_conf->c_desc.head = 0;
 		dpi_conf->c_desc.tail = 0;
+		dpi_conf->pnum_words = 0;
+		dpi_conf->pending = 0;
 		dpi_conf->desc_idx = 0;
 		for (j = 0; j < dpi_conf->c_desc.max_cnt + 1; j++)
 			dpi_conf->c_desc.compl_ptr[j * CNXK_DPI_COMPL_OFFSET] = CNXK_DPI_REQ_CDATA;
@@ -324,38 +324,13 @@ cnxk_dmadev_start(struct rte_dma_dev *dev)
 
 	rc = roc_dpi_configure_v2(&dpivf->rdpi, queue_buf_sz, dpivf->aura, (uint64_t)chunk);
 	if (rc < 0) {
-		plt_err("DMA configure v2 failed err = %d", rc);
-		rte_mempool_free(dpivf->chunk_pool);
-		goto open_v1;
-	}
-	dpivf->chunk_size_m1 = (queue_buf_sz >> 3) - 2;
-	goto done;
-
-open_v1:
-	chunks = CNXK_DPI_CHUNKS_FROM_DESC(CNXK_DPI_QUEUE_BUF_SIZE, nb_desc);
-	rc = cnxk_dmadev_chunk_pool_create(dev, chunks, CNXK_DPI_QUEUE_BUF_SIZE);
-	if (rc < 0) {
-		plt_err("DMA pool configure failed err = %d", rc);
-		goto error;
-	}
-
-	rc = rte_mempool_get(dpivf->chunk_pool, &chunk);
-	if (rc < 0) {
-		plt_err("DMA failed to get chunk pointer err = %d", rc);
-		rte_mempool_free(dpivf->chunk_pool);
-		goto error;
-	}
-
-	rc = roc_dpi_configure(&dpivf->rdpi, CNXK_DPI_QUEUE_BUF_SIZE, dpivf->aura, (uint64_t)chunk);
-	if (rc < 0) {
 		plt_err("DMA configure failed err = %d", rc);
 		rte_mempool_free(dpivf->chunk_pool);
 		goto error;
 	}
-	dpivf->chunk_size_m1 = (CNXK_DPI_QUEUE_BUF_SIZE >> 3) - 2;
-done:
 	dpivf->chunk_base = chunk;
 	dpivf->chunk_head = 0;
+	dpivf->chunk_size_m1 = (queue_buf_sz >> 3) - 2;
 
 	roc_dpi_enable(&dpivf->rdpi);
 error:
@@ -366,11 +341,9 @@ static int
 cnxk_dmadev_stop(struct rte_dma_dev *dev)
 {
 	struct cnxk_dpi_vf_s *dpivf = dev->fp_obj->dev_private;
-	uint64_t reg;
 
-	reg = plt_read64(dpivf->rdpi.rbase + DPI_VDMA_SADDR);
-	while (!(reg & BIT_ULL(63)))
-		reg = plt_read64(dpivf->rdpi.rbase + DPI_VDMA_SADDR);
+	if (roc_dpi_wait_queue_idle(&dpivf->rdpi))
+		return -EAGAIN;
 
 	roc_dpi_disable(&dpivf->rdpi);
 	rte_mempool_free(dpivf->chunk_pool);
@@ -463,7 +436,8 @@ cnxk_damdev_burst_capacity(const void *dev_private, uint16_t vchan)
 	uint16_t burst_cap;
 
 	burst_cap = dpi_conf->c_desc.max_cnt -
-		    (dpi_conf->stats.submitted - dpi_conf->stats.completed) + 1;
+		    ((dpi_conf->stats.submitted - dpi_conf->stats.completed) + dpi_conf->pending) +
+		    1;
 
 	return burst_cap;
 }
@@ -472,16 +446,18 @@ static int
 cnxk_dmadev_submit(void *dev_private, uint16_t vchan)
 {
 	struct cnxk_dpi_vf_s *dpivf = dev_private;
-	uint32_t num_words = dpivf->total_pnum_words;
-	RTE_SET_USED(vchan);
+	struct cnxk_dpi_conf *dpi_conf = &dpivf->conf[vchan];
+	uint32_t num_words = dpi_conf->pnum_words;
 
-	if (!num_words)
+	if (!dpi_conf->pnum_words)
 		return 0;
 
 	rte_wmb();
 	plt_write64(num_words, dpivf->rdpi.rbase + DPI_VDMA_DBELL);
 
-	dpivf->total_pnum_words = 0;
+	dpi_conf->stats.submitted += dpi_conf->pending;
+	dpi_conf->pnum_words = 0;
+	dpi_conf->pending = 0;
 
 	return 0;
 }
@@ -605,6 +581,7 @@ cnxk_dmadev_probe(struct rte_pci_driver *pci_drv __rte_unused, struct rte_pci_de
 		dmadev->fp_obj->copy_sg = cn10k_dmadev_copy_sg;
 	}
 
+	dpivf->mcs_lock = NULL;
 	rdpi = &dpivf->rdpi;
 
 	rdpi->pci_dev = pci_dev;

@@ -79,6 +79,24 @@ recv_msg_from_pf(struct plt_pci_addr *pci_addr, char *value, int size)
 }
 
 int
+roc_dpi_wait_queue_idle(struct roc_dpi *roc_dpi)
+{
+	const uint64_t cyc = (DPI_QUEUE_IDLE_TMO_MS * plt_tsc_hz()) / 1E3;
+	const uint64_t start = plt_tsc_cycles();
+	uint64_t reg;
+
+	/* Wait for SADDR to become idle */
+	reg = plt_read64(roc_dpi->rbase + DPI_VDMA_SADDR);
+	while (!(reg & BIT_ULL(63))) {
+		reg = plt_read64(roc_dpi->rbase + DPI_VDMA_SADDR);
+		if (plt_tsc_cycles() - start == cyc)
+			return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
+int
 roc_dpi_enable(struct roc_dpi *dpi)
 {
 	plt_write64(0x1, dpi->rbase + DPI_VDMA_EN);
