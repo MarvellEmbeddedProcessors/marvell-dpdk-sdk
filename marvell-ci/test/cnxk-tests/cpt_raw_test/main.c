@@ -502,10 +502,11 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 	void *data_ptrs[NB_DESC], *rptrs[NB_DESC], *cptrs[NB_CPTR];
 	uint64_t timeout, tsc_start, tsc_end, tsc_cycles;
 	double test_us, throughput_gbps, ops_per_second;
+	struct rte_pmd_cnxk_crypto_qptr *qptr;
 	struct cpt_inst_s *inst_mem, *inst;
 	int ret, i, status = TEST_SUCCESS;
 	union cpt_res_s res, *hw_res;
-	void *qptr, *dptr;
+	void *dptr;
 
 	const union cpt_res_s res_init = {
 		.cn10k.compcode = CPT_COMP_NOT_DONE,
