@@ -620,8 +620,8 @@ cnxk_sso_parse_devargs(struct cnxk_sso_evdev *dev, struct rte_devargs *devargs)
 			   &single_ws);
 	rte_kvargs_process(kvlist, CN10K_SSO_GW_MODE, &parse_kvargs_value,
 			   &dev->gw_mode);
-	rte_kvargs_process(kvlist, CN10K_SSO_STASH,
-			   &parse_sso_kvargs_stash_dict, dev);
+	rte_kvargs_process(kvlist, CNXK_SSO_STASH, &parse_sso_kvargs_stash_dict,
+			   dev);
 	dev->dual_ws = !single_ws;
 	rte_kvargs_free(kvlist);
 }
