@@ -257,6 +257,27 @@ struct virtio_net_hdr_mrg_rxbuf {
 	uint16_t num_buffers; /**< Number of merged rx buffers */
 };
 
+/**
+ * This is the version of the header to use when the HASH_REPORT
+ * feature has been negotiated.
+ */
+struct virtio_net_hdr_hash_report {
+	struct virtio_net_hdr_mrg_rxbuf hdr;
+	uint32_t hash_value;
+#define VIRTIO_NET_HASH_REPORT_NONE	0
+#define VIRTIO_NET_HASH_REPORT_IPv4	1
+#define VIRTIO_NET_HASH_REPORT_TCPv4	2
+#define VIRTIO_NET_HASH_REPORT_UDPv4	3
+#define VIRTIO_NET_HASH_REPORT_IPv6	4
+#define VIRTIO_NET_HASH_REPORT_TCPv6	5
+#define VIRTIO_NET_HASH_REPORT_UDPv6	6
+#define VIRTIO_NET_HASH_REPORT_IPv6_EX	7
+#define VIRTIO_NET_HASH_REPORT_TCPv6_EX	8
+#define VIRTIO_NET_HASH_REPORT_UDPv6_EX	9
+	uint16_t hash_report;
+	uint16_t pad_reserved;
+};
+
 /* Region reserved to allow for transmit header and indirect ring */
 #define VIRTIO_MAX_TX_INDIRECT 8
 struct virtio_tx_region {

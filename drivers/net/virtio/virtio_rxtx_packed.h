@@ -152,6 +152,29 @@ virtqueue_enqueue_single_packed_vec(struct virtnet_tx *txvq,
 	return 0;
 }
 
+static const uint32_t vhdr_hash_report_to_mbuf_pkt_type[] = {
+	RTE_PTYPE_UNKNOWN,
+	RTE_PTYPE_L3_IPV4,
+	RTE_PTYPE_L3_IPV4 | RTE_PTYPE_L4_TCP,
+	RTE_PTYPE_L3_IPV4 | RTE_PTYPE_L4_UDP,
+	RTE_PTYPE_L3_IPV6,
+	RTE_PTYPE_L3_IPV6 | RTE_PTYPE_L4_TCP,
+	RTE_PTYPE_L3_IPV6 | RTE_PTYPE_L4_UDP,
+	RTE_PTYPE_L3_IPV6_EXT,
+	RTE_PTYPE_L3_IPV6_EXT | RTE_PTYPE_L4_TCP,
+	RTE_PTYPE_L3_IPV6_EXT | RTE_PTYPE_L4_UDP,
+};
+
+static inline void
+virtio_vec_rx_update_hash_report(struct rte_mbuf *m, struct virtio_net_hdr_hash_report *hdr)
+{
+	if (likely(hdr->hash_report)) {
+		m->packet_type = vhdr_hash_report_to_mbuf_pkt_type[hdr->hash_report];
+		m->hash.rss = hdr->hash_value;
+		m->ol_flags |= RTE_MBUF_F_RX_RSS_HASH;
+	}
+}
+
 /* Optionally fill offload information in structure */
 static inline int
 virtio_vec_rx_offload(struct rte_mbuf *m, struct virtio_net_hdr *hdr)
@@ -241,6 +264,10 @@ virtqueue_dequeue_single_packed_vec(struct virtnet_rx *rxvq,
 
 	hdr = (struct virtio_net_hdr *)((char *)cookie->buf_addr +
 					RTE_PKTMBUF_HEADROOM - hdr_size);
+	if (hw->has_hash_report)
+		virtio_vec_rx_update_hash_report(cookie,
+				(struct virtio_net_hdr_hash_report *)hdr);
+
 	if (hw->has_rx_offload)
 		virtio_vec_rx_offload(cookie, hdr);
 

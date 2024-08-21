@@ -214,6 +214,14 @@ virtqueue_dequeue_batch_packed_vec(struct virtnet_rx *rxvq,
 	/* batch store into mbufs */
 	_mm512_i64scatter_epi64(0, v_index, v_value, 1);
 
+	if (hw->has_hash_report) {
+		virtio_for_each_try_unroll(i, 0, PACKED_BATCH_SIZE) {
+			char *addr = (char *)rx_pkts[i]->buf_addr +
+				RTE_PKTMBUF_HEADROOM - hdr_size;
+		virtio_vec_rx_update_hash_report(rx_pkts[i],
+				(struct virtio_net_hdr_hash_report *)addr);
+		}
+	}
 	if (hw->has_rx_offload) {
 		virtio_for_each_try_unroll(i, 0, PACKED_BATCH_SIZE) {
 			char *addr = (char *)rx_pkts[i]->buf_addr +
