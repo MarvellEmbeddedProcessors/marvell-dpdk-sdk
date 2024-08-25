@@ -27,7 +27,7 @@
 #define CNXK_SSO_GGRP_QOS  "qos"
 #define CNXK_SSO_FORCE_BP  "force_rx_bp"
 #define CN9K_SSO_SINGLE_WS "single_ws"
-#define CN10K_SSO_GW_MODE  "gw_mode"
+#define CNXK_SSO_GW_MODE   "gw_mode"
 #define CNXK_SSO_STASH	   "stash"
 
 #define CNXK_SSO_MAX_PROFILES 2
@@ -39,9 +39,9 @@
 #define CN9K_SSOW_GET_BASE_ADDR(_GW) ((_GW)-SSOW_LF_GWS_OP_GET_WORK0)
 #define CN9K_DUAL_WS_NB_WS	     2
 
-#define CN10K_GW_MODE_NONE     0
-#define CN10K_GW_MODE_PREF     1
-#define CN10K_GW_MODE_PREF_WFE 2
+#define CNXK_GW_MODE_NONE     0
+#define CNXK_GW_MODE_PREF     1
+#define CNXK_GW_MODE_PREF_WFE 2
 
 #define CNXK_QOS_NORMALIZE(val, min, max, cnt)                                 \
 	(min + val / ((max + cnt - 1) / cnt))
