@@ -11,9 +11,13 @@
 struct cn20k_sso_hws {
 	uint64_t base;
 	uint32_t gw_wdata;
+	void *lookup_mem;
 	uint64_t gw_rdata;
 	uint8_t swtag_req;
 	uint8_t hws_id;
+	/* PTP timestamp */
+	struct cnxk_timesync_info **tstamp;
+	uint64_t meta_aura;
 	/* Add Work Fastpath data */
 	int64_t *fc_mem __rte_cache_aligned;
 	int64_t *fc_cache_space;
