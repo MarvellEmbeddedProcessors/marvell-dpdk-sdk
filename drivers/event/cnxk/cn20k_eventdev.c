@@ -126,6 +126,7 @@ cn20k_sso_fp_fns_set(struct rte_eventdev *event_dev)
 		event_dev->dequeue_burst = cn20k_sso_hws_tmo_deq_burst;
 	}
 
+	event_dev->profile_switch = cn20k_sso_hws_profile_switch;
 #else
 	RTE_SET_USED(event_dev);
 #endif
