@@ -23,6 +23,7 @@ struct cn10k_sso_hws {
 	int64_t *fc_cache_space;
 	uintptr_t aw_lmt;
 	uintptr_t grp_base;
+	uint16_t xae_waes;
 	int32_t xaq_lmt;
 	/* Tx Fastpath data */
 	uintptr_t lmt_base __rte_cache_aligned;

@@ -517,6 +517,7 @@ INTERNAL {
 	roc_sso_hws_gwc_invalidate;
 	roc_sso_hws_unlink;
 	roc_sso_ns_to_gw;
+	roc_sso_pf_func_get;
 	roc_sso_rsrc_fini;
 	roc_sso_rsrc_init;
 	roc_tim_fini;
