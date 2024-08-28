@@ -24,6 +24,10 @@ struct cn20k_sso_hws {
 	uintptr_t aw_lmt;
 	uintptr_t grp_base;
 	int32_t xaq_lmt;
+	/* Tx Fastpath data */
+	uintptr_t lmt_base __rte_cache_aligned;
+	uint64_t lso_tun_fmt;
+	uint8_t tx_adptr_data[];
 } __rte_cache_aligned;
 
 #endif /* __CN20K_EVENTDEV_H__ */
