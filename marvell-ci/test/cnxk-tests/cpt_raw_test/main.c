@@ -487,15 +487,17 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 		status = TEST_FAILED;
 	}
 
-	for (i = 0; i < NB_CPTR; i++) {
-		for (retries = 0; retries < 100; retries++) {
-			ret = rte_pmd_cnxk_crypto_cptr_flush(qptr, cptrs[i], true);
-			if (ret == 0)
+	if (tc_params->ctx_val) {
+		for (i = 0; i < NB_CPTR; i++) {
+			for (retries = 0; retries < 100; retries++) {
+				ret = rte_pmd_cnxk_crypto_cptr_flush(qptr, cptrs[i], true);
+				if (ret == 0)
+					break;
+				rte_delay_ms(1);
+			}
+			if (ret < 0)
 				break;
-			rte_delay_ms(1);
 		}
-		if (ret < 0)
-			break;
 	}
 
 	if (ret < 0)
