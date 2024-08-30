@@ -503,7 +503,7 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 	if (ret < 0)
 		status = TEST_FAILED;
 
-	rte_mempool_put_bulk(ctx->cptr_mp, cptrs, i);
+	rte_mempool_put_bulk(ctx->cptr_mp, cptrs, NB_CPTR);
 
 rptrs_free:
 	rte_mempool_put_bulk(ctx->rptr_mp, rptrs, nb_dptrs);
