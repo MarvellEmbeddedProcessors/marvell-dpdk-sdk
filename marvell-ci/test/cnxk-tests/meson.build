@@ -104,6 +104,7 @@ test_subdirs_arm = [
         'flow_aging',
         'l3fwd_non_eal',
         'cpt_raw_test',
+        'port_representor',
 ]
 
 test_subdirs_x86 = [
