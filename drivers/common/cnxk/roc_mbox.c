@@ -557,6 +557,7 @@ mbox_id2name(uint16_t id)
 		return #_name;
 		MBOX_MESSAGES
 		MBOX_UP_CGX_MESSAGES
+		MBOX_UP_MCS_MESSAGES
 		MBOX_UP_REP_MESSAGES
 #undef M
 	}
@@ -573,6 +574,7 @@ mbox_id2size(uint16_t id)
 		return sizeof(struct _req_type);
 		MBOX_MESSAGES
 		MBOX_UP_CGX_MESSAGES
+		MBOX_UP_MCS_MESSAGES
 		MBOX_UP_REP_MESSAGES
 #undef M
 	}
