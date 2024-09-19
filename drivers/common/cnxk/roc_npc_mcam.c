@@ -727,10 +727,15 @@ done:
 }
 
 static void
-npc_mcam_set_channel(struct roc_npc_flow *flow, void *oreq, uint16_t channel, uint16_t chan_mask,
-		     bool is_second_pass)
+npc_mcam_set_channel(struct roc_npc_flow *flow, struct npc_cn20k_mcam_write_entry_req *req,
+		     uint16_t channel, uint16_t chan_mask, bool is_second_pass)
 {
 	uint16_t chan = 0, mask = 0;
+
+	req->entry_data.kw[0] &= ~(GENMASK(11, 0));
+	req->entry_data.kw_mask[0] &= ~(GENMASK(11, 0));
+	flow->mcam_data[0] &= ~(GENMASK(11, 0));
+	flow->mcam_mask[0] &= ~(GENMASK(11, 0));
 
 	chan = channel;
 	mask = chan_mask;
@@ -752,25 +757,9 @@ npc_mcam_set_channel(struct roc_npc_flow *flow, void *oreq, uint16_t channel, ui
 			}
 		}
 	}
-	if (roc_model_is_cn20k()) {
-		struct npc_cn20k_mcam_write_entry_req *req = oreq;
 
-		req->entry_data.kw[0] &= ~(GENMASK(11, 0));
-		req->entry_data.kw_mask[0] &= ~(GENMASK(11, 0));
-		req->entry_data.kw[0] |= (uint64_t)chan;
-		req->entry_data.kw_mask[0] |= (uint64_t)mask;
-
-	} else {
-		struct npc_mcam_write_entry_req *req = oreq;
-
-		req->entry_data.kw[0] &= ~(GENMASK(11, 0));
-		req->entry_data.kw_mask[0] &= ~(GENMASK(11, 0));
-		req->entry_data.kw[0] |= (uint64_t)chan;
-		req->entry_data.kw_mask[0] |= (uint64_t)mask;
-	}
-
-	flow->mcam_data[0] &= ~(GENMASK(11, 0));
-	flow->mcam_mask[0] &= ~(GENMASK(11, 0));
+	req->entry_data.kw[0] |= (uint64_t)chan;
+	req->entry_data.kw_mask[0] |= (uint64_t)mask;
 	flow->mcam_data[0] |= (uint64_t)chan;
 	flow->mcam_mask[0] |= (uint64_t)mask;
 }
