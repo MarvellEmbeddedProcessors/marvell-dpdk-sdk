@@ -479,25 +479,37 @@ union rte_pmd_cnxk_ipsec_hw_sa {
 
 /** CPT HW result format */
 union rte_pmd_cnxk_cpt_res_s {
+	/** CN10K CPT result */
 	struct rte_pmd_cpt_cn10k_res_s {
+		/** Completion code */
 		uint64_t compcode : 7;
+		/** Done interrupt */
 		uint64_t doneint : 1;
+		/** Microcode completion code */
 		uint64_t uc_compcode : 8;
+		/** Result length */
 		uint64_t rlen : 16;
+		/** SPI */
 		uint64_t spi : 32;
 
+		/** Extended sequence number */
 		uint64_t esn;
 	} cn10k;
 
+	/** CN9K CPT result */
 	struct rte_pmd_cpt_cn9k_res_s {
+		/** Completion code */
 		uint64_t compcode : 8;
+		/** Microcode completion code */
 		uint64_t uc_compcode : 8;
+		/** Done interrupt */
 		uint64_t doneint : 1;
 		uint64_t reserved_17_63 : 47;
 
 		uint64_t reserved_64_127;
 	} cn9k;
 
+	/** CPT RES */
 	uint64_t u64[2];
 };
 
