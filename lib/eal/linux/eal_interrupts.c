@@ -949,6 +949,10 @@ eal_intr_process_interrupts(struct epoll_event *events, int nfds)
 			break;
 #endif
 		case RTE_INTR_HANDLE_VDEV:
+			/* For vdev, number of bytes to read is set by driver */
+			bytes_read = rte_intr_efd_counter_size_get(src->intr_handle);
+			call = true;
+			break;
 		case RTE_INTR_HANDLE_EXT:
 			bytes_read = 0;
 			call = true;
