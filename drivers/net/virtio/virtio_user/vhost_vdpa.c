@@ -619,9 +619,17 @@ vhost_vdpa_get_backend_features(uint64_t *features)
 }
 
 static int
-vhost_vdpa_update_link_state(struct virtio_user_dev *dev __rte_unused)
+vhost_vdpa_update_link_state(struct virtio_user_dev *dev)
 {
-	/* Nothing to update (for now?) */
+	uint16_t status;
+	int rc, offset;
+
+	offset = offsetof(struct virtio_net_config, status);
+	rc = vhost_vdpa_get_config(dev, (uint8_t *)&status, offset, sizeof(status));
+	if (rc)
+		return rc;
+	dev->net_status = status & VIRTIO_NET_S_LINK_UP;
+
 	return 0;
 }
 
