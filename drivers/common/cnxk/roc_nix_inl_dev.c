@@ -855,7 +855,7 @@ roc_nix_inl_dev_qptr_get(uint8_t qid)
 		inl_dev = idev->nix_inl_dev;
 
 	if (!inl_dev) {
-		plt_err("Inline Device could not be detected\n");
+		plt_nix_dbg("Inline Device could not be detected\n");
 		return NULL;
 	}
 	if (!inl_dev->attach_cptlf) {
