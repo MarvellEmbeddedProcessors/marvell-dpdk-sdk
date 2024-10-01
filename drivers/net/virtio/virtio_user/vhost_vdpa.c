@@ -48,6 +48,7 @@ struct vhost_vdpa_data {
 #define VHOST_VDPA_SET_VRING_ENABLE _IOW(VHOST_VIRTIO, 0x75, struct vhost_vring_state)
 #define VHOST_SET_BACKEND_FEATURES _IOW(VHOST_VIRTIO, 0x25, __u64)
 #define VHOST_GET_BACKEND_FEATURES _IOR(VHOST_VIRTIO, 0x26, __u64)
+#define VHOST_SET_CONFIG_CALL      _IOW(VHOST_VIRTIO, 0x77, int)
 
 /* no alignment requirement */
 struct vhost_iotlb_msg {
@@ -509,6 +510,14 @@ vhost_vdpa_set_config(struct virtio_user_dev *dev, const uint8_t *data, uint32_t
 	return ret;
 }
 
+static int
+vhost_vdpa_set_config_call(struct virtio_user_dev *dev, int fd)
+{
+	struct vhost_vdpa_data *data = dev->backend_data;
+
+	return vhost_vdpa_ioctl(data->vhostfd, VHOST_SET_CONFIG_CALL, &fd);
+}
+
 /**
  * Set up environment to talk with a vhost vdpa backend.
  *
@@ -695,6 +704,7 @@ struct virtio_user_backend_ops virtio_ops_vdpa = {
 	.set_status = vhost_vdpa_set_status,
 	.get_config = vhost_vdpa_get_config,
 	.set_config = vhost_vdpa_set_config,
+	.set_config_call = vhost_vdpa_set_config_call,
 	.cvq_enable = vhost_vdpa_cvq_enable,
 	.enable_qp = vhost_vdpa_enable_queue_pair,
 	.dma_map = vhost_vdpa_dma_map_batch,
