@@ -55,6 +55,12 @@ virtio_user_read_dev_config(struct virtio_hw *hw, size_t offset,
 
 	if (offset >= offsetof(struct virtio_net_config, rss_max_key_size))
 		virtio_user_dev_get_rss_config(dev, dst, offset, length);
+
+	if (offset == offsetof(struct virtio_net_config, speed))
+		virtio_user_dev_get_speed_duplex_config(dev, dst, offset, length);
+
+	if (offset == offsetof(struct virtio_net_config, duplex))
+		virtio_user_dev_get_speed_duplex_config(dev, dst, offset, length);
 }
 
 static void

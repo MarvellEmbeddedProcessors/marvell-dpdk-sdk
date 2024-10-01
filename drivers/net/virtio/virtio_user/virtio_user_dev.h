@@ -88,6 +88,8 @@ int virtio_user_dev_set_mac(struct virtio_user_dev *dev);
 int virtio_user_dev_get_mac(struct virtio_user_dev *dev);
 int virtio_user_dev_get_rss_config(struct virtio_user_dev *dev, void *dst, size_t offset,
 				   int length);
+int virtio_user_dev_get_speed_duplex_config(struct virtio_user_dev *dev, void *dst,
+					    size_t offset, int length);
 void virtio_user_dev_delayed_disconnect_handler(void *param);
 int virtio_user_dev_server_reconnect(struct virtio_user_dev *dev);
 extern const char * const virtio_user_backend_strings[];
