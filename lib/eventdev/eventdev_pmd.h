@@ -185,6 +185,8 @@ struct rte_eventdev {
 	/**< Pointer to PMD Event switch profile function. */
 	event_preschedule_modify_t preschedule_modify;
 	/**< Pointer to PMD Event port pre-schedule type modify function.  */
+	event_preschedule_t preschedule;
+	/**< Pointer to PMD Event port pre-schedule function. */
 
 	uint64_t reserved_64s[3]; /**< Reserved for future fields */
 	void *reserved_ptrs[3];	  /**< Reserved for future fields */
