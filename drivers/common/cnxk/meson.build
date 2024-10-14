@@ -105,4 +105,12 @@ elif soc_type == 'cn20k'
 endif
 
 deps += ['bus_pci', 'net', 'telemetry']
+
 pmd_supports_disable_iova_as_pa = true
+
+cnxk_socs = ['cn9k', 'cn10k', 'cn20k']
+
+if dpdk_conf.get('RTE_IOVA_AS_PA') == 1 and soc_type in cnxk_socs
+    warning('IOVA in mbuf is not needed for cnxk drivers on cnxk platforms. ' +
+            'Set the enable_iova_as_pa option to false to save mbuf space.')
+endif
