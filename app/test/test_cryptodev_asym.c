@@ -542,6 +542,13 @@ testsuite_setup(void)
 			"Failed to configure cryptodev %u with %u qps",
 			dev_id, ts_params->conf.nb_queue_pairs);
 
+	ts_params->session_mpool = rte_cryptodev_asym_session_pool_create(
+			"test_asym_sess_mp", TEST_NUM_SESSIONS, 0, 0,
+			SOCKET_ID_ANY);
+
+	TEST_ASSERT_NOT_NULL(ts_params->session_mpool,
+			"session mempool allocation failed");
+
 	/* configure qp */
 	ts_params->qp_conf.nb_descriptors = DEFAULT_NUM_OPS_INFLIGHT;
 	ts_params->qp_conf.mp_session = ts_params->session_mpool;
@@ -553,12 +560,6 @@ testsuite_setup(void)
 			qp_id, dev_id);
 	}
 
-	ts_params->session_mpool = rte_cryptodev_asym_session_pool_create(
-			"test_asym_sess_mp", TEST_NUM_SESSIONS, 0, 0,
-			SOCKET_ID_ANY);
-
-	TEST_ASSERT_NOT_NULL(ts_params->session_mpool,
-			"session mempool allocation failed");
 	/* >8 End of device, op pool and session configuration for asymmetric crypto section. */
 	return TEST_SUCCESS;
 }
@@ -1158,6 +1159,98 @@ error_exit:
 	if (sess)
 		rte_cryptodev_asym_session_free(dev_id, sess);
 
+	rte_crypto_op_free(op);
+
+	TEST_ASSERT_EQUAL(status, 0, "Test failed");
+
+	return status;
+}
+
+static int
+test_mod_exp_sessionless(void)
+{
+	struct crypto_testsuite_params_asym *ts_params = &testsuite_params;
+	const struct rte_cryptodev_asymmetric_xform_capability *capability;
+	struct rte_mempool *op_mpool = ts_params->op_mpool;
+	struct rte_crypto_op *op = NULL, *result_op = NULL;
+	struct rte_cryptodev_asym_capability_idx cap_idx;
+	uint8_t dev_id = ts_params->valid_devs[0];
+	struct rte_crypto_asym_op *asym_op = NULL;
+	uint8_t result[sizeof(mod_p)] = { 0 };
+	uint8_t input[TEST_DATA_SIZE] = {0};
+	struct rte_cryptodev_info info;
+	int status = TEST_SUCCESS;
+	int ret = 0;
+
+	rte_cryptodev_info_get(dev_id, &info);
+	if (!(info.feature_flags & RTE_CRYPTODEV_FF_ASYM_SESSIONLESS))
+		return TEST_SKIPPED;
+
+	if (rte_cryptodev_asym_get_xform_enum(&modex_xform.xform_type, "modexp") < 0) {
+		RTE_LOG(ERR, USER1, "Invalid ASYM algorithm specified\n");
+		return -1;
+	}
+
+	/* check for modlen capability */
+	cap_idx.type = modex_xform.xform_type;
+	capability = rte_cryptodev_asym_capability_get(dev_id, &cap_idx);
+
+	if (capability == NULL) {
+		RTE_LOG(INFO, USER1, "Device doesn't support MOD EXP. Test Skipped\n");
+		return TEST_SKIPPED;
+	}
+
+	if (rte_cryptodev_asym_xform_capability_check_modlen(capability,
+							     modex_xform.modex.modulus.length)) {
+		RTE_LOG(ERR, USER1, "Unsupported MODULUS length specified\n");
+		return TEST_SKIPPED;
+	}
+
+	/* Create op and process packets. */
+	op = rte_crypto_op_alloc(op_mpool, RTE_CRYPTO_OP_TYPE_ASYMMETRIC);
+	if (!op) {
+		RTE_LOG(ERR, USER1, "line %u FAILED: %s", __LINE__,
+			"Failed to allocate asymmetric crypto operation struct");
+		return TEST_FAILED;
+	}
+
+	asym_op = op->asym;
+	memcpy(input, base, sizeof(base));
+	asym_op->modex.base.data = input;
+	asym_op->modex.base.length = sizeof(base);
+	asym_op->modex.result.data = result;
+	asym_op->modex.result.length = sizeof(result);
+	asym_op->xform = &modex_xform;
+	op->sess_type = RTE_CRYPTO_OP_SESSIONLESS;
+
+	RTE_LOG(DEBUG, USER1, "Process ASYM operation");
+	/* Process crypto operation */
+	if (rte_cryptodev_enqueue_burst(dev_id, 0, &op, 1) != 1) {
+		RTE_LOG(ERR, USER1,
+				"line %u FAILED: %s",
+				__LINE__, "Error sending packet for operation");
+		status = TEST_FAILED;
+		goto error_exit;
+	}
+
+	while (rte_cryptodev_dequeue_burst(dev_id, 0, &result_op, 1) == 0)
+		rte_pause();
+
+	if (result_op == NULL) {
+		RTE_LOG(ERR, USER1,
+				"line %u FAILED: %s",
+				__LINE__, "Failed to process asym crypto op");
+		status = TEST_FAILED;
+		goto error_exit;
+	}
+
+	ret = verify_modexp(mod_exp, result_op);
+	if (ret) {
+		RTE_LOG(ERR, USER1,  "operation verification failed\n");
+		status = TEST_FAILED;
+	}
+
+error_exit:
 	rte_crypto_op_free(op);
 
 	TEST_ASSERT_EQUAL(status, 0, "Test failed");
@@ -5184,6 +5277,7 @@ static struct unit_test_suite cryptodev_octeontx_asym_testsuite  = {
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym,
 				test_ecpm_all_curve),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_eddsa_sign_verify_all_curve),
+		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_mod_exp_sessionless),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_mlkem_keygen),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_mlkem_encap),
 		TEST_CASE_ST(ut_setup_asym, ut_teardown_asym, test_mlkem_decap),
