@@ -588,6 +588,9 @@ cn10k_ml_model_info_set(struct cnxk_ml_dev *cnxk_mldev, struct cnxk_ml_model *mo
 				rte_ml_io_type_size_get(io_info->input[i].qtype);
 		input[i].scale = 1.0 / io_info->input[i].scale;
 		input[i].zero_point = 0;
+		input[i].dtype = io_info->input[i].dtype;
+		input[i].dsize = io_info->input[i].nb_elements *
+				 rte_ml_io_type_size_get(io_info->input[i].dtype);
 	}
 
 	/* Set output info */
@@ -601,6 +604,9 @@ cn10k_ml_model_info_set(struct cnxk_ml_dev *cnxk_mldev, struct cnxk_ml_model *mo
 				 rte_ml_io_type_size_get(io_info->output[i].qtype);
 		output[i].scale = io_info->output[i].scale;
 		output[i].zero_point = 0;
+		output[i].dtype = io_info->output[i].dtype;
+		output[i].dsize = io_info->output[i].nb_elements *
+				  rte_ml_io_type_size_get(io_info->output[i].dtype);
 	}
 }
 

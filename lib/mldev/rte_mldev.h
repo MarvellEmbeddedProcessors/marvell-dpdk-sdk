@@ -943,7 +943,7 @@ struct rte_ml_io_info {
 	uint32_t *shape;
 	/**< Shape of the tensor for rte_ml_model_info::min_batches of the model. */
 	enum rte_ml_io_type type;
-	/**< Type of data
+	/**< Type of data for inference
 	 * @see enum rte_ml_io_type
 	 */
 	uint64_t nb_elements;
@@ -954,6 +954,10 @@ struct rte_ml_io_info {
 	/**< Scale factor */
 	int64_t zero_point;
 	/**< Zero point */
+	enum rte_ml_io_type dtype;
+	/**< Type of dequantized data */
+	uint64_t dsize;
+	/** Size of dequantized tensor in bytes */
 };
 
 /** Model information structure */
