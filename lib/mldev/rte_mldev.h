@@ -1492,6 +1492,83 @@ __rte_experimental
 int
 rte_ml_io_bfloat16_to_float32(const void *bf16, void *fp32, uint64_t nb_elements);
 
+
+/**
+ * Convert a buffer containing numbers in signed 16-bit integer format (INT16) to signed 64-bit
+ * integer format (INT64).
+ *
+ * @param[in] nb_elements
+ *	Number of elements in the buffer.
+ * @param[in] input
+ *	Input buffer containing INT16 numbers. Size of buffer is equal to (nb_elements * 2) bytes.
+ * @param[out] output
+ *	Output buffer to store INT64 numbers. Size of buffer is equal to (nb_elements * 8) bytes.
+ *
+ * @return
+ *	- 0, Success.
+ *	- < 0, Error code on failure.
+ */
+__rte_experimental
+int
+rte_ml_io_int16_to_int64(uint64_t nb_elements, void *input, void *output);
+
+/**
+ * Convert a buffer containing numbers in signed 16-bit integer format (INT16) to unsigned 64-bit
+ * integer format (UINT64).
+ *
+ * @param[in] nb_elements
+ *	Number of elements in the buffer.
+ * @param[in] input
+ *	Input buffer containing INT16 numbers. Size of buffer is equal to (nb_elements * 2) bytes.
+ * @param[out] output
+ *	Output buffer to store UINT64 numbers. Size of buffer is equal to (nb_elements * 8) bytes.
+ *
+ * @return
+ *	- 0, Success.
+ *	- < 0, Error code on failure.
+ */
+__rte_experimental
+int
+rte_ml_io_int16_to_uint64(uint64_t nb_elements, void *input, void *output);
+
+/**
+ * Convert a buffer containing numbers in unsigned 16-bit integer format (UINT16) to signed 64-bit
+ * integer format (INT64).
+ *
+ * @param[in] nb_elements
+ *	Number of elements in the buffer.
+ * @param[in] input
+ *	Input buffer containing UINT16 numbers. Size of buffer is equal to (nb_elements * 2) bytes.
+ * @param[out] output
+ *	Output buffer to store INT64 numbers. Size of buffer is equal to (nb_elements * 8) bytes.
+ *
+ * @return
+ *	- 0, Success.
+ *	- < 0, Error code on failure.
+ */
+__rte_experimental
+int
+rte_ml_io_uint16_to_int64(uint64_t nb_elements, void *input, void *output);
+
+/**
+ * Convert a buffer containing numbers in unsigned 16-bit integer format (UINT16) to unsigned 64-bit
+ * integer format (UINT64).
+ *
+ * @param[in] nb_elements
+ *	Number of elements in the buffer.
+ * @param[in] input
+ *	Input buffer containing UINT16 numbers. Size of buffer is equal to (nb_elements * 2) bytes.
+ * @param[out] output
+ *	Output buffer to store UINT64 numbers. Size of buffer is equal to (nb_elements * 8) bytes.
+ *
+ * @return
+ *	- 0, Success.
+ *	- < 0, Error code on failure.
+ */
+__rte_experimental
+int
+rte_ml_io_uint16_to_uint64(uint64_t nb_elements, void *input, void *output);
+
 /**
  * Quantize input data.
  *

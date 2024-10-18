@@ -93,3 +93,63 @@ rte_ml_io_type_to_str(enum rte_ml_io_type type, char *str, int len)
 		rte_strlcpy(str, "invalid", len);
 	}
 }
+
+RTE_EXPORT_EXPERIMENTAL_SYMBOL(rte_ml_io_int16_to_int64, 25.11)
+int
+rte_ml_io_int16_to_int64(uint64_t nb_elements, void *input, void *output)
+{
+	int16_t *s = input;
+	int64_t *d = output;
+	uint64_t i;
+
+	for (i = 0; i < nb_elements; i++)
+		d[i] = (int64_t)s[i];
+
+	return 0;
+}
+
+RTE_EXPORT_EXPERIMENTAL_SYMBOL(rte_ml_io_int16_to_uint64, 25.11)
+int
+rte_ml_io_int16_to_uint64(uint64_t nb_elements, void *input, void *output)
+{
+	int16_t *s = input;
+	uint64_t *d = output;
+	uint64_t i;
+
+	for (i = 0; i < nb_elements; i++) {
+		if (s[i] < 0)
+			d[i] = 0;
+		else
+			d[i] = (uint64_t)s[i];
+	}
+
+	return 0;
+}
+
+RTE_EXPORT_EXPERIMENTAL_SYMBOL(rte_ml_io_uint16_to_int64, 25.11)
+int
+rte_ml_io_uint16_to_int64(uint64_t nb_elements, void *input, void *output)
+{
+	uint16_t *s = input;
+	int64_t *d = output;
+	uint64_t i;
+
+	for (i = 0; i < nb_elements; i++)
+		d[i] = (int64_t)s[i];
+
+	return 0;
+}
+
+RTE_EXPORT_EXPERIMENTAL_SYMBOL(rte_ml_io_uint16_to_uint64, 25.11)
+int
+rte_ml_io_uint16_to_uint64(uint64_t nb_elements, void *input, void *output)
+{
+	uint16_t *s = input;
+	uint64_t *d = output;
+	uint64_t i;
+
+	for (i = 0; i < nb_elements; i++)
+		d[i] = (uint64_t)s[i];
+
+	return 0;
+}
