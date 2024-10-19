@@ -7,7 +7,9 @@
 #include <rte_common.h>
 #include <rte_cryptodev.h>
 #include <rte_eal.h>
+#include <rte_hexdump.h>
 #include <rte_malloc.h>
+#include <rte_security.h>
 
 #include <rte_pmd_cnxk_crypto.h>
 
@@ -20,9 +22,9 @@
 #define TEST_SKIPPED  77
 
 #define NB_DESC		20000
+/* Only one cptr is supported for now */
 #define NB_CPTR		1
 #define MAX_CPTR_LEN	8192
-#define MAX_DLEN	16384
 #define CPT_RES_ALIGN	sizeof(union cpt_res_s)
 
 struct lcore_conf {
@@ -44,6 +46,7 @@ struct test_ctx {
 	uint8_t nb_cryptodevs;
 	uint8_t enabled_cdevs[RTE_CRYPTO_MAX_DEVS];
 	enum cdev_type cdev_type;
+	void *cptrs[NB_CPTR];
 };
 
 static struct test_ctx ctx;
@@ -56,6 +59,8 @@ uc_opcode_major_to_str(uint16_t major_opcode)
 		return "MISC";
 	case ROC_SE_MAJOR_OP_FC:
 		return "Flexi Crypto";
+	case ROC_IE_OT_MAJOR_OP_PROCESS_OUTBOUND_IPSEC:
+		return "IPsec Outbound";
 	default:
 		return "Invalid";
 	}
@@ -247,13 +252,142 @@ cptr_fc_init(struct se_ctx_s *ctx)
 	fctx->enc.hmac_key_sz = 0;
 }
 
-static void
-cptr_ctx_init(struct test_case_params *tc_params)
+
+static int
+cptr_ipsec_outb_init(struct test_ctx *test_ctx, struct test_case_params *tc_params)
+{
+	struct ipsec_test_data *td = &tc_params->aes_cbc_hmac_sha256;
+	struct rte_security_ipsec_xform ipsec_xform;
+	struct rte_crypto_sym_xform cipher_xform;
+	struct rte_pmd_cnxk_crypto_sess rte_sess;
+	uint8_t *data = rte_malloc(NULL, 256, 0);
+	struct rte_crypto_sym_xform auth_xform;
+	struct rte_pmd_cnxk_crypto_qptr *qptr;
+	uint64_t *iv, *tmp_iv;
+	uint64_t *iv_src;
+	uint32_t src, dst;
+	void *sec_session;
+	void *ctx;
+	int ret;
+
+	const struct rte_ipv4_hdr *ipv4 =
+		(const struct rte_ipv4_hdr *)td->output_text.data;
+
+	struct rte_security_session_conf sess_conf = {
+		.action_type = RTE_SECURITY_ACTION_TYPE_LOOKASIDE_PROTOCOL,
+		.protocol = RTE_SECURITY_PROTOCOL_IPSEC,
+	};
+
+	memcpy(&ipsec_xform, &td->ipsec_xform, sizeof(ipsec_xform));
+	memcpy(&src, &ipv4->src_addr, sizeof(ipv4->src_addr));
+	memcpy(&dst, &ipv4->dst_addr, sizeof(ipv4->dst_addr));
+
+	if (tc_params->verify_output == true)
+		ipsec_xform.options.stats = 1;
+
+	if (td->ipsec_xform.mode == RTE_SECURITY_IPSEC_SA_MODE_TUNNEL) {
+		if (td->ipsec_xform.tunnel.type == RTE_SECURITY_IPSEC_TUNNEL_IPV4) {
+			memcpy(&ipsec_xform.tunnel.ipv4.src_ip, &src, sizeof(src));
+			memcpy(&ipsec_xform.tunnel.ipv4.dst_ip, &dst, sizeof(dst));
+
+			ipsec_xform.tunnel.ipv4.df = 0;
+			ipsec_xform.tunnel.ipv4.dscp = 0;
+		} else {
+			printf("IPV6 is not supported\n");
+			return TEST_FAILED;
+		}
+	}
+
+	memcpy(&cipher_xform, &td->xform.chain.cipher, sizeof(cipher_xform));
+	memcpy(&auth_xform, &td->xform.chain.auth, sizeof(auth_xform));
+	cipher_xform.cipher.key.data = td->key.data;
+	cipher_xform.cipher.iv.offset = 0;
+	auth_xform.auth.key.data = td->auth_key.data;
+
+	sess_conf.ipsec = ipsec_xform;
+	if (ipsec_xform.direction == RTE_SECURITY_IPSEC_SA_DIR_EGRESS) {
+		sess_conf.crypto_xform = &cipher_xform;
+		cipher_xform.next = &auth_xform;
+	} else {
+		sess_conf.crypto_xform = &auth_xform;
+		auth_xform.next = &cipher_xform;
+	}
+
+	ctx = rte_cryptodev_get_sec_ctx(0);
+	if (ctx == NULL) {
+		printf("security ctx is NULL\n");
+		return TEST_FAILED;
+	}
+
+	sec_session = rte_security_session_create(ctx, &sess_conf, test_ctx->cptr_mp);
+	if (sec_session == NULL) {
+		printf("session create failed\n");
+		return TEST_FAILED;
+	}
+	tc_params->sec_session = sec_session;
+
+	rte_sess.op_type = RTE_CRYPTO_OP_TYPE_SYMMETRIC;
+	rte_sess.sess_type = RTE_CRYPTO_OP_SECURITY_SESSION;
+	rte_sess.sec_sess = sec_session;
+
+	tc_params->cptr = rte_pmd_cnxk_crypto_cptr_get(&rte_sess);
+	if (tc_params->cptr == NULL) {
+		printf("cptr get failed\n");
+		goto sess_destroy;
+	}
+
+	qptr = rte_pmd_cnxk_crypto_qptr_get(0, 0);
+	ret = rte_pmd_cnxk_crypto_cptr_read(qptr, tc_params->cptr, data, 256);
+	if (ret < 0) {
+		printf("cptr read failed\n");
+		goto sess_destroy;
+	}
+
+	/* set IV source as from context in cptr */
+	iv_src = (uint64_t *)(data + 16);
+	*iv_src |= (1ULL << 21);
+	*iv_src &= ~(1ULL << 20);
+
+	/* Update IV in cptr */
+	iv = (uint64_t *)(data + 64);
+	memcpy(iv, td->iv.data, 16);
+
+	tmp_iv = (uint64_t *)iv;
+	*tmp_iv = rte_be_to_cpu_64(*tmp_iv);
+	tmp_iv = (uint64_t *)(iv + 1);
+	*tmp_iv = rte_be_to_cpu_64(*tmp_iv);
+
+	ret = rte_pmd_cnxk_crypto_cptr_write(qptr, tc_params->cptr, data, 256);
+	if (ret < 0) {
+		printf("cptr write failed\n");
+		goto sess_destroy;
+	}
+	return 0;
+
+sess_destroy:
+	rte_security_session_destroy(ctx, sec_session);
+	return TEST_FAILED;
+}
+
+static int
+cptr_ctx_init(struct test_ctx *test_ctx, struct test_case_params *tc_params)
 {
 	uint8_t opcode_major = tc_params->opcode_major;
-	struct se_ctx_s *ctx = tc_params->cptr;
+	struct se_ctx_s *ctx;
 	uint64_t ctx_len, *uc_ctx;
 	uint8_t i;
+	int ret;
+
+	if (opcode_major == ROC_IE_OT_MAJOR_OP_PROCESS_OUTBOUND_IPSEC)
+		return cptr_ipsec_outb_init(test_ctx, tc_params);
+
+	ret = rte_mempool_get_bulk(test_ctx->cptr_mp, test_ctx->cptrs, NB_CPTR);
+	if (ret) {
+		printf("Could not allocate context buffers\n");
+		return TEST_FAILED;
+	}
+	tc_params->cptr = RTE_PTR_ALIGN_CEIL(test_ctx->cptrs[0], ROC_ALIGN);
+	ctx = tc_params->cptr;
 
 	switch (opcode_major) {
 	case ROC_SE_MAJOR_OP_MISC:
@@ -268,7 +402,7 @@ cptr_ctx_init(struct test_case_params *tc_params)
 	}
 
 	if (!tc_params->ctx_val)
-		return;
+		return 0;
 
 	/* Populate CTX region & swap CPTR data. */
 
@@ -293,6 +427,28 @@ cptr_ctx_init(struct test_case_params *tc_params)
 	ctx->w0.s.ctx_push_size = ctx_len / 8;
 	if (ctx->w0.s.ctx_push_size > 32)
 		ctx->w0.s.ctx_push_size = 32;
+
+	return 0;
+}
+
+static int
+cptr_ctx_fini(struct test_ctx *test_ctx, struct test_case_params *tc_params)
+{
+	uint8_t opcode_major = tc_params->opcode_major;
+	void *ctx;
+
+	if (opcode_major == ROC_IE_OT_MAJOR_OP_PROCESS_OUTBOUND_IPSEC) {
+		ctx = rte_cryptodev_get_sec_ctx(0);
+		if (ctx == NULL) {
+			printf("security ctx is NULL\n");
+			return TEST_FAILED;
+		}
+
+		return rte_security_session_destroy(ctx, tc_params->sec_session);
+	}
+
+	rte_mempool_put_bulk(test_ctx->cptr_mp, test_ctx->cptrs, NB_CPTR);
+	return 0;
 }
 
 static void
@@ -336,6 +492,20 @@ pt_inst_populate(struct cpt_inst_s *inst, struct test_case_params *tc_params)
 }
 
 static void
+ipsec_inst_populate(struct cpt_inst_s *inst, struct test_case_params *tc_params)
+{
+	struct ipsec_test_data *td = &tc_params->aes_cbc_hmac_sha256;
+	uint64_t *dptr = tc_params->dptr;
+
+	inst->w4.s.opcode_minor = 0;
+	inst->w4.s.param1 = 3;
+	inst->w4.s.param2 = 0;
+	inst->w4.s.dlen = td->input_text.len;
+
+	memcpy(dptr, &td->input_text.data, td->input_text.len);
+	inst->dptr = (uint64_t)dptr;
+}
+static void
 inst_populate(struct cpt_inst_s *inst, struct test_case_params *tc_params)
 {
 	if (tc_params->ctx_val == 1) {
@@ -358,6 +528,10 @@ inst_populate(struct cpt_inst_s *inst, struct test_case_params *tc_params)
 		inst->w7.s.egrp = ROC_CPT_DFLT_ENG_GRP_SE_IE;
 		fc_inst_populate(inst, tc_params);
 		break;
+	case ROC_IE_OT_MAJOR_OP_PROCESS_OUTBOUND_IPSEC:
+		inst->w7.s.egrp = ROC_CPT_DFLT_ENG_GRP_SE_IE;
+		ipsec_inst_populate(inst, tc_params);
+		break;
 	default:
 		rte_panic("Invalid opcode\n");
 	};
@@ -366,7 +540,7 @@ inst_populate(struct cpt_inst_s *inst, struct test_case_params *tc_params)
 static int
 test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int nb_dptrs)
 {
-	void *data_ptrs[NB_DESC], *rptrs[NB_DESC], *cptrs[NB_CPTR];
+	void *data_ptrs[NB_DESC], *rptrs[NB_DESC];
 	uint64_t timeout, tsc_start, tsc_end, tsc_cycles;
 	double test_us, throughput_gbps, ops_per_second;
 	int ret, i, retries, status = TEST_SUCCESS;
@@ -415,9 +589,10 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 		goto dptrs_free;
 	}
 
-	ret = rte_mempool_get_bulk(ctx->cptr_mp, cptrs, NB_CPTR);
+	ret = cptr_ctx_init(ctx, tc_params);
+
 	if (ret) {
-		printf("Could not allocate context buffers\n");
+		printf("Could not initialize context\n");
 		status = TEST_FAILED;
 		goto rptrs_free;
 	}
@@ -433,9 +608,6 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 		dptr = RTE_PTR_ADD(hw_res, sizeof(union cpt_res_s));
 		tc_params->dptr = dptr;
 		tc_params->rptr = rptrs[i];
-		tc_params->cptr = RTE_PTR_ALIGN_CEIL(cptrs[0], ROC_ALIGN);
-
-		cptr_ctx_init(tc_params);
 
 		inst_populate(inst, tc_params);
 
@@ -449,13 +621,23 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 
 	tsc_start = rte_rdtsc_precise();
 	rte_pmd_cnxk_crypto_submit(qptr, inst, nb_dptrs);
-
 	do {
 		hw_res = data_ptrs[nb_dptrs - 1];
 		res.u64[0] = __atomic_load_n(&hw_res->u64[0], __ATOMIC_RELAXED);
 	} while ((res.cn10k.compcode == CPT_COMP_NOT_DONE) && (rte_rdtsc() < timeout));
 
 	tsc_end = rte_rdtsc_precise();
+
+	if (tc_params->verify_output == true) {
+		struct ipsec_test_data *td = &tc_params->aes_cbc_hmac_sha256;
+		uint64_t output_len = td->output_text.len;
+		dptr = RTE_PTR_ADD(data_ptrs[0], sizeof(union cpt_res_s));
+		if (memcmp(dptr, td->output_text.data, output_len)) {
+			printf("\n=======Data Mismatch========\n");
+			rte_hexdump(stdout, "Output Data", dptr, output_len);
+			rte_hexdump(stdout, "Expected Data", td->output_text.data, output_len);
+		}
+	}
 
 	tsc_cycles = tsc_end - tsc_start;
 	test_us = (double)tsc_cycles * 1000 * 1000 / rte_get_tsc_hz();
@@ -488,22 +670,20 @@ test_cpt_raw_api(struct test_ctx *ctx, struct test_case_params *tc_params, int n
 	}
 
 	if (tc_params->ctx_val) {
-		for (i = 0; i < NB_CPTR; i++) {
-			for (retries = 0; retries < 100; retries++) {
-				ret = rte_pmd_cnxk_crypto_cptr_flush(qptr, cptrs[i], true);
-				if (ret == 0)
-					break;
-				rte_delay_ms(1);
-			}
-			if (ret < 0)
+		for (retries = 0; retries < 100; retries++) {
+			ret = rte_pmd_cnxk_crypto_cptr_flush(qptr, tc_params->cptr, true);
+			if (ret == 0)
 				break;
+			rte_delay_ms(1);
 		}
 	}
 
 	if (ret < 0)
 		status = TEST_FAILED;
 
-	rte_mempool_put_bulk(ctx->cptr_mp, cptrs, NB_CPTR);
+	ret = cptr_ctx_fini(ctx, tc_params);
+	if (ret < 0)
+		status = TEST_FAILED;
 
 rptrs_free:
 	rte_mempool_put_bulk(ctx->rptr_mp, rptrs, nb_dptrs);
@@ -519,6 +699,8 @@ inst_mem_free:
 
 int main(int argc, char **argv)
 {
+	struct rte_pmd_cnxk_crypto_qp_stats stats;
+	struct rte_pmd_cnxk_crypto_qptr *qptr;
 	int i, ret, nb_cases, nb_skipped = 0;
 	uint8_t nb_lcores;
 
@@ -573,8 +755,26 @@ int main(int argc, char **argv)
 	else
 		printf("Overall status		: [SUCCESS]\n");
 
-	cryptodev_fini(&ctx);
+	qptr = rte_pmd_cnxk_crypto_qptr_get(0, 0);
+	if (qptr == NULL) {
+		printf("Could not get QPTR and stats cannot be displayed\n");
+		goto mempool_fini;
+	}
+
+	ret = rte_pmd_cnxk_crypto_qp_stats_get(qptr, &stats);
+	if (ret < 0) {
+		printf("\nstats get failed\n");
+	} else {
+		printf("\n");
+		printf("Number of packets encrypted: %ld\n", stats.ctx_enc_pkts);
+		printf("Number of bytes encrypted: %ld\n", stats.ctx_enc_bytes);
+		printf("Number of packets decrypted: %ld\n", stats.ctx_dec_pkts);
+		printf("Number of bytes decrypted: %ld\n", stats.ctx_dec_bytes);
+	}
+
+mempool_fini:
 	mempool_fini(&ctx);
+	cryptodev_fini(&ctx);
 
 	return ret;
 cryptodev_fini:
