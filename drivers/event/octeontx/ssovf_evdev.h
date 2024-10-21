@@ -172,7 +172,6 @@ ssovf_pmd_priv(const struct rte_eventdev *eventdev)
 
 extern int otx_logtype_ssovf;
 
-uint16_t ssows_enq(void *port, const struct rte_event *ev);
 uint16_t ssows_enq_burst(void *port,
 		const struct rte_event ev[], uint16_t nb_events);
 uint16_t ssows_enq_new_burst(void *port,
