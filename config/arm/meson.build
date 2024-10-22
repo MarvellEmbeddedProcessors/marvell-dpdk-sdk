@@ -430,6 +430,20 @@ soc_cn10k = {
     'sve_acle': false
 }
 
+soc_cn10kcpn = {
+    'description' : 'Marvell OCTEON 10',
+    'implementer' : '0x41',
+    'flags': [
+        ['RTE_MAX_LCORE', 24],
+        ['RTE_MAX_NUMA_NODES', 1],
+        ['RTE_MEMPOOL_ALIGN', 128],
+        ['RTE_IOVA_IN_MBUF', 0]
+    ],
+    'part_number': '0xd49',
+    'numa': false,
+    'sve_acle': false
+}
+
 soc_cn20k = {
     'description' : 'Marvell OCTEON 20',
     'implementer' : '0x41',
@@ -664,6 +678,7 @@ socs = {
     'centriq2400': soc_centriq2400,
     'cn9k': soc_cn9k,
     'cn10k' : soc_cn10k,
+    'cn10kcpn' : soc_cn10kcpn,
     'cn20k' : soc_cn20k,
     'dpaa': soc_dpaa,
     'emag': soc_emag,
