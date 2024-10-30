@@ -761,15 +761,17 @@ int main(int argc, char **argv)
 		goto mempool_fini;
 	}
 
-	ret = rte_pmd_cnxk_crypto_qp_stats_get(qptr, &stats);
-	if (ret < 0) {
-		printf("\nstats get failed\n");
-	} else {
-		printf("\n");
-		printf("Number of packets encrypted: %ld\n", stats.ctx_enc_pkts);
-		printf("Number of bytes encrypted: %ld\n", stats.ctx_enc_bytes);
-		printf("Number of packets decrypted: %ld\n", stats.ctx_dec_pkts);
-		printf("Number of bytes decrypted: %ld\n", stats.ctx_dec_bytes);
+	if (ctx.cdev_type == CDEV_TYPE_CRYPTO_CN10K) {
+		ret = rte_pmd_cnxk_crypto_qp_stats_get(qptr, &stats);
+		if (ret < 0) {
+			printf("\nstats get failed\n");
+		} else {
+			printf("\n");
+			printf("Number of packets encrypted: %ld\n", stats.ctx_enc_pkts);
+			printf("Number of bytes encrypted: %ld\n", stats.ctx_enc_bytes);
+			printf("Number of packets decrypted: %ld\n", stats.ctx_dec_pkts);
+			printf("Number of bytes decrypted: %ld\n", stats.ctx_dec_bytes);
+		}
 	}
 
 mempool_fini:
