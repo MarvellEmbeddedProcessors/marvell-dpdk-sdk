@@ -393,7 +393,8 @@ rte_pmd_cnxk_hw_sa_write(uint16_t portid, void *sess, union rte_pmd_cnxk_ipsec_h
 		sa = sess;
 
 	q = dev->inb.inl_dev_q;
-	if (q && cnxk_nix_inl_fc_check(q->fc_addr, &q->fc_addr_sw, q->nb_desc, 1))
+	if (q && cnxk_nix_inl_fc_check(q->fc_addr, (int32_t __rte_atomic *)&q->fc_addr_sw,
+				       q->nb_desc, 1))
 		return -EAGAIN;
 
 	return roc_nix_inl_ctx_write(&dev->nix, data, sa, inb, len);

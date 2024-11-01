@@ -109,7 +109,7 @@ struct roc_nix_inl_dev_q {
 	uint32_t nb_desc;
 	uintptr_t rbase;
 	uintptr_t lmt_base;
-	uint64_t *fc_addr;
+	uint64_t __rte_atomic *fc_addr;
 	uint64_t io_addr;
 	int32_t fc_addr_sw;
 } __plt_cache_aligned;

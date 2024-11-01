@@ -11,7 +11,7 @@
 #include "roc_api.h"
 #include "roc_priv.h"
 
-static inline void
+__attribute__((__format__(__printf__, 2, 0))) static inline void
 dpi_dump(FILE *file, const char *fmt, ...)
 {
 	va_list args;

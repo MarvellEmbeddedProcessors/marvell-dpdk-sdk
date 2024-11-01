@@ -103,7 +103,7 @@ cnxk_tim_timer_arm_tmo_brst(const struct rte_event_timer_adapter *adptr,
 			    const uint64_t timeout_tick,
 			    const uint16_t nb_timers, const uint8_t flags)
 {
-	struct cnxk_tim_ent entry[CNXK_TIM_MAX_BURST] __rte_cache_aligned;
+	alignas(RTE_CACHE_LINE_SIZE) struct cnxk_tim_ent entry[CNXK_TIM_MAX_BURST];
 	struct cnxk_tim_ring *tim_ring = adptr->data->adapter_priv;
 	uint16_t set_timers = 0;
 	uint16_t arr_idx = 0;
@@ -210,7 +210,7 @@ uint16_t
 cnxk_tim_timer_cancel_burst_hwwqe(const struct rte_event_timer_adapter *adptr,
 				  struct rte_event_timer **tim, const uint16_t nb_timers)
 {
-	uint64_t *status;
+	uint64_t __rte_atomic *status;
 	uint16_t i;
 
 	RTE_SET_USED(adptr);
@@ -225,8 +225,8 @@ cnxk_tim_timer_cancel_burst_hwwqe(const struct rte_event_timer_adapter *adptr,
 			break;
 		}
 
-		status = &tim[i]->impl_opaque[1];
-		if (!rte_atomic_compare_exchange_strong_explicit(status, &tim[i], 0,
+		status = (uint64_t __rte_atomic *)&tim[i]->impl_opaque[1];
+		if (!rte_atomic_compare_exchange_strong_explicit(status, (uint64_t *)&tim[i], 0,
 								 rte_memory_order_release,
 								 rte_memory_order_relaxed)) {
 			rte_errno = ENOENT;

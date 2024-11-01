@@ -387,7 +387,7 @@ tim_free_lf_count_get(struct dev *dev, uint16_t *nb_lfs)
 	mbox_alloc_msg_free_rsrc_cnt(mbox);
 	rc = mbox_process_msg(mbox, (void **)&rsrc_cnt);
 	if (rc) {
-		plt_err("Failed to get free resource count\n");
+		plt_err("Failed to get free resource count");
 		mbox_put(mbox);
 		return -EIO;
 	}
@@ -409,7 +409,7 @@ tim_hw_info_get(struct roc_tim *roc_tim)
 	mbox_alloc_msg_tim_get_hw_info(mbox);
 	rc = mbox_process_msg(mbox, (void **)&rsp);
 	if (rc && rc != MBOX_MSG_INVALID) {
-		plt_err("Failed to get TIM HW info\n");
+		plt_err("Failed to get TIM HW info");
 		rc = -EIO;
 		goto exit;
 	}

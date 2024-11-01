@@ -186,7 +186,7 @@ sso_rsrc_get(struct roc_sso *roc_sso)
 	mbox_alloc_msg_free_rsrc_cnt(mbox);
 	rc = mbox_process_msg(mbox, (void **)&rsrc_cnt);
 	if (rc) {
-		plt_err("Failed to get free resource count\n");
+		plt_err("Failed to get free resource count");
 		rc = -EIO;
 		goto exit;
 	}
@@ -211,7 +211,7 @@ sso_hw_info_get(struct roc_sso *roc_sso)
 	mbox_alloc_msg_sso_get_hw_info(mbox);
 	rc = mbox_process_msg(mbox, (void **)&rsp);
 	if (rc && rc != MBOX_MSG_INVALID) {
-		plt_err("Failed to get SSO HW info\n");
+		plt_err("Failed to get SSO HW info");
 		rc = -EIO;
 		goto exit;
 	}
@@ -532,7 +532,7 @@ roc_sso_hwgrp_agq_alloc(struct roc_sso *roc_sso, uint16_t hwgrp, struct roc_sso_
 			mbox_process(mbox);
 			req = mbox_alloc_msg_sso_aggr_setconfig(mbox);
 			if (req == NULL) {
-				plt_err("Failed to allocate AGQ config mbox.\n");
+				plt_err("Failed to allocate AGQ config mbox.");
 				mbox_put(mbox);
 				return -EIO;
 			}
@@ -542,7 +542,7 @@ roc_sso_hwgrp_agq_alloc(struct roc_sso *roc_sso, uint16_t hwgrp, struct roc_sso_
 		req->npa_pf_func = idev_npa_pffunc_get();
 		rc = mbox_process(mbox);
 		if (rc < 0) {
-			plt_err("Failed to set HWGRP AGQ config rc=%d\n", rc);
+			plt_err("Failed to set HWGRP AGQ config rc=%d", rc);
 			mbox_put(mbox);
 			return rc;
 		}
@@ -689,7 +689,7 @@ roc_sso_hwgrp_agq_release(struct roc_sso *roc_sso, uint16_t hwgrp)
 		mbox_process(mbox);
 		req = mbox_alloc_msg_sso_aggr_setconfig(mbox);
 		if (req == NULL) {
-			plt_err("Failed to allocate AGQ config mbox.\n");
+			plt_err("Failed to allocate AGQ config mbox.");
 			mbox_put(mbox);
 			return;
 		}
@@ -699,7 +699,7 @@ roc_sso_hwgrp_agq_release(struct roc_sso *roc_sso, uint16_t hwgrp)
 	req->npa_pf_func = 0;
 	rc = mbox_process(mbox);
 	if (rc < 0)
-		plt_err("Failed to set HWGRP AGQ config rc=%d\n", rc);
+		plt_err("Failed to set HWGRP AGQ config rc=%d", rc);
 	mbox_put(mbox);
 }
 
@@ -1103,11 +1103,11 @@ sso_update_msix_vec_count(struct roc_sso *roc_sso, uint16_t sso_vec_cnt)
 		return dev_irq_reconfigure(pci_dev->intr_handle, mbox_vec_cnt + npa_vec_cnt);
 	}
 
+	/* Before re-configuring unregister irqs */
 	npa_vec_cnt = (dev->npa.pci_dev == pci_dev) ? NPA_LF_INT_VEC_POISON + 1 : 0;
 	if (npa_vec_cnt)
 		npa_unregister_irqs(&dev->npa);
 
-	/* Before re-configuring unregister irqs */
 	dev_mbox_unregister_irq(pci_dev, dev);
 	if (!dev_is_vf(dev))
 		dev_vf_flr_unregister_irqs(pci_dev, dev);

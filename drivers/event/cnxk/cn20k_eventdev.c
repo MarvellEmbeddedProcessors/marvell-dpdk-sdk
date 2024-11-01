@@ -39,6 +39,7 @@ cn20k_sso_init_hws_mem(void *arg, uint8_t port_id)
 	ws->swtag_req = 0;
 	ws->gw_wdata = cnxk_sso_hws_prf_wdata(dev);
 	ws->gw_rdata = SSO_TT_EMPTY << 32;
+	ws->xae_waes = dev->sso.feat.xaq_wq_entries;
 
 	return ws;
 }
@@ -69,10 +70,11 @@ cn20k_sso_hws_setup(void *arg, void *hws, uintptr_t grp_base)
 	uint64_t val;
 
 	ws->grp_base = grp_base;
-	ws->fc_mem = (int64_t *)dev->fc_iova;
+	ws->fc_mem = (int64_t __rte_atomic *)dev->fc_iova;
 	ws->xaq_lmt = dev->xaq_lmt;
-	ws->fc_cache_space = dev->fc_cache_space;
+	ws->fc_cache_space = (int64_t __rte_atomic *)dev->fc_cache_space;
 	ws->aw_lmt = dev->sso.lmt_base;
+	ws->gw_wdata = cnxk_sso_hws_prf_wdata(dev);
 	ws->lmt_base = dev->sso.lmt_base;
 
 	/* Set get_work timeout for HWS */
@@ -206,20 +208,9 @@ cn20k_sso_fp_tmplt_fns_set(struct rte_eventdev *event_dev)
 {
 #if !defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
-	const event_dequeue_t sso_hws_deq[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_deq_##name,
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
 
 	const event_dequeue_burst_t sso_hws_deq_burst[NIX_RX_OFFLOAD_MAX] = {
 #define R(name, flags) [flags] = cn20k_sso_hws_deq_burst_##name,
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
-	const event_dequeue_t sso_hws_deq_tmo[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_deq_tmo_##name,
 		NIX_RX_FASTPATH_MODES
 #undef R
 	};
@@ -230,21 +221,8 @@ cn20k_sso_fp_tmplt_fns_set(struct rte_eventdev *event_dev)
 #undef R
 	};
 
-	const event_dequeue_t sso_hws_deq_seg[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_deq_seg_##name,
-
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
 	const event_dequeue_burst_t sso_hws_deq_seg_burst[NIX_RX_OFFLOAD_MAX] = {
 #define R(name, flags) [flags] = cn20k_sso_hws_deq_seg_burst_##name,
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
-	const event_dequeue_t sso_hws_deq_tmo_seg[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_deq_tmo_seg_##name,
 		NIX_RX_FASTPATH_MODES
 #undef R
 	};
@@ -255,20 +233,8 @@ cn20k_sso_fp_tmplt_fns_set(struct rte_eventdev *event_dev)
 #undef R
 	};
 
-	const event_dequeue_t sso_hws_reas_deq[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_reas_deq_##name,
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
 	const event_dequeue_burst_t sso_hws_reas_deq_burst[NIX_RX_OFFLOAD_MAX] = {
 #define R(name, flags) [flags] = cn20k_sso_hws_reas_deq_burst_##name,
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
-	const event_dequeue_t sso_hws_reas_deq_tmo[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_reas_deq_tmo_##name,
 		NIX_RX_FASTPATH_MODES
 #undef R
 	};
@@ -279,21 +245,8 @@ cn20k_sso_fp_tmplt_fns_set(struct rte_eventdev *event_dev)
 #undef R
 	};
 
-	const event_dequeue_t sso_hws_reas_deq_seg[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_reas_deq_seg_##name,
-
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
 	const event_dequeue_burst_t sso_hws_reas_deq_seg_burst[NIX_RX_OFFLOAD_MAX] = {
 #define R(name, flags) [flags] = cn20k_sso_hws_reas_deq_seg_burst_##name,
-		NIX_RX_FASTPATH_MODES
-#undef R
-	};
-
-	const event_dequeue_t sso_hws_reas_deq_tmo_seg[NIX_RX_OFFLOAD_MAX] = {
-#define R(name, flags) [flags] = cn20k_sso_hws_reas_deq_tmo_seg_##name,
 		NIX_RX_FASTPATH_MODES
 #undef R
 	};
@@ -319,48 +272,33 @@ cn20k_sso_fp_tmplt_fns_set(struct rte_eventdev *event_dev)
 
 	if (dev->rx_offloads & NIX_RX_MULTI_SEG_F) {
 		if (dev->rx_offloads & NIX_RX_REAS_F) {
-			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue, sso_hws_reas_deq_seg);
 			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 					       sso_hws_reas_deq_seg_burst);
-			if (dev->is_timeout_deq) {
-				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue,
-						       sso_hws_reas_deq_tmo_seg);
+			if (dev->is_timeout_deq)
 				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 						       sso_hws_reas_deq_tmo_seg_burst);
-			}
 		} else {
-			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue, sso_hws_deq_seg);
 			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 					       sso_hws_deq_seg_burst);
 
-			if (dev->is_timeout_deq) {
-				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue,
-						       sso_hws_deq_tmo_seg);
+			if (dev->is_timeout_deq)
 				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 						       sso_hws_deq_tmo_seg_burst);
-			}
 		}
 	} else {
 		if (dev->rx_offloads & NIX_RX_REAS_F) {
-			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue, sso_hws_reas_deq);
 			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 					       sso_hws_reas_deq_burst);
 
-			if (dev->is_timeout_deq) {
-				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue,
-						       sso_hws_reas_deq_tmo);
+			if (dev->is_timeout_deq)
 				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 						       sso_hws_reas_deq_tmo_burst);
-			}
 		} else {
-			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue, sso_hws_deq);
 			CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst, sso_hws_deq_burst);
 
-			if (dev->is_timeout_deq) {
-				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue, sso_hws_deq_tmo);
+			if (dev->is_timeout_deq)
 				CN20K_SET_EVDEV_DEQ_OP(dev, event_dev->dequeue_burst,
 						       sso_hws_deq_tmo_burst);
-			}
 		}
 	}
 
@@ -381,12 +319,9 @@ cn20k_sso_fp_blk_fns_set(struct rte_eventdev *event_dev)
 #if defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
 
-	event_dev->dequeue = cn20k_sso_hws_deq_all_offload;
 	event_dev->dequeue_burst = cn20k_sso_hws_deq_burst_all_offload;
-	if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F) {
-		event_dev->dequeue = cn20k_sso_hws_deq_all_offload_tst;
+	if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F)
 		event_dev->dequeue_burst = cn20k_sso_hws_deq_burst_all_offload_tst;
-	}
 	event_dev->txa_enqueue = cn20k_sso_hws_tx_adptr_enq_seg_all_offload;
 	event_dev->txa_enqueue_same_dest = cn20k_sso_hws_tx_adptr_enq_seg_all_offload;
 	if (dev->tx_offloads & (NIX_TX_OFFLOAD_OL3_OL4_CSUM_F | NIX_TX_OFFLOAD_VLAN_QINQ_F |
@@ -407,12 +342,13 @@ cn20k_sso_fp_fns_set(struct rte_eventdev *event_dev)
 	cn20k_sso_fp_blk_fns_set(event_dev);
 	cn20k_sso_fp_tmplt_fns_set(event_dev);
 
-	event_dev->enqueue = cn20k_sso_hws_enq;
 	event_dev->enqueue_burst = cn20k_sso_hws_enq_burst;
 	event_dev->enqueue_new_burst = cn20k_sso_hws_enq_new_burst;
 	event_dev->enqueue_forward_burst = cn20k_sso_hws_enq_fwd_burst;
 
 	event_dev->profile_switch = cn20k_sso_hws_profile_switch;
+	event_dev->preschedule_modify = cn20k_sso_hws_preschedule_modify;
+	event_dev->preschedule = cn20k_sso_hws_preschedule;
 #else
 	RTE_SET_USED(event_dev);
 #endif
@@ -449,6 +385,8 @@ cn20k_sso_dev_configure(const struct rte_eventdev *event_dev)
 	rc = cnxk_sso_xaq_allocate(dev);
 	if (rc < 0)
 		goto cnxk_rsrc_fini;
+
+	dev->gw_mode = cnxk_sso_hws_preschedule_get(event_dev->data->dev_conf.preschedule_type);
 
 	rc = cnxk_setup_event_ports(event_dev, cn20k_sso_init_hws_mem, cn20k_sso_hws_setup);
 	if (rc < 0)
@@ -673,7 +611,7 @@ cn20k_sso_set_priv_mem(const struct rte_eventdev *event_dev, void *lookup_mem)
 	for (i = 0; i < dev->nb_event_ports; i++) {
 		struct cn20k_sso_hws *ws = event_dev->data->ports[i];
 		ws->xaq_lmt = dev->xaq_lmt;
-		ws->fc_mem = (int64_t *)dev->fc_iova;
+		ws->fc_mem = (int64_t __rte_atomic *)dev->fc_iova;
 		ws->tstamp = dev->tstamp;
 		if (lookup_mem)
 			ws->lookup_mem = lookup_mem;
@@ -685,7 +623,6 @@ eventdev_fops_tstamp_update(struct rte_eventdev *event_dev)
 {
 	struct rte_event_fp_ops *fp_op = rte_event_fp_ops + event_dev->data->dev_id;
 
-	fp_op->dequeue = event_dev->dequeue;
 	fp_op->dequeue_burst = event_dev->dequeue_burst;
 }
 
@@ -1093,7 +1030,6 @@ cn20k_sso_init(struct rte_eventdev *event_dev)
 		return 0;
 	}
 
-	dev->gw_mode = CNXK_GW_MODE_PREF_WFE;
 	rc = cnxk_sso_init(event_dev);
 	if (rc < 0)
 		return rc;
@@ -1141,7 +1077,6 @@ RTE_PMD_REGISTER_PARAM_STRING(event_cn20k,
 			      CNXK_SSO_XAE_CNT "=<int>"
 			      CNXK_SSO_GGRP_QOS "=<string>"
 			      CNXK_SSO_STASH "=<string>"
-			      CNXK_SSO_GW_MODE "=<int>"
 			      CNXK_SSO_FORCE_BP "=1"
 			      CNXK_TIM_DISABLE_NPA "=1"
 			      CNXK_TIM_CHNK_SLOTS "=<int>"

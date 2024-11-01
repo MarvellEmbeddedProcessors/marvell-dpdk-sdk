@@ -212,7 +212,7 @@ nix_inl_cpt_setup(struct nix_inl_dev *inl_dev, bool inl_dev_sso)
 
 		q_info = &inl_dev->q_info[i];
 		q_info->nb_desc = lf->nb_desc;
-		q_info->fc_addr = lf->fc_addr;
+		q_info->fc_addr = (uint64_t __rte_atomic *)lf->fc_addr;
 		q_info->io_addr = lf->io_addr;
 		q_info->lmt_base = lf->lmt_base;
 		q_info->rbase = lf->rbase;

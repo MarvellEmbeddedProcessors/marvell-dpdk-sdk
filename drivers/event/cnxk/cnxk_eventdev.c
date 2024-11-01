@@ -118,8 +118,8 @@ cnxk_setup_event_ports(const struct rte_eventdev *event_dev,
 	return 0;
 hws_fini:
 	for (i = i - 1; i >= 0; i--) {
-		event_dev->data->ports[i] = NULL;
 		rte_free(cnxk_sso_hws_get_cookie(event_dev->data->ports[i]));
+		event_dev->data->ports[i] = NULL;
 	}
 	return -ENOMEM;
 }
@@ -554,6 +554,9 @@ parse_list(const char *value, void *opaque, param_parse_t fn)
 	char *end = NULL;
 	char *f = s;
 
+	if (s == NULL)
+		return;
+
 	while (*s) {
 		if (*s == '[')
 			start = s;
@@ -618,8 +621,8 @@ cnxk_sso_parse_devargs(struct cnxk_sso_evdev *dev, struct rte_devargs *devargs)
 			   &dev->force_ena_bp);
 	rte_kvargs_process(kvlist, CN9K_SSO_SINGLE_WS, &parse_kvargs_flag,
 			   &single_ws);
-	rte_kvargs_process(kvlist, CNXK_SSO_STASH,
-			   &parse_sso_kvargs_stash_dict, dev);
+	rte_kvargs_process(kvlist, CNXK_SSO_STASH, &parse_sso_kvargs_stash_dict,
+			   dev);
 	dev->dual_ws = !single_ws;
 	rte_kvargs_free(kvlist);
 }

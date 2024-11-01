@@ -16,8 +16,9 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
 #include <limits.h>
+#include <stdalign.h>
+#include <stdint.h>
 
 #include <rte_config.h>
 

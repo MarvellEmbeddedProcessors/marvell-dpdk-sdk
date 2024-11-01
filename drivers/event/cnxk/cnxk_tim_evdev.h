@@ -106,22 +106,22 @@ struct cnxk_tim_evdev {
 struct cnxk_tim_bkt {
 	uint64_t first_chunk;
 	union {
-		uint64_t w1;
+		uint64_t __rte_atomic w1;
 		struct {
-			uint32_t nb_entry;
+			uint32_t __rte_atomic nb_entry;
 			uint8_t sbt : 1;
 			uint8_t hbt : 1;
 			uint8_t bsk : 1;
 			uint8_t rsvd : 5;
-			uint8_t lock;
-			int16_t chunk_remainder;
+			uint8_t __rte_atomic lock;
+			int16_t __rte_atomic chunk_remainder;
 		};
 	};
 	uint64_t current_chunk;
 	uint64_t pad;
 };
 
-struct cnxk_tim_ring {
+struct __rte_cache_aligned cnxk_tim_ring {
 	uint16_t nb_chunk_slots;
 	uint32_t nb_bkts;
 	uintptr_t tbase;
@@ -133,7 +133,7 @@ struct cnxk_tim_ring {
 	struct rte_reciprocal_u64 fast_div;
 	struct rte_reciprocal_u64 fast_bkt;
 	uint64_t tck_int;
-	uint64_t arm_cnt;
+	uint64_t __rte_atomic arm_cnt;
 	uintptr_t base;
 	uint8_t prod_type_sp;
 	uint8_t enable_stats;
@@ -148,7 +148,7 @@ struct cnxk_tim_ring {
 	uint64_t nb_chunks;
 	uint64_t chunk_sz;
 	enum roc_tim_clk_src clk_src;
-} __rte_cache_aligned;
+};
 
 struct cnxk_tim_ent {
 	uint64_t w0;

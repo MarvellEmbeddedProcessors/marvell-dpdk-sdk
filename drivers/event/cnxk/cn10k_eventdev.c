@@ -73,10 +73,11 @@ cn10k_sso_hws_setup(void *arg, void *hws, uintptr_t grp_base)
 	uint64_t val;
 
 	ws->grp_base = grp_base;
-	ws->fc_mem = (int64_t *)dev->fc_iova;
+	ws->fc_mem = (int64_t __rte_atomic *)dev->fc_iova;
 	ws->xaq_lmt = dev->xaq_lmt;
-	ws->fc_cache_space = dev->fc_cache_space;
+	ws->fc_cache_space = (int64_t __rte_atomic *)dev->fc_cache_space;
 	ws->aw_lmt = ws->lmt_base;
+	ws->gw_wdata = cnxk_sso_hws_prf_wdata(dev);
 
 	/* Set get_work timeout for HWS */
 	val = NSEC2USEC(dev->deq_tmo_ns);
@@ -324,12 +325,9 @@ cn10k_sso_fp_blk_fns_set(struct rte_eventdev *event_dev)
 #if defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
 
-	event_dev->dequeue = cn10k_sso_hws_deq_all_offload;
 	event_dev->dequeue_burst = cn10k_sso_hws_deq_burst_all_offload;
-	if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F) {
-		event_dev->dequeue = cn10k_sso_hws_deq_all_offload_tst;
+	if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F)
 		event_dev->dequeue_burst = cn10k_sso_hws_deq_burst_all_offload_tst;
-	}
 	event_dev->txa_enqueue = cn10k_sso_hws_tx_adptr_enq_seg_all_offload;
 	event_dev->txa_enqueue_same_dest = cn10k_sso_hws_tx_adptr_enq_seg_all_offload;
 	if (dev->tx_offloads & (NIX_TX_OFFLOAD_OL3_OL4_CSUM_F | NIX_TX_OFFLOAD_VLAN_QINQ_F |
@@ -407,18 +405,7 @@ cn10k_sso_dev_configure(const struct rte_eventdev *event_dev)
 	if (rc < 0)
 		goto cnxk_rsrc_fini;
 
-	switch (event_dev->data->dev_conf.preschedule_type) {
-	default:
-	case RTE_EVENT_PRESCHEDULE_NONE:
-		dev->gw_mode = CN10K_GW_MODE_NONE;
-		break;
-	case RTE_EVENT_PRESCHEDULE:
-		dev->gw_mode = CN10K_GW_MODE_PREF;
-		break;
-	case RTE_EVENT_PRESCHEDULE_ADAPTIVE:
-		dev->gw_mode = CN10K_GW_MODE_PREF_WFE;
-		break;
-	}
+	dev->gw_mode = cnxk_sso_hws_preschedule_get(event_dev->data->dev_conf.preschedule_type);
 
 	rc = cnxk_setup_event_ports(event_dev, cn10k_sso_init_hws_mem,
 				    cn10k_sso_hws_setup);
@@ -652,7 +639,7 @@ cn10k_sso_set_priv_mem(const struct rte_eventdev *event_dev, void *lookup_mem)
 	for (i = 0; i < dev->nb_event_ports; i++) {
 		struct cn10k_sso_hws *ws = event_dev->data->ports[i];
 		ws->xaq_lmt = dev->xaq_lmt;
-		ws->fc_mem = (int64_t *)dev->fc_iova;
+		ws->fc_mem = (int64_t __rte_atomic *)dev->fc_iova;
 		ws->tstamp = dev->tstamp;
 		if (lookup_mem)
 			ws->lookup_mem = lookup_mem;

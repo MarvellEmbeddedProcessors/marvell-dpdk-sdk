@@ -40,6 +40,27 @@ cnxk_sso_hws_prf_wdata(struct cnxk_sso_evdev *dev)
 	return wdata;
 }
 
+static uint8_t
+cnxk_sso_hws_preschedule_get(uint8_t preschedule_type)
+{
+	uint8_t gw_mode = 0;
+
+	switch (preschedule_type) {
+	default:
+	case RTE_EVENT_PRESCHEDULE_NONE:
+		gw_mode = CNXK_GW_MODE_NONE;
+		break;
+	case RTE_EVENT_PRESCHEDULE:
+		gw_mode = CNXK_GW_MODE_PREF;
+		break;
+	case RTE_EVENT_PRESCHEDULE_ADAPTIVE:
+		gw_mode = CNXK_GW_MODE_PREF_WFE;
+		break;
+	}
+
+	return gw_mode;
+}
+
 static void
 cnxk_sso_hws_reset(void *arg, void *ws)
 {

@@ -82,7 +82,8 @@ cn20k_sso_hws_forward_event(struct cn20k_sso_hws *ws, const struct rte_event *ev
 static inline int32_t
 sso_read_xaq_space(struct cn20k_sso_hws *ws)
 {
-	return (ws->xaq_lmt - rte_atomic_load_explicit(ws->fc_mem, rte_memory_order_relaxed)) * 352;
+	return (ws->xaq_lmt - rte_atomic_load_explicit(ws->fc_mem, rte_memory_order_relaxed)) *
+	       ws->xae_waes;
 }
 
 static inline void
@@ -102,37 +103,12 @@ retry:
 		do {
 			refill = sso_read_xaq_space(ws);
 		} while (refill <= 0);
-		rte_atomic_compare_exchange_strong_explicit(ws->fc_cache_space, &cached, &refill,
+		rte_atomic_compare_exchange_strong_explicit(ws->fc_cache_space, &cached, refill,
 							    rte_memory_order_release,
 							    rte_memory_order_relaxed);
+
 		goto retry;
 	}
-}
-
-uint16_t __rte_hot
-cn20k_sso_hws_enq(void *port, const struct rte_event *ev)
-{
-	struct cn20k_sso_hws *ws = port;
-
-	switch (ev->op) {
-	case RTE_EVENT_OP_NEW:
-		return cn20k_sso_hws_new_event(ws, ev);
-	case RTE_EVENT_OP_FORWARD:
-		cn20k_sso_hws_forward_event(ws, ev);
-		break;
-	case RTE_EVENT_OP_RELEASE:
-		if (ws->swtag_req) {
-			cnxk_sso_hws_desched(ev->u64, ws->base);
-			ws->swtag_req = 0;
-			break;
-		}
-		cnxk_sso_hws_swtag_flush(ws->base);
-		break;
-	default:
-		return 0;
-	}
-
-	return 1;
 }
 
 #define VECTOR_SIZE_BITS	     0xFFFFFFFFFFF80000ULL
@@ -342,8 +318,28 @@ again:
 uint16_t __rte_hot
 cn20k_sso_hws_enq_burst(void *port, const struct rte_event ev[], uint16_t nb_events)
 {
+	struct cn20k_sso_hws *ws = port;
+
 	RTE_SET_USED(nb_events);
-	return cn20k_sso_hws_enq(port, ev);
+	switch (ev->op) {
+	case RTE_EVENT_OP_NEW:
+		return cn20k_sso_hws_new_event(ws, ev);
+	case RTE_EVENT_OP_FORWARD:
+		cn20k_sso_hws_forward_event(ws, ev);
+		break;
+	case RTE_EVENT_OP_RELEASE:
+		if (ws->swtag_req) {
+			cnxk_sso_hws_desched(ev->u64, ws->base);
+			ws->swtag_req = 0;
+			break;
+		}
+		cnxk_sso_hws_swtag_flush(ws->base);
+		break;
+	default:
+		return 0;
+	}
+
+	return 1;
 }
 
 uint16_t __rte_hot
@@ -355,7 +351,7 @@ cn20k_sso_hws_enq_new_burst(void *port, const struct rte_event ev[], uint16_t nb
 	int32_t space;
 
 	/* Do a common back-pressure check and return */
-	space = sso_read_xaq_space(ws) - 352;
+	space = sso_read_xaq_space(ws) - ws->xae_waes;
 	if (space <= 0)
 		return 0;
 	nb_events = space < nb_events ? space : nb_events;
@@ -396,4 +392,34 @@ cn20k_sso_hws_profile_switch(void *port, uint8_t profile)
 	ws->gw_wdata |= (profile + 1);
 
 	return 0;
+}
+
+int __rte_hot
+cn20k_sso_hws_preschedule_modify(void *port, enum rte_event_dev_preschedule_type type)
+{
+	struct cn20k_sso_hws *ws = port;
+
+	ws->gw_wdata &= ~(BIT(19) | BIT(20));
+	switch (type) {
+	default:
+	case RTE_EVENT_PRESCHEDULE_NONE:
+		break;
+	case RTE_EVENT_PRESCHEDULE:
+		ws->gw_wdata |= BIT(19);
+		break;
+	case RTE_EVENT_PRESCHEDULE_ADAPTIVE:
+		ws->gw_wdata |= BIT(19) | BIT(20);
+		break;
+	}
+
+	return 0;
+}
+
+void __rte_hot
+cn20k_sso_hws_preschedule(void *port, enum rte_event_dev_preschedule_type type)
+{
+	struct cn20k_sso_hws *ws = port;
+
+	RTE_SET_USED(type);
+	plt_write64(ws->gw_wdata, ws->base + SSOW_LF_GWS_OP_PRF_GETWORK);
 }

@@ -1330,7 +1330,8 @@ cn10k_inl_dev_submit(struct roc_nix_inl_dev_q *q, void *inst, uint16_t nb_inst)
 	uint16_t lmt_id;
 
 	/* Check the flow control to avoid the queue overflow */
-	if (cnxk_nix_inl_fc_check(q->fc_addr, &q->fc_addr_sw, q->nb_desc, nb_inst))
+	if (cnxk_nix_inl_fc_check(q->fc_addr, (int32_t __rte_atomic *)&q->fc_addr_sw, q->nb_desc,
+				  nb_inst))
 		return 0;
 
 	io_addr = q->io_addr;

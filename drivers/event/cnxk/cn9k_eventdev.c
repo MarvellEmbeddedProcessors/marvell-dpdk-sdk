@@ -74,7 +74,7 @@ cn9k_sso_hws_setup(void *arg, void *hws, uintptr_t grp_base)
 	if (dev->dual_ws) {
 		dws = hws;
 		dws->grp_base = grp_base;
-		dws->fc_mem = (uint64_t *)dev->fc_iova;
+		dws->fc_mem = (uint64_t __rte_atomic *)dev->fc_iova;
 		dws->xaq_lmt = dev->xaq_lmt;
 
 		plt_write64(val, dws->base[0] + SSOW_LF_GWS_NW_TIM);
@@ -82,7 +82,7 @@ cn9k_sso_hws_setup(void *arg, void *hws, uintptr_t grp_base)
 	} else {
 		ws = hws;
 		ws->grp_base = grp_base;
-		ws->fc_mem = (uint64_t *)dev->fc_iova;
+		ws->fc_mem = (uint64_t __rte_atomic *)dev->fc_iova;
 		ws->xaq_lmt = dev->xaq_lmt;
 
 		plt_write64(val, ws->base + SSOW_LF_GWS_NW_TIM);
@@ -465,12 +465,9 @@ cn9k_sso_fp_blk_fns_set(struct rte_eventdev *event_dev)
 #if defined(CNXK_DIS_TMPLT_FUNC)
 	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
 
-	event_dev->dequeue = cn9k_sso_hws_deq_all_offload;
 	event_dev->dequeue_burst = cn9k_sso_hws_deq_burst_all_offload;
-	if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F) {
-		event_dev->dequeue = cn9k_sso_hws_deq_all_offload_tst;
+	if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F)
 		event_dev->dequeue_burst = cn9k_sso_hws_deq_burst_all_offload_tst;
-	}
 	event_dev->txa_enqueue = cn9k_sso_hws_tx_adptr_enq_seg_all_offload;
 	event_dev->txa_enqueue_same_dest = cn9k_sso_hws_tx_adptr_enq_seg_all_offload;
 	if (dev->tx_offloads & NIX_TX_OFFLOAD_TSTAMP_F) {
@@ -478,12 +475,9 @@ cn9k_sso_fp_blk_fns_set(struct rte_eventdev *event_dev)
 		event_dev->txa_enqueue_same_dest = cn9k_sso_hws_tx_adptr_enq_seg_all_offload_tst;
 	}
 	if (dev->dual_ws) {
-		event_dev->dequeue = cn9k_sso_hws_deq_dual_all_offload;
 		event_dev->dequeue_burst = cn9k_sso_hws_deq_dual_burst_all_offload;
-		if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F) {
-			event_dev->dequeue = cn9k_sso_hws_deq_dual_all_offload_tst;
+		if (dev->rx_offloads & NIX_RX_OFFLOAD_TSTAMP_F)
 			event_dev->dequeue_burst = cn9k_sso_hws_deq_dual_burst_all_offload_tst;
-		}
 		event_dev->txa_enqueue = cn9k_sso_hws_tx_adptr_enq_dual_seg_all_offload;
 		event_dev->txa_enqueue_same_dest = cn9k_sso_hws_tx_adptr_enq_dual_seg_all_offload;
 		if (dev->tx_offloads & NIX_TX_OFFLOAD_TSTAMP_F) {
@@ -828,14 +822,14 @@ cn9k_sso_set_priv_mem(const struct rte_eventdev *event_dev, void *lookup_mem)
 			struct cn9k_sso_hws_dual *dws =
 				event_dev->data->ports[i];
 			dws->xaq_lmt = dev->xaq_lmt;
-			dws->fc_mem = (uint64_t *)dev->fc_iova;
+			dws->fc_mem = (uint64_t __rte_atomic *)dev->fc_iova;
 			dws->tstamp = dev->tstamp;
 			if (lookup_mem)
 				dws->lookup_mem = lookup_mem;
 		} else {
 			struct cn9k_sso_hws *ws = event_dev->data->ports[i];
 			ws->xaq_lmt = dev->xaq_lmt;
-			ws->fc_mem = (uint64_t *)dev->fc_iova;
+			ws->fc_mem = (uint64_t __rte_atomic *)dev->fc_iova;
 			ws->tstamp = dev->tstamp;
 			if (lookup_mem)
 				ws->lookup_mem = lookup_mem;
