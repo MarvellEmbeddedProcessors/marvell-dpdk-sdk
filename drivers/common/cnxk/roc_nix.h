@@ -981,41 +981,27 @@ void __roc_api roc_nix_ptp_info_cb_unregister(struct roc_nix *roc_nix);
 bool __roc_api roc_nix_ptp_is_enable(struct roc_nix *roc_nix);
 
 /* VLAN */
-int __roc_api
-roc_nix_vlan_mcam_entry_read(struct roc_nix *roc_nix, uint32_t index,
-			     struct npc_mcam_read_entry_rsp **rsp);
-int __roc_api roc_nix_vlan_mcam_entry_write(struct roc_nix *roc_nix,
-					    uint32_t index,
-					    struct mcam_entry *entry,
+int __roc_api roc_nix_vlan_mcam_entry_read(struct roc_nix *roc_nix, uint32_t index, void **rsp);
+int __roc_api roc_nix_vlan_mcam_entry_write(struct roc_nix *roc_nix, uint32_t index, void *entry,
 					    uint8_t intf, uint8_t enable);
-int __roc_api roc_nix_vlan_mcam_entry_alloc_and_write(struct roc_nix *roc_nix,
-						      struct mcam_entry *entry,
-						      uint8_t intf,
-						      uint8_t priority,
+int __roc_api roc_nix_vlan_mcam_entry_alloc_and_write(struct roc_nix *roc_nix, void *entry,
+						      uint8_t intf, uint8_t priority,
 						      uint8_t ref_entry);
-int __roc_api roc_nix_vlan_mcam_entry_free(struct roc_nix *roc_nix,
-					   uint32_t index);
-int __roc_api roc_nix_vlan_mcam_entry_ena_dis(struct roc_nix *roc_nix,
-					      uint32_t index, const int enable);
-int __roc_api roc_nix_vlan_strip_vtag_ena_dis(struct roc_nix *roc_nix,
-					      bool enable);
+int __roc_api roc_nix_vlan_mcam_entry_free(struct roc_nix *roc_nix, uint32_t index);
+int __roc_api roc_nix_vlan_mcam_entry_ena_dis(struct roc_nix *roc_nix, uint32_t index,
+					      const int enable);
+int __roc_api roc_nix_vlan_strip_vtag_ena_dis(struct roc_nix *roc_nix, bool enable);
 int __roc_api roc_nix_vlan_insert_ena_dis(struct roc_nix *roc_nix,
 					  struct roc_nix_vlan_config *vlan_cfg,
 					  uint64_t *mcam_index, bool enable);
-int __roc_api roc_nix_vlan_tpid_set(struct roc_nix *roc_nix, uint32_t type,
-				    uint16_t tpid);
+int __roc_api roc_nix_vlan_tpid_set(struct roc_nix *roc_nix, uint32_t type, uint16_t tpid);
 
 /* MCAST*/
-int __roc_api roc_nix_mcast_mcam_entry_alloc(struct roc_nix *roc_nix,
-					     uint16_t nb_entries,
-					     uint8_t priority,
-					     uint16_t index[]);
-int __roc_api roc_nix_mcast_mcam_entry_free(struct roc_nix *roc_nix,
-					    uint32_t index);
-int __roc_api roc_nix_mcast_mcam_entry_write(struct roc_nix *roc_nix,
-					     struct mcam_entry *entry,
-					     uint32_t index, uint8_t intf,
-					     uint64_t action);
+int __roc_api roc_nix_mcast_mcam_entry_alloc(struct roc_nix *roc_nix, uint16_t nb_entries,
+					     uint8_t priority, uint16_t index[]);
+int __roc_api roc_nix_mcast_mcam_entry_free(struct roc_nix *roc_nix, uint32_t index);
+int __roc_api roc_nix_mcast_mcam_entry_write(struct roc_nix *roc_nix, void *entry, uint32_t index,
+					     uint8_t intf, uint64_t action);
 int __roc_api roc_nix_mcast_mcam_entry_ena_dis(struct roc_nix *roc_nix, uint32_t index,
 					       bool enable);
 int __roc_api roc_nix_mcast_list_setup(struct mbox *mbox, uint8_t intf, int nb_entries,
