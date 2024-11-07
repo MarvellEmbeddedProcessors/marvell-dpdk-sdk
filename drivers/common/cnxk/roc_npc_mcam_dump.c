@@ -883,10 +883,14 @@ roc_npc_flow_mcam_dump(FILE *file, struct roc_npc *roc_npc, struct roc_npc_flow 
 
 	fprintf(file, "MCAM Index:%d\n", flow->mcam_id);
 	if (flow->ctr_id != NPC_COUNTER_NONE && flow->use_ctr) {
-		if (flow->use_pre_alloc)
+		if (flow->use_pre_alloc) {
 			rc = roc_npc_inl_mcam_read_counter(flow->ctr_id, &count);
-		else
-			rc = roc_npc_mcam_read_counter(roc_npc, flow->ctr_id, &count);
+		} else {
+			if (roc_model_is_cn20k())
+				rc = roc_npc_mcam_get_stats(roc_npc, flow, &count);
+			else
+				rc = roc_npc_mcam_read_counter(roc_npc, flow->ctr_id, &count);
+		}
 
 		if (rc)
 			return;

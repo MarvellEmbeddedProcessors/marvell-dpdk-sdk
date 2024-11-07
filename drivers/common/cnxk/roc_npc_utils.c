@@ -4,6 +4,36 @@
 #include "roc_api.h"
 #include "roc_priv.h"
 
+enum npc_mcam_cn20k_key_width {
+	NPC_CN20K_MCAM_KEY_X1 = 0,
+	NPC_CN20K_MCAM_KEY_DYN = NPC_CN20K_MCAM_KEY_X1,
+	NPC_CN20K_MCAM_KEY_X2,
+	NPC_CN20K_MCAM_KEY_X4,
+	NPC_CN20K_MCAM_KEY_MAX,
+};
+
+uint8_t
+npc_get_key_type(struct npc *npc, struct roc_npc_flow *flow)
+{
+	int i;
+
+	/* KEX is configured just for X2 */
+	if (npc->keyw[ROC_NPC_INTF_RX] == 1)
+		return NPC_CN20K_MCAM_KEY_X2;
+
+	/* KEX is configured just for X4 */
+	if (npc->keyw[ROC_NPC_INTF_RX] == 2)
+		return NPC_CN20K_MCAM_KEY_X4;
+
+	/* KEX is configured for both X2 and X4 */
+	/* Check mask for upper 256 bits. if mask is set, then it is X4 entry */
+	for (i = 4; i < ROC_NPC_MAX_MCAM_WIDTH_DWORDS; i++) {
+		if (flow->mcam_mask[i] != 0)
+			return NPC_CN20K_MCAM_KEY_X4;
+	}
+	return NPC_CN20K_MCAM_KEY_X2;
+}
+
 static void
 npc_prep_mcam_ldata(uint8_t *ptr, const uint8_t *data, int len)
 {
@@ -961,7 +991,7 @@ npc_insert_into_flow_list(struct npc *npc, struct npc_prio_flow_entry *entry)
 
 static int
 npc_allocate_mcam_entry(struct mbox *mbox, int prio, struct npc_mcam_alloc_entry_rsp *rsp_local,
-			int ref_entry)
+			int ref_entry, uint8_t kw_type)
 {
 	struct npc_mcam_alloc_entry_rsp *rsp;
 	struct npc_mcam_alloc_entry_req *req;
@@ -975,6 +1005,7 @@ npc_allocate_mcam_entry(struct mbox *mbox, int prio, struct npc_mcam_alloc_entry
 	req->count = 1;
 	req->ref_priority = prio;
 	req->ref_entry = ref_entry;
+	req->kw_type = kw_type;
 
 	rc = mbox_process_msg(mbox, (void *)&rsp);
 	if (rc)
@@ -1029,8 +1060,7 @@ npc_find_mcam_ref_entry(struct roc_npc_flow *flow, struct npc *npc, int *prio,
 }
 
 static int
-npc_alloc_mcam_by_ref_entry(struct mbox *mbox, struct roc_npc_flow *flow,
-			    struct npc *npc,
+npc_alloc_mcam_by_ref_entry(struct mbox *mbox, struct roc_npc_flow *flow, struct npc *npc,
 			    struct npc_mcam_alloc_entry_rsp *rsp_local)
 {
 	int prio, ref_entry = 0, rc = 0, dir = NPC_MCAM_LOWER_PRIO;
@@ -1038,7 +1068,7 @@ npc_alloc_mcam_by_ref_entry(struct mbox *mbox, struct roc_npc_flow *flow,
 
 retry:
 	npc_find_mcam_ref_entry(flow, npc, &prio, &ref_entry, dir);
-	rc = npc_allocate_mcam_entry(mbox, prio, rsp_local, ref_entry);
+	rc = npc_allocate_mcam_entry(mbox, prio, rsp_local, ref_entry, flow->key_type);
 	if (rc && !retry_done) {
 		plt_npc_dbg(
 			"npc: Failed to allocate lower priority entry. Retrying for higher priority");
@@ -1054,32 +1084,42 @@ retry:
 }
 
 int
-npc_get_free_mcam_entry(struct mbox *mbox, struct roc_npc_flow *flow,
-			struct npc *npc)
+npc_get_free_mcam_entry(struct mbox *mbox, struct roc_npc_flow *flow, struct npc *npc)
 {
 	struct npc_mcam_alloc_entry_rsp rsp_local;
 	struct npc_prio_flow_entry *new_entry;
 	int rc = 0;
 
-	rc = npc_alloc_mcam_by_ref_entry(mbox, flow, npc, &rsp_local);
-
-	if (rc)
-		return rc;
-
 	new_entry = plt_zmalloc(sizeof(*new_entry), 0);
 	if (!new_entry)
 		return -ENOSPC;
 
-	new_entry->flow = flow;
+	if (roc_model_is_cn20k()) {
+		rc = npc_allocate_mcam_entry(mbox, NPC_MCAM_ANY_PRIO, &rsp_local, 0,
+					     flow->key_type);
+		if (rc) {
+			plt_npc_dbg("npc: failed to allocate MCAM entry.");
+			return rc;
+		}
 
-	plt_npc_dbg("kernel allocated MCAM entry %d", rsp_local.entry);
+		new_entry->flow = flow;
+	} else {
+		rc = npc_alloc_mcam_by_ref_entry(mbox, flow, npc, &rsp_local);
 
-	rc = npc_sort_mcams_by_user_prio_level(mbox, new_entry, npc,
-					       &rsp_local);
-	if (rc)
-		goto err;
+		if (rc)
+			return rc;
 
-	plt_npc_dbg("allocated MCAM entry after sorting %d", rsp_local.entry);
+		new_entry->flow = flow;
+
+		plt_npc_dbg("kernel allocated MCAM entry %d", rsp_local.entry);
+
+		rc = npc_sort_mcams_by_user_prio_level(mbox, new_entry, npc, &rsp_local);
+		if (rc)
+			goto err;
+
+		plt_npc_dbg("allocated MCAM entry after sorting %d", rsp_local.entry);
+	}
+
 	flow->mcam_id = rsp_local.entry;
 	npc_insert_into_flow_list(npc, new_entry);
 

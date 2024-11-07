@@ -2577,6 +2577,7 @@ struct npc_cn20k_mcam_write_entry_req {
 	uint8_t __io intf;	   /* Rx or Tx interface */
 	uint8_t __io enable_entry; /* Enable this MCAM entry ? */
 	uint8_t __io hw_prio;	   /* hardware priority, valid for cn20k */
+	uint8_t __io req_kw_type;  /* Type of kw which should be written */
 	uint64_t __io reserved;	   /* reserved for future use */
 };
 
@@ -2654,6 +2655,7 @@ struct npc_cn20k_mcam_alloc_and_write_entry_req {
 	uint8_t __io enable_entry; /* Enable this MCAM entry ? */
 	uint8_t __io hw_prio;	   /* hardware priority, valid for cn20k */
 	uint8_t __io virt;	   /* Allocate virtual index */
+	uint8_t __io req_kw_type;  /* Key type to be written */
 	uint16_t __io reserved[4]; /* reserved for future use */
 };
 

@@ -516,7 +516,7 @@ npc_mcam_write_entry(struct mbox *mbox, struct roc_npc_flow *mcam)
 		if (mcam->use_ctr)
 			cn20k_req->cntr = mcam->ctr_id;
 
-		for (i = 0; i < NPC_CN20K_MCAM_KEY_X4_WORDS; i++) {
+		for (i = 0; i < NPC_MCAM_KEY_X4_WORDS; i++) {
 			cn20k_req->entry_data.kw[i] = mcam->mcam_data[i];
 			cn20k_req->entry_data.kw_mask[i] = mcam->mcam_mask[i];
 		}
@@ -775,11 +775,12 @@ npc_mcam_set_channel(struct roc_npc_flow *flow, void *oreq, uint16_t channel, ui
 	flow->mcam_mask[0] |= (uint64_t)mask;
 }
 
+#define NPC_PF_FUNC_WIDTH    2
+#define NPC_KEX_PF_FUNC_MASK 0xFFFF
+
 static int
 npc_mcam_set_pf_func(struct npc *npc, struct roc_npc_flow *flow, uint16_t pf_func)
 {
-#define NPC_PF_FUNC_WIDTH    2
-#define NPC_KEX_PF_FUNC_MASK 0xFFFF
 	uint16_t nr_bytes, hdr_offset, key_offset, pf_func_offset;
 	uint8_t *flow_mcam_data, *flow_mcam_mask;
 	struct npc_lid_lt_xtract_info *xinfo;
@@ -814,9 +815,47 @@ npc_mcam_set_pf_func(struct npc *npc, struct roc_npc_flow *flow, uint16_t pf_fun
 	return 0;
 }
 
+static int
+npc_mcam_set_pf_func_cn20k(struct npc *npc, struct roc_npc_flow *flow, uint16_t pf_func)
+{
+	uint16_t nr_bytes, hdr_offset, key_offset, pf_func_offset;
+	struct npc_lid_lt_xtract_info_cn20k *xinfo;
+	uint8_t *flow_mcam_data, *flow_mcam_mask;
+	bool pffunc_found = false;
+	uint16_t mask = 0xFFFF;
+	int i;
+
+	flow_mcam_data = (uint8_t *)flow->mcam_data;
+	flow_mcam_mask = (uint8_t *)flow->mcam_mask;
+
+	xinfo = npc->prx_dxcfg_cn20k[NIX_INTF_TX][NPC_LID_LA];
+
+	for (i = 0; i < NPC_MAX_LT; i++) {
+		nr_bytes = xinfo[i].xtract.len;
+		hdr_offset = xinfo[i].xtract.hdr_off;
+		key_offset = xinfo[i].xtract.key_off;
+
+		if (hdr_offset > 0 || nr_bytes < NPC_PF_FUNC_WIDTH)
+			continue;
+		else
+			pffunc_found = true;
+
+		pf_func_offset = key_offset + nr_bytes - NPC_PF_FUNC_WIDTH;
+		memcpy((void *)&flow_mcam_data[pf_func_offset], (uint8_t *)&pf_func,
+		       NPC_PF_FUNC_WIDTH);
+		memcpy((void *)&flow_mcam_mask[pf_func_offset], (uint8_t *)&mask,
+		       NPC_PF_FUNC_WIDTH);
+	}
+	if (!pffunc_found)
+		return -EINVAL;
+
+	return 0;
+}
+
 int
 npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_parse_state *pst)
 {
+	struct npc_cn20k_mcam_write_entry_req *cn20k_req;
 	struct npc_cn20k_mcam_write_entry_req req;
 	struct nix_inl_dev *inl_dev = NULL;
 	struct mbox *mbox = npc->mbox;
@@ -851,6 +890,12 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 			return rc;
 	}
 
+	if (roc_model_is_cn20k()) {
+		req.hw_prio = flow->priority;
+		flow->key_type = npc_get_key_type(npc, flow);
+		req.req_kw_type = flow->key_type;
+	}
+
 	if (flow->nix_intf == NIX_INTF_RX && flow->is_inline_dev && inl_dev &&
 	    inl_dev->ipsec_index && inl_dev->is_multi_channel) {
 		if (inl_dev->curr_ipsec_idx >= inl_dev->alloc_ipsec_rules)
@@ -875,7 +920,10 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 
 		pffunc = plt_cpu_to_be_16(pffunc);
 
-		rc = npc_mcam_set_pf_func(npc, flow, pffunc);
+		if (roc_model_is_cn20k())
+			rc = npc_mcam_set_pf_func_cn20k(npc, flow, pffunc);
+		else
+			rc = npc_mcam_set_pf_func(npc, flow, pffunc);
 		if (rc)
 			return rc;
 	}
@@ -989,17 +1037,26 @@ npc_mcam_alloc_and_write(struct npc *npc, struct roc_npc_flow *flow, struct npc_
 	}
 
 	if (roc_model_is_cn20k()) {
-		struct npc_cn20k_mcam_write_entry_req *req_leg;
+		cn20k_req = mbox_alloc_msg_npc_cn20k_mcam_write_entry(mbox_get(mbox));
+		if (cn20k_req == NULL) {
+			mbox_put(mbox);
+			if (flow->use_ctr)
+				npc_mcam_free_counter(mbox, ctr);
 
-		req_leg = mbox_alloc_msg_npc_cn20k_mcam_write_entry(mbox_get(mbox));
-		if (req_leg == NULL) {
-			rc = -ENOSPC;
-			goto exit;
+			return rc;
 		}
-		mbox_memcpy(&req_leg->entry_data, &req.entry_data,
-			    sizeof(req) -
-				    offsetof(struct npc_cn20k_mcam_write_entry_req, entry_data));
+		cn20k_req->entry = req.entry;
+		cn20k_req->intf = req.intf;
+		cn20k_req->enable_entry = req.enable_entry;
+		cn20k_req->entry_data.action = req.entry_data.action;
+		cn20k_req->entry_data.vtag_action = req.entry_data.vtag_action;
+		cn20k_req->hw_prio = req.hw_prio;
+		cn20k_req->req_kw_type = req.req_kw_type;
+		if (flow->use_ctr)
+			cn20k_req->cntr = req.cntr;
 
+		mbox_memcpy(&cn20k_req->entry_data, &req.entry_data,
+			    sizeof(struct cn20k_mcam_entry));
 	} else {
 		struct npc_mcam_write_entry_req *req_leg;
 

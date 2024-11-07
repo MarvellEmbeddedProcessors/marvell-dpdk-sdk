@@ -44,10 +44,13 @@
 #define NPC_RSS_ACT_GRP_MASK   (0xFFFFF)
 #define NPC_RSS_ACT_ALG_MASK   (0x1F)
 
-#define NPC_MCAM_KEX_FIELD_MAX	    23
-#define NPC_MCAM_MAX_PROTO_FIELDS   (NPC_MCAM_KEX_FIELD_MAX + 1)
-#define NPC_MCAM_KEY_X4_WORDS	    7 /* Number of 64-bit words */
-#define NPC_CN20K_MCAM_KEY_X4_WORDS 8 /* Number of 64-bit words */
+#define NPC_MCAM_KEX_FIELD_MAX	  23
+#define NPC_MCAM_MAX_PROTO_FIELDS (NPC_MCAM_KEX_FIELD_MAX + 1)
+#if defined(ROC_PLATFORM_CN20K)
+#define NPC_MCAM_KEY_X4_WORDS 8 /* Number of 64-bit words */
+#else
+#define NPC_MCAM_KEY_X4_WORDS 7 /* Number of 64-bit words */
+#endif
 
 #define NPC_RVUPF_MAX_9XXX 0x10 /* HRM: RVU_PRIV_CONST */
 #define NPC_RVUPF_MAX_98XX 0x18 /* HRM: RVU_PRIV_CONST */
@@ -483,6 +486,7 @@ int npc_update_parse_state(struct npc_parse_state *pst, struct npc_parse_item_in
 			   int lt, uint8_t flags);
 void npc_get_hw_supp_mask(struct npc_parse_state *pst, struct npc_parse_item_info *info, int lid,
 			  int lt);
+uint8_t npc_get_key_type(struct npc *npc, struct roc_npc_flow *flow);
 int npc_mask_is_supported(const char *mask, const char *hw_mask, int len);
 int npc_parse_item_basic(const struct roc_npc_item_info *item, struct npc_parse_item_info *info);
 int npc_parse_meta_items(struct npc_parse_state *pst);

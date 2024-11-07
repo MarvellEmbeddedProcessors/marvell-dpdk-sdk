@@ -488,5 +488,6 @@ int __roc_api roc_npc_mcam_move(struct roc_npc *roc_npc, uint16_t old_ent, uint1
 void *__roc_api roc_npc_aged_flow_ctx_get(struct roc_npc *roc_npc, uint32_t mcam_id);
 void __roc_api roc_npc_sdp_channel_get(struct roc_npc *roc_npc, uint16_t *chan_base,
 				       uint16_t *chan_mask);
-int roc_npc_mcam_get_stats(struct roc_npc *roc_npc, struct roc_npc_flow *flow, uint64_t *count);
+int __roc_api roc_npc_mcam_get_stats(struct roc_npc *roc_npc, struct roc_npc_flow *flow,
+				     uint64_t *count);
 #endif /* _ROC_NPC_H_ */
