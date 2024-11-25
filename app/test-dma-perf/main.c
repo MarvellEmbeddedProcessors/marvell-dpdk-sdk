@@ -17,6 +17,7 @@
 #include <rte_string_fns.h>
 #include <rte_lcore.h>
 #include <rte_dmadev.h>
+#include <rte_kvargs.h>
 
 #include "main.h"
 
@@ -133,7 +134,7 @@ run_test(uint32_t case_id, struct test_configure *case_cfg)
 	for (i = 0; i < RTE_DIM(output_str); i++)
 		memset(output_str[i], 0, MAX_OUTPUT_STR_LEN);
 
-	if (nb_lcores <= case_cfg->lcore_dma_map.cnt) {
+	if (nb_lcores <= case_cfg->num_worker) {
 		printf("Case %u: Not enough lcores.\n", case_id);
 		return;
 	}
@@ -189,99 +190,24 @@ parse_lcore(struct test_configure *test_case, const char *value)
 	len = strlen(value);
 	input = (char *)malloc((len + 1) * sizeof(char));
 	strlcpy(input, value, len + 1);
-	lcore_dma_map = &(test_case->lcore_dma_map);
-
-	memset(lcore_dma_map, 0, sizeof(struct lcore_dma_map_t));
 
 	char *token = strtok(input, ", ");
 	while (token != NULL) {
-		if (lcore_dma_map->cnt >= MAX_LCORE_NB) {
+		lcore_dma_map = &(test_case->dma_config[test_case->num_worker++].lcore_dma_map);
+		memset(lcore_dma_map, 0, sizeof(struct lcore_dma_map_t));
+		if (test_case->num_worker >= MAX_WORKER_NB) {
 			free(input);
 			return -1;
 		}
 
 		uint16_t lcore_id = atoi(token);
-		lcore_dma_map->lcores[lcore_dma_map->cnt++] = lcore_id;
+		lcore_dma_map->lcore = lcore_id;
 
 		token = strtok(NULL, ", ");
 	}
 
 	free(input);
 	return 0;
-}
-
-static int
-parse_lcore_dma(struct test_configure *test_case, const char *value)
-{
-	struct lcore_dma_map_t *lcore_dma_map;
-	char *input, *addrs;
-	char *ptrs[2];
-	char *start, *end, *substr;
-	uint16_t lcore_id;
-	int ret = 0;
-
-	if (test_case == NULL || value == NULL)
-		return -1;
-
-	input = strndup(value, strlen(value) + 1);
-	addrs = input;
-
-	while (*addrs == '\0')
-		addrs++;
-	if (*addrs == '\0') {
-		fprintf(stderr, "No input DMA addresses\n");
-		ret = -1;
-		goto out;
-	}
-
-	substr = strtok(addrs, ",");
-	if (substr == NULL) {
-		fprintf(stderr, "No input DMA address\n");
-		ret = -1;
-		goto out;
-	}
-
-	memset(&test_case->lcore_dma_map, 0, sizeof(struct lcore_dma_map_t));
-
-	do {
-		if (rte_strsplit(substr, strlen(substr), ptrs, 2, '@') < 0) {
-			fprintf(stderr, "Illegal DMA address\n");
-			ret = -1;
-			break;
-		}
-
-		start = strstr(ptrs[0], "lcore");
-		if (start == NULL) {
-			fprintf(stderr, "Illegal lcore\n");
-			ret = -1;
-			break;
-		}
-
-		start += 5;
-		lcore_id = strtol(start, &end, 0);
-		if (end == start) {
-			fprintf(stderr, "No input lcore ID or ID %d is wrong\n", lcore_id);
-			ret = -1;
-			break;
-		}
-
-		lcore_dma_map = &test_case->lcore_dma_map;
-		if (lcore_dma_map->cnt >= MAX_LCORE_NB) {
-			fprintf(stderr, "lcores count error\n");
-			ret = -1;
-			break;
-		}
-
-		lcore_dma_map->lcores[lcore_dma_map->cnt] = lcore_id;
-		strlcpy(lcore_dma_map->dma_names[lcore_dma_map->cnt], ptrs[1],
-				RTE_DEV_NAME_MAX_LEN);
-		lcore_dma_map->cnt++;
-		substr = strtok(NULL, ",");
-	} while (substr != NULL);
-
-out:
-	free(input);
-	return ret;
 }
 
 static int
@@ -328,6 +254,40 @@ out:
 	return args_nr;
 }
 
+static int populate_dma_dev_config(const char *key, const char *value, void *test)
+{
+	struct lcore_dma_config *dma_config = (struct lcore_dma_config *)test;
+	struct vchan_dev_config *vchan_config = &dma_config->vchan_dev;
+	struct lcore_dma_map_t *lcore_map = &dma_config->lcore_dma_map;
+	char *endptr;
+	int ret = 0;
+
+	if (strcmp(key, "lcore") == 0)
+		lcore_map->lcore = (uint8_t)atoi(value);
+	else if (strcmp(key, "dev") == 0)
+		strlcpy(lcore_map->dma_names, value, RTE_DEV_NAME_MAX_LEN);
+	else if (strcmp(key, "dir") == 0 && strcmp(value, "mem2mem") == 0)
+		vchan_config->tdir = RTE_DMA_DIR_MEM_TO_MEM;
+	else if (strcmp(key, "dir") == 0 && strcmp(value, "mem2dev") == 0)
+		vchan_config->tdir = RTE_DMA_DIR_MEM_TO_DEV;
+	else if (strcmp(key, "dir") == 0 && strcmp(value, "dev2mem") == 0)
+		vchan_config->tdir = RTE_DMA_DIR_DEV_TO_MEM;
+	else if (strcmp(key, "raddr") == 0)
+		vchan_config->raddr = strtoull(value, &endptr, 16);
+	else if (strcmp(key, "coreid") == 0)
+		vchan_config->port.pcie.coreid = (uint8_t)atoi(value);
+	else if (strcmp(key, "vfid") == 0)
+		vchan_config->port.pcie.vfid = (uint16_t)atoi(value);
+	else if (strcmp(key, "pfid") == 0)
+		vchan_config->port.pcie.pfid = (uint16_t)atoi(value);
+	else {
+		printf("Invalid config param: %s\n", key);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static uint16_t
 load_configs(const char *path)
 {
@@ -336,12 +296,11 @@ load_configs(const char *path)
 	struct test_configure *test_case;
 	char section_name[CFG_NAME_LEN];
 	const char *case_type;
-	const char *transfer_dir;
 	const char *lcore_dma;
 	const char *mem_size_str, *buf_size_str, *ring_size_str, *kick_batch_str,
-		*src_ptrs_str, *dst_ptrs_str;
+		*src_sges_str, *dst_sges_str;
 	const char *skip;
-	const char *raddr, *scoreid, *dcoreid, *vfid, *pfid;
+	struct rte_kvargs *kvlist;
 	int args_nr, nb_vp;
 	bool is_dma;
 
@@ -379,20 +338,6 @@ load_configs(const char *path)
 		if (strcmp(case_type, DMA_MEM_COPY) == 0) {
 			test_case->test_type = TEST_TYPE_DMA_MEM_COPY;
 			test_case->test_type_str = DMA_MEM_COPY;
-
-			transfer_dir = rte_cfgfile_get_entry(cfgfile, section_name, "direction");
-			if (transfer_dir == NULL) {
-				printf("Transfer direction not configured."
-					" Defaulting it to MEM to MEM transfer.\n");
-				test_case->transfer_dir = RTE_DMA_DIR_MEM_TO_MEM;
-			} else
-				test_case->transfer_dir = (uint8_t)atoi(transfer_dir);
-
-			if (test_case->transfer_dir >= RTE_DMA_DIR_DEV_TO_DEV) {
-				printf("Error: Invalid transfer direction configured.\n");
-				test_case->is_valid = false;
-				continue;
-			}
 			is_dma = true;
 		} else if (strcmp(case_type, CPU_MEM_COPY) == 0) {
 			test_case->test_type = TEST_TYPE_CPU_MEM_COPY;
@@ -402,56 +347,6 @@ load_configs(const char *path)
 			printf("Error: Wrong test case type %s in case%d.\n", case_type, i + 1);
 			test_case->is_valid = false;
 			continue;
-		}
-
-		if (test_case->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV ||
-			test_case->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM) {
-			char *endptr;
-
-			raddr = rte_cfgfile_get_entry(cfgfile, section_name, "raddr");
-			if (raddr == NULL) {
-				printf("Error: No raddr configured for case%d.\n", i + 1);
-				test_case->is_valid = false;
-				continue;
-			}
-			test_case->raddr = strtoull(raddr, &endptr, 16);
-
-			vfid = rte_cfgfile_get_entry(cfgfile, section_name, "vfid");
-			if (vfid == NULL) {
-				printf("Error: No vfid configured for case%d.\n", i + 1);
-				test_case->is_valid = false;
-				continue;
-			}
-			test_case->vfid = (uint16_t)atoi(vfid);
-
-			pfid = rte_cfgfile_get_entry(cfgfile, section_name, "pfid");
-			if (pfid == NULL) {
-				printf("Error: No pfid configured for case%d.\n", i + 1);
-				test_case->is_valid = false;
-				continue;
-			}
-			test_case->pfid = (uint8_t)atoi(pfid);
-
-		}
-
-		if (test_case->transfer_dir == RTE_DMA_DIR_DEV_TO_MEM) {
-			scoreid = rte_cfgfile_get_entry(cfgfile, section_name, "scoreid");
-			if (scoreid == NULL) {
-				printf("Error: No scoreid configured for case%d.\n", i + 1);
-				test_case->is_valid = false;
-				continue;
-			}
-			test_case->scoreid = (uint8_t)atoi(scoreid);
-		}
-
-		if (test_case->transfer_dir == RTE_DMA_DIR_MEM_TO_DEV) {
-			dcoreid = rte_cfgfile_get_entry(cfgfile, section_name, "dcoreid");
-			if (dcoreid == NULL) {
-				printf("Error: No dcoreid configured for case%d.\n", i + 1);
-				test_case->is_valid = false;
-				continue;
-			}
-			test_case->dcoreid = (uint8_t)atoi(dcoreid);
 		}
 
 		test_case->is_dma = is_dma;
@@ -489,28 +384,35 @@ load_configs(const char *path)
 			} else if (args_nr == 4)
 				nb_vp++;
 
-			src_ptrs_str = rte_cfgfile_get_entry(cfgfile, section_name,
-								"dma_ptrs_src");
-			if (src_ptrs_str != NULL) {
-				test_case->src_ptrs = (int)atoi(rte_cfgfile_get_entry(cfgfile,
-								section_name, "dma_ptrs_src"));
+			src_sges_str = rte_cfgfile_get_entry(cfgfile, section_name,
+								"dma_src_sge");
+			if (src_sges_str != NULL) {
+				test_case->nb_src_sges = (int)atoi(rte_cfgfile_get_entry(cfgfile,
+								section_name, "dma_src_sge"));
 			}
 
-			dst_ptrs_str = rte_cfgfile_get_entry(cfgfile, section_name,
-								"dma_ptrs_dst");
-			if (dst_ptrs_str != NULL) {
-				test_case->dst_ptrs = (int)atoi(rte_cfgfile_get_entry(cfgfile,
-								section_name, "dma_ptrs_dst"));
+			dst_sges_str = rte_cfgfile_get_entry(cfgfile, section_name,
+								"dma_dst_sge");
+			if (dst_sges_str != NULL) {
+				test_case->nb_dst_sges = (int)atoi(rte_cfgfile_get_entry(cfgfile,
+								section_name, "dma_dst_sge"));
 			}
 
-			if ((src_ptrs_str != NULL && dst_ptrs_str == NULL) ||
-			    (src_ptrs_str == NULL && dst_ptrs_str != NULL)) {
-				printf("parse dma_ptrs_src, dma_ptrs_dst error in case %d.\n",
+			if ((src_sges_str != NULL && dst_sges_str == NULL) ||
+			    (src_sges_str == NULL && dst_sges_str != NULL)) {
+				printf("parse dma_src_sge, dma_dst_sge error in case %d.\n",
 					i + 1);
 				test_case->is_valid = false;
 				continue;
-			} else if (src_ptrs_str != NULL && dst_ptrs_str != NULL) {
+			} else if (src_sges_str != NULL && dst_sges_str != NULL) {
 				test_case->is_sg = true;
+
+				if (test_case->nb_src_sges == 0 || test_case->nb_dst_sges == 0) {
+					printf("dma_src_sge and dma_dst_sge can not be 0 in case %d.\n",
+						i + 1);
+					test_case->is_valid = false;
+					continue;
+				}
 			} else {
 				test_case->is_sg = false;
 			}
@@ -524,11 +426,35 @@ load_configs(const char *path)
 			} else if (args_nr == 4)
 				nb_vp++;
 
-			lcore_dma = rte_cfgfile_get_entry(cfgfile, section_name, "lcore_dma");
-			int lcore_ret = parse_lcore_dma(test_case, lcore_dma);
-			if (lcore_ret < 0) {
-				printf("parse lcore dma error in case %d.\n", i + 1);
-				test_case->is_valid = false;
+			char lc_dma[RTE_DEV_NAME_MAX_LEN];
+			int i = 0;
+			while (1) {
+				snprintf(lc_dma, RTE_DEV_NAME_MAX_LEN, "lcore_dma%d", i);
+				lcore_dma = rte_cfgfile_get_entry(cfgfile, section_name, lc_dma);
+				if (lcore_dma == NULL)
+					break;
+
+				kvlist = rte_kvargs_parse(lcore_dma, NULL);
+				if (kvlist == NULL) {
+					printf("rte_kvargs_parse() error");
+					test_case->is_valid = false;
+					break;
+				}
+
+				if (rte_kvargs_process(kvlist, NULL, populate_dma_dev_config,
+						       (void *)&test_case->dma_config[i]) < 0) {
+					printf("rte_kvargs_process() error\n");
+					rte_kvargs_free(kvlist);
+					test_case->is_valid = false;
+					break;
+				}
+				i++;
+				test_case->num_worker++;
+				rte_kvargs_free(kvlist);
+			}
+
+			if (test_case->num_worker == 0) {
+				printf("Error: Parsing %s Failed\n", lc_dma);
 				continue;
 			}
 		} else {
@@ -722,4 +648,3 @@ main(int argc, char *argv[])
 	printf("Bye...\n");
 	return 0;
 }
-
