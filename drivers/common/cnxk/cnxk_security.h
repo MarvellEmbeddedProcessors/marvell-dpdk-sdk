@@ -64,6 +64,4 @@ int __roc_api cnxk_ow_ipsec_inb_sa_fill(struct roc_ow_ipsec_inb_sa *sa,
 int __roc_api cnxk_ow_ipsec_outb_sa_fill(struct roc_ow_ipsec_outb_sa *sa,
 					 struct rte_security_ipsec_xform *ipsec_xfrm,
 					 struct rte_crypto_sym_xform *crypto_xfrm);
-bool __roc_api cnxk_ow_ipsec_inb_sa_valid(struct roc_ow_ipsec_inb_sa *sa);
-bool __roc_api cnxk_ow_ipsec_outb_sa_valid(struct roc_ow_ipsec_outb_sa *sa);
 #endif /* _CNXK_SECURITY_H__ */
