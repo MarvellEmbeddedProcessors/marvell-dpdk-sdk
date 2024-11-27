@@ -21008,6 +21008,18 @@ test_cryptodev_cn10k_raw_api(void)
 }
 
 static int
+test_cryptodev_cn20k(void)
+{
+	return run_cryptodev_testsuite(RTE_STR(CRYPTODEV_NAME_CN20K_PMD));
+}
+
+static int
+test_cryptodev_cn20k_raw_api(void)
+{
+	return run_cryptodev_raw_testsuite(RTE_STR(CRYPTODEV_NAME_CN20K_PMD));
+}
+
+static int
 test_cryptodev_dpaa2_sec_raw_api(void)
 {
 	return run_cryptodev_raw_testsuite(RTE_STR(CRYPTODEV_NAME_DPAA2_SEC_PMD));
@@ -21062,4 +21074,7 @@ REGISTER_DRIVER_TEST(cryptodev_nitrox_autotest, test_cryptodev_nitrox);
 REGISTER_DRIVER_TEST(cryptodev_bcmfs_autotest, test_cryptodev_bcmfs);
 REGISTER_DRIVER_TEST(cryptodev_cn9k_autotest, test_cryptodev_cn9k);
 REGISTER_DRIVER_TEST(cryptodev_cn10k_autotest, test_cryptodev_cn10k);
+REGISTER_DRIVER_TEST(cryptodev_cn20k_autotest, test_cryptodev_cn20k);
+REGISTER_DRIVER_TEST(cryptodev_cn20k_raw_api_autotest,
+		test_cryptodev_cn20k_raw_api);
 REGISTER_DRIVER_TEST(cryptodev_zsda_autotest, test_cryptodev_zsda);
