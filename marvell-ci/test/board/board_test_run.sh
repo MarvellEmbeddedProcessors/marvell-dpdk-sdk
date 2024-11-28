@@ -14,7 +14,7 @@ GENERATOR_BOARD=${GENERATOR_BOARD:-}
 TARGET_SSH_CMD=${TARGET_SSH_CMD:-"ssh"}
 TARGET_SCP_CMD=${TARGET_SCP_CMD:-"scp"}
 REMOTE="$TARGET_SSH_CMD $TARGET_BOARD -n"
-REMOTE_DIR=${REMOTE_DIR:-/tmp/dpdk}
+TARGET_RUN_DIR=${TARGET_RUN_DIR:-/tmp/dpdk}
 PROJECT_ROOT=${PROJECT_ROOT:-$PWD}
 BUILD_DIR=${BUILD_DIR:-$PWD/build}
 REBOOT_ON_FAIL=${REBOOT_ON_FAIL:-}
@@ -49,18 +49,26 @@ function target_sync()
 		return
 	fi
 	echo "Syncing files to target"
-	$REMOTE "rm -rf $REMOTE_DIR"
-	$REMOTE "mkdir -p $REMOTE_DIR"
-	$sync -e "$TARGET_SSH_CMD" -r $BUILD_DIR/* $TARGET_BOARD:$REMOTE_DIR
+	$REMOTE "rm -rf $TARGET_RUN_DIR"
+	$REMOTE "mkdir -p $TARGET_RUN_DIR/deps"
+	# If DEPS_INSTALL_DIR is not same as BUILD_DIR/deps, then sync the deps separately
+	if [[ $(realpath $DEPS_INSTALL_DIR) != $(realpath $BUILD_DIR/deps) ]]; then
+		$sync -e "$TARGET_SSH_CMD" -r $DEPS_INSTALL_DIR/ $TARGET_BOARD:$TARGET_RUN_DIR/deps/
+	fi
+	$sync -e "$TARGET_SSH_CMD" -r $BUILD_DIR/* $TARGET_BOARD:$TARGET_RUN_DIR
 	$sync -e "$TARGET_SSH_CMD" -r --exclude "marvell-ci/test/cnxk-tests/*" \
-		$PROJECT_ROOT/marvell-ci $TARGET_BOARD:$REMOTE_DIR
+		$PROJECT_ROOT/marvell-ci $TARGET_BOARD:$TARGET_RUN_DIR
 
 	if [[ -n $GENERATOR_BOARD ]]; then
-		$TARGET_SSH_CMD $GENERATOR_BOARD mkdir -p $REMOTE_DIR
-		$sync -e "$TARGET_SSH_CMD" -r $BUILD_DIR/* $GENERATOR_BOARD:$REMOTE_DIR
+		$TARGET_SSH_CMD $GENERATOR_BOARD mkdir -p $TARGET_RUN_DIR/deps
+		# If DEPS_INSTALL_DIR is not same as BUILD_DIR/deps, then sync the deps separately
+		if [[ $(realpath $DEPS_INSTALL_DIR) != $(realpath $BUILD_DIR/deps) ]]; then
+			$sync -e "$TARGET_SSH_CMD" -r $DEPS_INSTALL_DIR/ $GENERATOR_BOARD:$TARGET_RUN_DIR/deps/
+		fi
+		$sync -e "$TARGET_SSH_CMD" -r $BUILD_DIR/* $GENERATOR_BOARD:$TARGET_RUN_DIR
 		$sync -e "$TARGET_SSH_CMD" \
 			$PROJECT_ROOT/marvell-ci/test/board/oxk-devbind-basic.sh \
-			$GENERATOR_BOARD:$REMOTE_DIR
+			$GENERATOR_BOARD:$TARGET_RUN_DIR
 	fi
 }
 
@@ -70,7 +78,7 @@ function target_setup()
 	# Setup the board
 	export TARGET_BOARD
 	export TARGET_SSH_CMD
-	export REMOTE_DIR
+	export REMOTE_DIR=$TARGET_RUN_DIR
 	export PERF_STAGE
 	export TM_SETUP
 	if [[ -n $SKIP_TARGET_SETUP ]]; then
@@ -80,7 +88,7 @@ function target_setup()
 
 	if [[ -n $GENERATOR_BOARD ]]; then
 		# Setup Generator Board also
-		TARGET_BOARD=$GENERATOR_BOARD VFIO_DEVBIND=$REMOTE_DIR/oxk-devbind-basic.sh \
+		TARGET_BOARD=$GENERATOR_BOARD VFIO_DEVBIND=$TARGET_RUN_DIR/oxk-devbind-basic.sh \
 			$PROJECT_ROOT/marvell-ci/test/board/cnxk-target-setup.sh
 	fi
 }
