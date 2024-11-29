@@ -113,6 +113,9 @@ function run_all_tests()
 	local tst
 	local res
 	local test_num=0
+	local failed_tests=""
+	local passed_tests=""
+	local skipped_tests=""
 
 	# Errors will be handled inline. No need for sig handler
 	set +e
@@ -123,22 +126,37 @@ function run_all_tests()
 		test_num=$((test_num + 1))
 		test_enabled $test_num
 		res=$?
+		tst=$(get_test_name $test_num)
 		if [[ $res == 77 ]]; then
+			skipped_tests="${skipped_tests}${tst}#"
 			continue
 		fi
 		if [[ $res -ne 0 ]]; then
 			break
 		fi
 
-		tst=$(get_test_name $test_num)
-
 		# Run the tests
 		run_test $tst
 		res=$?
 		if [[ $res -ne 0 ]] && [[ $res -ne 77 ]] ; then
-			test_exit -1 "FAILURE: Test $tst failed"
+			failed_tests="${failed_tests}${tst}#"
+			if [[ -n $CONTINUE_ON_FAILURE ]]; then
+				echo "FAILURE: Test $tst failed"
+			else
+				test_exit -1 "FAILURE: Test $tst failed"
+			fi
+		else
+			passed_tests="${passed_tests}${tst}#"
 		fi
 	done
+	if [[ -n $STATUS_OUTFILE ]] ; then
+		echo "PASSED: $passed_tests" > $STATUS_OUTFILE
+		echo "FAILED: $failed_tests" >> $STATUS_OUTFILE
+		echo "SKIPPED: $skipped_tests" >> $STATUS_OUTFILE
+	fi
+	if [[ -n $failed_tests ]]; then
+		test_exit -1 "FAILURE: Test(s) [$failed_tests] failed"
+	fi
 }
 
 function test_exit()
