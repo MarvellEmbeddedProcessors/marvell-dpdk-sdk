@@ -141,7 +141,7 @@ function run_all_tests()
 		res=$?
 		tst=$(get_test_name $test_num)
 		if [[ $res == 77 ]]; then
-			skipped_tests="$skipped_tests $tst"
+			skipped_tests="${skipped_tests}${tst}#"
 			continue
 		fi
 		if [[ $res -ne 0 ]]; then
@@ -152,14 +152,14 @@ function run_all_tests()
 		run_test $tst
 		res=$?
 		if [[ $res -ne 0 ]] && [[ $res -ne 77 ]] ; then
+			failed_tests="${failed_tests}${tst}#"
 			if [[ -n $CONTINUE_ON_FAILURE ]]; then
 				echo "FAILURE: Test $tst failed"
-				failed_tests="$failed_tests $tst"
 			else
 				test_exit -1 "FAILURE: Test $tst failed"
 			fi
 		else
-			passed_tests="$passed_tests $tst"
+			passed_tests="${passed_tests}${tst}#"
 		fi
 	done
 	if [[ -n $STATUS_OUTFILE ]] ; then
