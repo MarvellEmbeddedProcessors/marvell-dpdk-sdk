@@ -514,9 +514,9 @@ init_dev
 delete_scapy_logs
 run_testpmds
 
-#test_fwd_pf_to_vf1
-#test_fwd_pf_to_vf2
-#test_fwd_vf1_to_vf2
+test_fwd_pf_to_vf1
+test_fwd_pf_to_vf2
+test_fwd_vf1_to_vf2
 test_fwd_wire_to_vf2
 
 quit_testpmds
@@ -524,6 +524,6 @@ run_testpmds
 
 test_fwd_port_repr_2_to_vf1
 test_fwd_port_repr_1_port_repr_2_pair
-#test_fwd_vf2_to_wire
+test_fwd_vf2_to_wire
 
 quit_testpmds
