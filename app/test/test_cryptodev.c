@@ -7503,6 +7503,10 @@ test_snow3g_auth_cipher_test_case_1(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_test_case_1, IN_PLACE, 0);
@@ -7531,6 +7535,10 @@ test_snow3g_auth_cipher_part_digest_enc(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7546,6 +7554,10 @@ test_snow3g_auth_cipher_part_digest_enc_oop(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7582,6 +7594,10 @@ test_snow3g_auth_cipher_part_digest_enc_sgl(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7597,6 +7613,10 @@ test_snow3g_auth_cipher_part_digest_enc_oop_sgl(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7640,6 +7660,10 @@ test_snow3g_auth_cipher_verify_test_case_1(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_test_case_1, IN_PLACE, 1);
@@ -7668,6 +7692,10 @@ test_snow3g_auth_cipher_verify_part_digest_enc(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7683,6 +7711,10 @@ test_snow3g_auth_cipher_verify_part_digest_enc_oop(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7712,6 +7744,10 @@ test_snow3g_auth_cipher_verify_part_digest_enc_sgl(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_partial_digest_encryption,
@@ -7727,6 +7763,10 @@ test_snow3g_auth_cipher_verify_part_digest_enc_oop_sgl(void)
 	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
 			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
 		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 
 	return test_snow3g_auth_cipher_sgl(
 		&snow3g_auth_cipher_partial_digest_encryption,
