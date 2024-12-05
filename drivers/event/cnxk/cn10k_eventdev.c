@@ -731,6 +731,47 @@ cn10k_sso_rx_adapter_queue_add(
 }
 
 static int
+cn10k_sso_rx_adapter_queues_add(const struct rte_eventdev *event_dev,
+				const struct rte_eth_dev *eth_dev, int32_t rx_queue_id[],
+				const struct rte_event_eth_rx_adapter_queue_conf queue_conf[],
+				uint16_t nb_rx_queues)
+{
+	struct cnxk_eth_dev *cnxk_eth_dev = eth_dev->data->dev_private;
+	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+	struct roc_sso_hwgrp_stash stash;
+	struct cn10k_eth_rxq *rxq;
+	void *lookup_mem;
+	int rc;
+
+	rc = strncmp(eth_dev->device->driver->name, "net_cn10k", 8);
+	if (rc)
+		return -EINVAL;
+
+	rc = cnxk_sso_rx_adapter_queues_add(event_dev, eth_dev, rx_queue_id, queue_conf,
+					    nb_rx_queues);
+	if (rc)
+		return -EINVAL;
+
+	cnxk_eth_dev->cnxk_sso_ptp_tstamp_cb = cn10k_sso_tstamp_hdl_update;
+	cnxk_eth_dev->evdev_priv = (struct rte_eventdev *)(uintptr_t)event_dev;
+
+	rxq = eth_dev->data->rx_queues[0];
+	lookup_mem = rxq->lookup_mem;
+	cn10k_sso_set_priv_mem(event_dev, lookup_mem);
+	cn10k_sso_fp_fns_set((struct rte_eventdev *)(uintptr_t)event_dev);
+	if (roc_feature_sso_has_stash() && dev->nb_event_ports > 1) {
+		stash.hwgrp = queue_conf[0].ev.queue_id;
+		stash.stash_offset = CN10K_SSO_DEFAULT_STASH_OFFSET;
+		stash.stash_count = CN10K_SSO_DEFAULT_STASH_LENGTH;
+		rc = roc_sso_hwgrp_stash_config(&dev->sso, &stash, 1);
+		if (rc < 0)
+			plt_warn("failed to configure HWGRP WQE stashing rc = %d", rc);
+	}
+
+	return 0;
+}
+
+static int
 cn10k_sso_rx_adapter_queue_del(const struct rte_eventdev *event_dev,
 			       const struct rte_eth_dev *eth_dev,
 			       int32_t rx_queue_id)
@@ -1014,6 +1055,7 @@ static struct eventdev_ops cn10k_sso_dev_ops = {
 
 	.eth_rx_adapter_caps_get = cn10k_sso_rx_adapter_caps_get,
 	.eth_rx_adapter_queue_add = cn10k_sso_rx_adapter_queue_add,
+	.eth_rx_adapter_queues_add = cn10k_sso_rx_adapter_queues_add,
 	.eth_rx_adapter_queue_del = cn10k_sso_rx_adapter_queue_del,
 	.eth_rx_adapter_start = cnxk_sso_rx_adapter_start,
 	.eth_rx_adapter_stop = cnxk_sso_rx_adapter_stop,

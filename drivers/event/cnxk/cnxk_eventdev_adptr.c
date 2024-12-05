@@ -280,6 +280,81 @@ cnxk_sso_rx_adapter_queue_add(
 }
 
 int
+cnxk_sso_rx_adapter_queues_add(const struct rte_eventdev *event_dev,
+			       const struct rte_eth_dev *eth_dev, int32_t rx_queue_id[],
+			       const struct rte_event_eth_rx_adapter_queue_conf queue_conf[],
+			       uint16_t nb_rx_queues)
+{
+	struct cnxk_eth_dev *cnxk_eth_dev = eth_dev->data->dev_private;
+	struct cnxk_sso_evdev *dev = cnxk_sso_pmd_priv(event_dev);
+	uint64_t old_xae_cnt = dev->adptr_xae_cnt;
+	uint16_t port = eth_dev->data->port_id;
+	struct cnxk_eth_rxq_sp *rxq_sp;
+	bool vec_drop_reset = false;
+	uint16_t max_rx_queues;
+	int i, rc;
+
+	max_rx_queues = nb_rx_queues ? nb_rx_queues : eth_dev->data->nb_rx_queues;
+	for (i = 0; i < max_rx_queues; i++) {
+		const struct rte_event_eth_rx_adapter_queue_conf *conf =
+			nb_rx_queues ? &queue_conf[i] : &queue_conf[0];
+		int32_t queue_id = nb_rx_queues ? rx_queue_id[i] : i;
+
+		rxq_sp = cnxk_eth_rxq_to_sp(eth_dev->data->rx_queues[queue_id]);
+		cnxk_sso_updt_xae_cnt(dev, rxq_sp, RTE_EVENT_TYPE_ETHDEV);
+
+		if (conf->rx_queue_flags & RTE_EVENT_ETH_RX_ADAPTER_QUEUE_EVENT_VECTOR)
+			cnxk_sso_updt_xae_cnt(dev, conf->vector_mp, RTE_EVENT_TYPE_ETHDEV_VECTOR);
+	}
+
+	if (dev->adptr_xae_cnt != old_xae_cnt) {
+		rc = cnxk_sso_xae_reconfigure((struct rte_eventdev *)(uintptr_t)event_dev);
+		if (rc < 0)
+			goto fail;
+	}
+
+	for (i = 0; i < max_rx_queues; i++) {
+		const struct rte_event_eth_rx_adapter_queue_conf *conf =
+			nb_rx_queues ? &queue_conf[i] : &queue_conf[0];
+
+		rc = cnxk_sso_rxq_enable(
+			cnxk_eth_dev, (uint16_t)i, port, &conf->ev,
+			!!(conf->rx_queue_flags & RTE_EVENT_ETH_RX_ADAPTER_QUEUE_FLOW_ID_VALID));
+		if (rc < 0)
+			goto fail;
+
+		if (conf->rx_queue_flags & RTE_EVENT_ETH_RX_ADAPTER_QUEUE_EVENT_VECTOR) {
+			rc = cnxk_sso_rx_adapter_vwqe_enable(cnxk_eth_dev, port, i, conf->vector_sz,
+							     conf->vector_timeout_ns,
+							     conf->vector_mp);
+			if (rc < 0)
+				goto fail;
+
+			vec_drop_reset = true;
+		}
+
+		cnxk_eth_dev->nb_rxq_sso++;
+	}
+
+	if (cnxk_eth_dev->vec_drop_re_dis && vec_drop_reset) {
+		rc = roc_nix_rx_drop_re_set(&cnxk_eth_dev->nix, false);
+		if (rc < 0)
+			goto fail;
+	}
+
+	/* Propagate force bp devarg */
+	cnxk_eth_dev->nix.force_rx_aura_bp = dev->force_ena_bp;
+	cnxk_sso_tstamp_cfg(eth_dev->data->port_id, eth_dev, dev);
+
+	dev->rx_offloads |= cnxk_eth_dev->rx_offload_flags;
+	return 0;
+
+fail:
+	plt_err("Failed to configure Rx adapter port=%d", port);
+	return rc;
+}
+
+int
 cnxk_sso_rx_adapter_queue_del(const struct rte_eventdev *event_dev,
 			      const struct rte_eth_dev *eth_dev,
 			      int32_t rx_queue_id)

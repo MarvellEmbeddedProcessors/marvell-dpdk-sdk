@@ -259,6 +259,10 @@ int cnxk_sso_rx_adapter_queue_add(
 	const struct rte_eventdev *event_dev, const struct rte_eth_dev *eth_dev,
 	int32_t rx_queue_id,
 	const struct rte_event_eth_rx_adapter_queue_conf *queue_conf);
+int cnxk_sso_rx_adapter_queues_add(const struct rte_eventdev *event_dev,
+				   const struct rte_eth_dev *eth_dev, int32_t rx_queue_id[],
+				   const struct rte_event_eth_rx_adapter_queue_conf queue_conf[],
+				   uint16_t nb_rx_queues);
 int cnxk_sso_rx_adapter_queue_del(const struct rte_eventdev *event_dev,
 				  const struct rte_eth_dev *eth_dev,
 				  int32_t rx_queue_id);
