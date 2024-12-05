@@ -160,6 +160,22 @@ RTE_TRACE_POINT(
 )
 
 RTE_TRACE_POINT(
+	rte_eventdev_trace_eth_rx_adapter_queues_add,
+	RTE_TRACE_POINT_ARGS(uint8_t adptr_id, uint16_t eth_dev_id,
+		uint16_t nb_rx_queues,
+		const struct rte_event_eth_rx_adapter_queue_conf *queue_conf,
+		int rc),
+	rte_trace_point_emit_u8(adptr_id);
+	rte_trace_point_emit_u16(eth_dev_id);
+	rte_trace_point_emit_u16(nb_rx_queues);
+	rte_trace_point_emit_u32(queue_conf->rx_queue_flags);
+	rte_trace_point_emit_u16(queue_conf->servicing_weight);
+	rte_trace_point_emit_u8(queue_conf->ev.queue_id);
+	rte_trace_point_emit_u8(queue_conf->ev.priority);
+	rte_trace_point_emit_int(rc);
+)
+
+RTE_TRACE_POINT(
 	rte_eventdev_trace_eth_rx_adapter_queue_del,
 	RTE_TRACE_POINT_ARGS(uint8_t adptr_id, uint16_t eth_dev_id,
 		int32_t rx_queue_id, int rc),
