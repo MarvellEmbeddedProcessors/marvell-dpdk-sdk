@@ -86,14 +86,18 @@ function sig_handler()
 		testpmd_cleanup $PRFX_PF
 	fi
 
+	# Disable SRIOV
+	echo 0 > /sys/module/vfio_pci/parameters/enable_sriov
+
 	exit $status
 }
 
 function init_dev()
 {
+	# Enable SRIOV
+	echo 1 > /sys/module/vfio_pci/parameters/enable_sriov
+
 	$VFIO_DEVBIND -b vfio-pci $ESW_PF
-	echo 0 > /sys/bus/pci/devices/$ESW_PF/sriov_numvfs
-	echo 1 > /sys/bus/pci/devices/$ESW_PF/sriov_numvfs
 
 	$VFIO_DEVBIND -b vfio-pci $NET_PF
 	echo 0 > /sys/bus/pci/devices/$NET_PF/sriov_numvfs
