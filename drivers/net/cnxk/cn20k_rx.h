@@ -762,10 +762,10 @@ cn20k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts, c
 	uint64_t lbase, laddr;
 	uintptr_t sa_base = 0;
 	uint16_t packets = 0;
+	uint64_t buf_sz = 0;
 	uint16_t pkts_left;
 	uint32_t head;
 	uintptr_t cq0;
-	uint64_t buf_sz = rxq->mp_buf_sz;
 
 	if (!(flags & NIX_RX_VWQE_F)) {
 		lookup_mem = rxq->lookup_mem;
@@ -816,6 +816,7 @@ cn20k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts, c
 			d_off = rxq->data_off;
 			sa_base = rxq->sa_base;
 			lbase = rxq->lmt_base;
+			buf_sz = rxq->mp_buf_sz;
 		}
 
 		sa_base &= ~(ROC_NIX_INL_SA_BASE_ALIGN - 1);
