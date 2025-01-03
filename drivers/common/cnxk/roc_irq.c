@@ -30,13 +30,7 @@ void
 dev_irq_unregister(struct plt_intr_handle *intr_handle, plt_intr_callback_fn cb, void *data,
 		   unsigned int vec)
 {
-	if (vec > (uint32_t)plt_intr_max_intr_get(intr_handle)) {
-		plt_err("Error unregistering MSI-X interrupts vec:%d > %d", vec,
-			plt_intr_max_intr_get(intr_handle));
-		return;
-	}
-
-	return plt_irq_unregister(intr_handle, cb, data, vec);
+	plt_irq_unregister(intr_handle, cb, data, vec);
 }
 
 #else
