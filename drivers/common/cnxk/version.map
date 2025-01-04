@@ -299,8 +299,10 @@ INTERNAL {
 	roc_nix_lf_free;
 	roc_nix_lf_get_reg_count;
 	roc_nix_lf_reg_dump;
+	roc_nix_lso_alt_flags_profile_setup;
 	roc_nix_lso_custom_fmt_setup;
 	roc_nix_lso_fmt_get;
+	roc_nix_lso_fmt_ipv4_frag_get;
 	roc_nix_lso_fmt_setup;
 	roc_nix_mac_addr_add;
 	roc_nix_mac_addr_del;
