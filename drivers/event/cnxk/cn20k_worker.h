@@ -209,7 +209,7 @@ cn20k_sso_hws_post_process(struct cn20k_sso_hws *ws, uint64_t *u64, const uint32
 				loff = loff + 1;
 				mbuf = (uint64_t)(*(uint64_t *)(cpth + 8) - m_sz);
 				/* Mark inner mbuf as get */
-				RTE_MEMPOOL_CHECK_COOKIES(mbuf->pool, (void **)&mbuf, 1, 1);
+				RTE_MEMPOOL_CHECK_COOKIES(m->pool, (void **)&m, 1, 1);
 				roc_npa_aura_op_free(meta_aura, 0, iova);
 			}
 		}
