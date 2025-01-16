@@ -114,4 +114,10 @@ roc_feature_nix_has_plain_pkt_reassembly(void)
 	return roc_model_is_cn20k();
 }
 
+static inline bool
+roc_feature_nix_has_sq_cnt_update(void)
+{
+	return roc_model_is_cn20k();
+}
+
 #endif
