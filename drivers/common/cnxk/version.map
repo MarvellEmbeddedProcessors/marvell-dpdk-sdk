@@ -421,6 +421,7 @@ INTERNAL {
 	roc_nix_tm_root_has_sp;
 	roc_nix_tm_rsrc_count;
 	roc_nix_tm_rsrc_max;
+	roc_nix_tm_sdp_prepare_tree;
 	roc_nix_tm_shaper_default_red_algo;
 	roc_nix_tm_shaper_profile_add;
 	roc_nix_tm_shaper_profile_delete;
