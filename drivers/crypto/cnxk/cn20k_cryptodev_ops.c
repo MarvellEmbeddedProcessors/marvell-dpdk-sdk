@@ -4,6 +4,7 @@
 
 #include <cryptodev_pmd.h>
 #include <rte_cryptodev.h>
+#include <rte_hexdump.h>
 
 #include "roc_cpt.h"
 #include "roc_idev.h"
@@ -142,8 +143,8 @@ cn20k_cpt_fill_inst(struct cnxk_cpt_qp *qp, struct rte_crypto_op *ops[], struct 
 	printf("param2:%d\n", inst[0].w4.s.param2);
 	printf("dlen:%d\n", inst[0].w4.s.dlen);
 
-	cpt_request_data_sgv2_mode_dump((void *)inst[0].dptr, 1, inst[0].w5.s.gather_sz);
-	cpt_request_data_sgv2_mode_dump((void *)inst[0].rptr, 0, inst[0].w6.s.scatter_sz);
+	cnxk_cpt_request_data_sgv2_mode_dump((void *)inst[0].dptr, 1, inst[0].w5.s.gather_sz);
+	cnxk_cpt_request_data_sgv2_mode_dump((void *)inst[0].rptr, 0, inst[0].w6.s.scatter_sz);
 #endif
 
 	return 1;
