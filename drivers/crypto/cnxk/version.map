@@ -25,6 +25,8 @@ INTERNAL {
 
 	cn10k_cryptodev_sec_inb_rx_inject;
 	cn10k_cryptodev_sec_rx_inject_configure;
+	cn20k_cryptodev_sec_inb_rx_inject;
+	cn20k_cryptodev_sec_rx_inject_configure;
 
 	local: *;
 };

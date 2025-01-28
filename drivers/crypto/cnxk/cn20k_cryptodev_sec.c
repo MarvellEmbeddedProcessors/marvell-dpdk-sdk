@@ -112,41 +112,6 @@ cn20k_sec_session_update(void *dev, struct rte_security_session *sec_sess,
 	return -ENOTSUP;
 }
 
-static int
-cn20k_cryptodev_sec_rx_inject_configure(void *device, uint16_t port_id, bool enable)
-{
-	RTE_SET_USED(device);
-	RTE_SET_USED(port_id);
-	RTE_SET_USED(enable);
-
-	return -ENOTSUP;
-}
-
-#if defined(RTE_ARCH_ARM64)
-static uint16_t
-cn20k_cryptodev_sec_inb_rx_inject(void *dev, struct rte_mbuf **pkts,
-				  struct rte_security_session **sess, uint16_t nb_pkts)
-{
-	RTE_SET_USED(dev);
-	RTE_SET_USED(pkts);
-	RTE_SET_USED(sess);
-	RTE_SET_USED(nb_pkts);
-
-	return 0;
-}
-#else
-uint16_t __rte_hot
-cn20k_cryptodev_sec_inb_rx_inject(void *dev, struct rte_mbuf **pkts,
-				  struct rte_security_session **sess, uint16_t nb_pkts)
-{
-	RTE_SET_USED(dev);
-	RTE_SET_USED(sess);
-	RTE_SET_USED(nb_pkts);
-
-	return 0;
-}
-#endif
-
 /* Update platform specific security ops */
 void
 cn20k_sec_ops_override(void)
