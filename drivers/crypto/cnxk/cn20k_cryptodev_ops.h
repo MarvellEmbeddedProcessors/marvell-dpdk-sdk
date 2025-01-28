@@ -23,7 +23,7 @@
 
 extern struct rte_cryptodev_ops cn20k_cpt_ops;
 
-void cn20k_cpt_set_enqdeq_fns(struct rte_cryptodev *dev, struct cnxk_cpt_vf *vf);
+void cn20k_cpt_set_enqdeq_fns(struct rte_cryptodev *dev);
 
 static __rte_always_inline void __rte_hot
 cn20k_cpt_lmtst_dual_submit(uint64_t *io_addr, const uint16_t lmt_id, int *i)
