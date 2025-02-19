@@ -3709,8 +3709,23 @@ test_cryptodev_cn10k_asym(void)
 	return unit_test_suite_runner(&cryptodev_octeontx_asym_testsuite);
 }
 
+static int
+test_cryptodev_cn20k_asym(void)
+{
+	gbl_driver_id = rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD));
+	if (gbl_driver_id == -1) {
+		RTE_LOG(ERR, USER1, "CN20K PMD must be loaded.\n");
+		return TEST_SKIPPED;
+	}
+
+	/* Use test suite registered for crypto_octeontx PMD */
+	return unit_test_suite_runner(&cryptodev_octeontx_asym_testsuite);
+}
+
 REGISTER_DRIVER_TEST(cryptodev_openssl_asym_autotest, test_cryptodev_openssl_asym);
 REGISTER_DRIVER_TEST(cryptodev_qat_asym_autotest, test_cryptodev_qat_asym);
 REGISTER_DRIVER_TEST(cryptodev_octeontx_asym_autotest, test_cryptodev_octeontx_asym);
 REGISTER_DRIVER_TEST(cryptodev_cn9k_asym_autotest, test_cryptodev_cn9k_asym);
 REGISTER_DRIVER_TEST(cryptodev_cn10k_asym_autotest, test_cryptodev_cn10k_asym);
+REGISTER_DRIVER_TEST(cryptodev_cn20k_asym_autotest, test_cryptodev_cn20k_asym);
