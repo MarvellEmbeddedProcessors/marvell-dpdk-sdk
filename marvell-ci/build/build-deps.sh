@@ -57,8 +57,8 @@ function setup_libpcap()
 	fetch_dep https://github.com/the-tcpdump-group/libpcap/archive/libpcap-1.10.0.tar.gz
 	tar -zxf libpcap-1.10.0.tar.gz
 	cd libpcap-libpcap-1.10.0
-	CC=aarch64-marvell-linux-gnu-gcc ./configure \
-		--host=aarch64-marvell-linux-gnu \
+	CC=${CROSS_HOST}-gcc ./configure \
+		--host=${CROSS_HOST} \
 		--without-libnl \
 		--prefix=$INSTALL_ROOT
 	make -j${MAKE_J}
@@ -71,11 +71,11 @@ function setup_ipsec_mb()
 	mkdir -p $BUILD_ROOT/ipsec_mb
 
 	pushd $BUILD_ROOT/ipsec_mb
-	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2023.06.20/ipsec-mb-SECLIB-IPSEC-2023.06.20.tar.gz
-	tar -zxvf ipsec-mb-SECLIB-IPSEC-2023.06.20.tar.gz --strip-components=1
-	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
+	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2024.07.08/ipsec-mb-SECLIB-IPSEC-2024.07.08.tar.gz
+	tar -zxvf ipsec-mb-SECLIB-IPSEC-2024.07.08.tar.gz --strip-components=1
+	SHARED=y CC=${CROSS_HOST}-gcc \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y
-	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
+	SHARED=y CC=${CROSS_HOST}-gcc \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y install
 	popd
 }
@@ -87,7 +87,7 @@ function setup_openssl()
 	pushd $BUILD_ROOT/libopenssl
 	fetch_dep https://www.openssl.org/source/openssl-1.1.1g.tar.gz
 	tar -zxvf openssl-1.1.1g.tar.gz --strip-components=1
-	./Configure --cross-compile-prefix=aarch64-marvell-linux-gnu- \
+	./Configure --cross-compile-prefix=${CROSS_HOST}- \
 		--openssldir=etc/ssl \
 		--prefix=$INSTALL_ROOT \
 		shared \
@@ -105,8 +105,8 @@ function setup_libtmc()
 	fetch_dep https://github.com/PavanNikhilesh/libtmc/archive/refs/tags/pthread_timed_join.tar.gz
 	tar -zxvf pthread_timed_join.tar.gz --strip-components=1
 	./bootstrap
-	CC=aarch64-marvell-linux-gnu-gcc ./configure \
-		--host=aarch64-marvell-linux-gnu \
+	CC=${CROSS_HOST}-gcc ./configure \
+		--host=${CROSS_HOST} \
 		--prefix=$INSTALL_ROOT
 	make -j${MAKE_J}
 	make install -j${MAKE_J}
@@ -123,8 +123,8 @@ function setup_libarchive()
 	cd libarchive-3.6.1
 	CFLAGS="-I$INSTALL_ROOT/include" \
 	LDFLAGS="-L$INSTALL_ROOT/lib" \
-	CC=aarch64-marvell-linux-gnu-gcc ./configure \
-		--host=aarch64-marvell-linux-gnu \
+	CC=${CROSS_HOST}-gcc ./configure \
+		--host=${CROSS_HOST} \
 		--without-xml2 \
 		--without-lzma \
 		--without-zlib \
@@ -161,7 +161,7 @@ function setup_jansson()
 		-S $BUILD_ROOT/jansson/ \
 		-B $BUILD_ROOT/jansson/build \
 		-DCMAKE_INSTALL_PREFIX=$INSTALL_ROOT \
-		-DCMAKE_C_COMPILER=aarch64-marvell-linux-gnu-gcc \
+		-DCMAKE_C_COMPILER=${CROSS_HOST}-gcc \
 		-DJANSSON_BUILD_SHARED_LIBS=ON
 	make -j${MAKE_J} -C $BUILD_ROOT/jansson/build
 	make install -j${MAKE_J} -C $BUILD_ROOT/jansson/build
@@ -188,8 +188,8 @@ function setup_tvm()
 		-S $BUILD_ROOT/tvm/3rdparty/dlpack \
 		-B $BUILD_ROOT/dlpack/ \
 		-DCMAKE_INSTALL_PREFIX=$INSTALL_ROOT \
-		-DCMAKE_C_COMPILER=aarch64-marvell-linux-gnu-gcc \
-		-DCMAKE_CXX_COMPILER=aarch64-marvell-linux-gnu-g++ \
+		-DCMAKE_C_COMPILER=${CROSS_HOST}-gcc \
+		-DCMAKE_CXX_COMPILER=${CROSS_HOST}-g++ \
 		-DBUILD_MOCK=OFF
 	make -j${MAKE_J} -C $BUILD_ROOT/dlpack/
 	make install -j${MAKE_J} -C $BUILD_ROOT/dlpack/
@@ -200,8 +200,8 @@ function setup_tvm()
 		-S $BUILD_ROOT/tvm/3rdparty/dmlc-core \
 		-B $BUILD_ROOT/dmlc-core \
 		-DCMAKE_INSTALL_PREFIX=$INSTALL_ROOT \
-		-DCMAKE_C_COMPILER=aarch64-marvell-linux-gnu-gcc \
-		-DCMAKE_CXX_COMPILER=aarch64-marvell-linux-gnu-g++ \
+		-DCMAKE_C_COMPILER=${CROSS_HOST}-gcc \
+		-DCMAKE_CXX_COMPILER=${CROSS_HOST}-g++ \
 		-DUSE_OPENMP=OFF
 	make -j${MAKE_J} -C $BUILD_ROOT/dmlc-core
 	make install -j${MAKE_J} -C $BUILD_ROOT/dmlc-core
@@ -212,9 +212,9 @@ function setup_tvm()
 		-S $BUILD_ROOT/tvm \
 		-B $BUILD_ROOT/tvm/build \
 		-DCMAKE_INSTALL_PREFIX=$INSTALL_ROOT \
-		-DCMAKE_C_COMPILER=aarch64-marvell-linux-gnu-gcc \
-		-DCMAKE_CXX_COMPILER=aarch64-marvell-linux-gnu-g++ \
-		-DMACHINE_NAME=aarch64-marvell-linux-gnu \
+		-DCMAKE_C_COMPILER=${CROSS_HOST}-gcc \
+		-DCMAKE_CXX_COMPILER=${CROSS_HOST}-g++ \
+		-DMACHINE_NAME=${CROSS_HOST} \
 		-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
 		-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
 		-DUSE_ALTERNATIVE_LINKER=OFF \
@@ -246,8 +246,8 @@ function setup_tvmdp()
 		-S $BUILD_ROOT/tvmdp \
 		-B $BUILD_ROOT/tvmdp/build \
 		-DCMAKE_INSTALL_PREFIX=$INSTALL_ROOT \
-		-DCMAKE_C_COMPILER=aarch64-marvell-linux-gnu-gcc \
-		-DCMAKE_CXX_COMPILER=aarch64-marvell-linux-gnu-g++ \
+		-DCMAKE_C_COMPILER=${CROSS_HOST}-gcc \
+		-DCMAKE_CXX_COMPILER=${CROSS_HOST}-g++ \
 		-DBUILD_SHARED_LIBS=ON
 
 	make -C $BUILD_ROOT/tvmdp/build
@@ -265,6 +265,7 @@ if ! OPTS=$(getopt \
 	exit 1
 fi
 
+CROSS_HOST=${CROSS_HOST:-aarch64-none-linux-gnu}
 BUILD_ROOT=
 INSTALL_ROOT=
 MAKE_J=4
