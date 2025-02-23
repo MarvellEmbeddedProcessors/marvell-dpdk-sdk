@@ -56,8 +56,8 @@ function setup_libpcap()
 	fetch_dep https://github.com/the-tcpdump-group/libpcap/archive/libpcap-1.10.0.tar.gz
 	tar -zxf libpcap-1.10.0.tar.gz
 	cd libpcap-libpcap-1.10.0
-	CC=aarch64-marvell-linux-gnu-gcc  ./configure \
-		--host=aarch64-linux-gnu \
+	CC=${CROSS_HOST}-gcc ./configure \
+		--host=${CROSS_HOST} \
 		--without-libnl \
 		--prefix=$INSTALL_ROOT
 	make -j${MAKE_J}
@@ -70,11 +70,11 @@ function setup_ipsec_mb()
 	mkdir -p $BUILD_ROOT/ipsec_mb
 
 	pushd $BUILD_ROOT/ipsec_mb
-	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2023.3.21/ipsec-mb-SECLIB-IPSEC-2023.3.21.tar.gz
-	tar -zxvf ipsec-mb-SECLIB-IPSEC-2023.3.21.tar.gz --strip-components=1
-	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
+	fetch_dep https://gitlab.arm.com/arm-reference-solutions/ipsec-mb/-/archive/SECLIB-IPSEC-2024.07.08/ipsec-mb-SECLIB-IPSEC-2024.07.08.tar.gz
+	tar -zxvf ipsec-mb-SECLIB-IPSEC-2024.07.08.tar.gz --strip-components=1
+	SHARED=y CC=${CROSS_HOST}-gcc \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y
-	SHARED=y CC=aarch64-marvell-linux-gnu-gcc \
+	SHARED=y CC=${CROSS_HOST}-gcc \
 		make -C lib AESNI_EMU=y ARCH=aarch64 PREFIX=$INSTALL_ROOT NOLDCONFIG=y install
 	popd
 }
@@ -86,7 +86,7 @@ function setup_openssl()
 	pushd $BUILD_ROOT/libopenssl
 	fetch_dep https://www.openssl.org/source/openssl-1.1.1g.tar.gz
 	tar -zxvf openssl-1.1.1g.tar.gz --strip-components=1
-	./Configure --cross-compile-prefix=aarch64-marvell-linux-gnu- \
+	./Configure --cross-compile-prefix=${CROSS_HOST}- \
 		--openssldir=etc/ssl \
 		--prefix=$INSTALL_ROOT \
 		shared \
@@ -118,8 +118,8 @@ function setup_libtmc()
 	fetch_dep https://github.com/PavanNikhilesh/libtmc/archive/refs/tags/pthread_timed_join.tar.gz
 	tar -zxvf pthread_timed_join.tar.gz --strip-components=1
 	./bootstrap
-	CC=aarch64-marvell-linux-gnu-gcc ./configure \
-		--host=aarch64-marvell-linux-gnu \
+	CC=${CROSS_HOST}-gcc ./configure \
+		--host=${CROSS_HOST} \
 		--prefix=$INSTALL_ROOT
 	make -j${MAKE_J}
 	make install -j${MAKE_J}
@@ -136,6 +136,7 @@ if ! OPTS=$(getopt \
 	exit 1
 fi
 
+CROSS_HOST=${CROSS_HOST:-aarch64-none-linux-gnu}
 BUILD_ROOT=
 INSTALL_ROOT=
 MAKE_J=4

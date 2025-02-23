@@ -67,7 +67,7 @@ rm -rf $BUILD_DIR
 
 cd $PROJECT_ROOT
 
-CROSS_FILE=$PROJECT_ROOT/marvell-ci/build/config/arm64_cn10k_linux_gcc-marvell
+CROSS_FILE=$PROJECT_ROOT/marvell-ci/build/config/arm64_cn10k_linux_gcc-arm
 
 meson $BUILD_DIR --cross-file $CROSS_FILE
 
