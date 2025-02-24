@@ -953,6 +953,8 @@ on_fill_ipsec_common_sa(struct rte_security_ipsec_xform *ipsec,
 		cipher_key_len = crypto_xform->aead.key.length;
 	} else {
 		if (cipher_xform) {
+			if (cipher_xform->cipher.algo == RTE_CRYPTO_CIPHER_AES_CTR)
+				memcpy(common_sa->iv.gcm.nonce, &ipsec->salt, 4);
 			cipher_key = cipher_xform->cipher.key.data;
 			cipher_key_len = cipher_xform->cipher.key.length;
 		}
