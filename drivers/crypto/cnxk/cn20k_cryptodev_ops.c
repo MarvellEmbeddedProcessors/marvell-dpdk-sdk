@@ -1155,6 +1155,7 @@ again:
 		}
 
 		/* Word 0 and 1 */
+		inst_01 = vdupq_n_u64(0);
 		u64_0 = pf_func << 48 | *(vf->rx_chan_base + m->port) << 4 | (l2_len - 2) << 24 |
 			l2_len << 16;
 		inst_01 = vsetq_lane_u64(u64_0, inst_01, 0);
@@ -1168,12 +1169,14 @@ again:
 		vst1q_u64(&inst->w2.u64, inst_23);
 
 		/* Word 4 and 5 */
+		inst_45 = vdupq_n_u64(0);
 		u64_0 = sec_sess->inst.w4 | (rte_pktmbuf_pkt_len(m));
 		inst_45 = vsetq_lane_u64(u64_0, inst_45, 0);
 		inst_45 = vsetq_lane_u64(u64_dptr, inst_45, 1);
 		vst1q_u64(&inst->w4.u64, inst_45);
 
 		/* Word 6 and 7 */
+		inst_67 = vdupq_n_u64(0);
 		u64_1 = sec_sess->inst.w7;
 		inst_67 = vsetq_lane_u64(u64_1, inst_67, 1);
 		vst1q_u64(&inst->w6.u64, inst_67);
