@@ -1113,6 +1113,44 @@ init_pktmbuf_pool(uint32_t portid, unsigned int nb_mbuf)
 	return 0;
 }
 
+static void
+create_default_ipsec_oop_flow(uint16_t port_id, void *ses)
+{
+	struct rte_flow_action action[2];
+	struct rte_flow_item pattern[2];
+	struct rte_flow_attr attr = {0};
+	struct rte_flow_error err;
+	struct rte_flow *flow;
+	int ret;
+
+	/* Add the default rte_flow to enable SECURITY for all ESP packets */
+
+	pattern[0].type = RTE_FLOW_ITEM_TYPE_ESP;
+	pattern[0].spec = NULL;
+	pattern[0].mask = NULL;
+	pattern[0].last = NULL;
+	pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+	action[0].type = RTE_FLOW_ACTION_TYPE_SECURITY;
+	action[0].conf = ses;
+	action[1].type = RTE_FLOW_ACTION_TYPE_END;
+	action[1].conf = NULL;
+
+	attr.ingress = 1;
+
+	ret = rte_flow_validate(port_id, &attr, pattern, action, &err);
+	if (ret)
+		return;
+
+	flow = rte_flow_create(port_id, &attr, pattern, action, &err);
+	if (flow == NULL)
+		return;
+
+	default_flow_no_msns[port_id] = flow;
+	printf("Created default OOP flow enabling SECURITY for all ESP traffic on port %d\n",
+		port_id);
+}
+
 int
 create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint32_t spi,
 		    uint16_t sa_lo, uint16_t sa_hi, uint32_t sa_index)
@@ -1135,6 +1173,9 @@ create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint
 	pattern[0].mask = &mesp;
 	pattern[0].last = NULL;
 	pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+	if (inl_inb_oop)
+		sec.is_non_inp = 1;
 
 	action[act_count].type = RTE_FLOW_ACTION_TYPE_SECURITY;
 	action[act_count].conf = &sec;
@@ -2850,7 +2891,11 @@ poll_mode_inb_outb_worker(void *args)
 #if !defined(MSNS_CN9K)
 				if (unlikely(softexp))
 					handle_inb_soft_exp(portid, pkt, lcore_id);
+
+				if (unlikely(inl_inb_oop))
+					handle_inb_oop(pkt);
 #endif
+
 				lconf->rx_ipsec_pkts += 1;
 				sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
 				sa_index = sa_data->spi;
@@ -2947,12 +2992,14 @@ event_inb_laoutb_worker(void *args)
 		info->rx_pkts += nb_rx;
 		info->rx_ipsec_pkts += !!(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
 #if !defined(MSNS_CN9K)
-		if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp))
-			handle_inb_soft_exp(0, ev.mbuf, lcore_id);
-#endif
+		if (likely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
+			if (unlikely(softexp))
+				handle_inb_soft_exp(0, pkt, lcore_id);
 
-		if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && inl_inb_oop))
-			handle_inb_oop(ev.mbuf);
+			if (unlikely(inl_inb_oop))
+				handle_inb_oop(pkt);
+		}
+#endif
 
 		rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
 		/* Drop packets received with offload failure */
@@ -3006,12 +3053,14 @@ handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struc
 
 	info->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
 #if !defined(MSNS_CN9K)
-	if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp))
-		handle_inb_soft_exp(0, pkt, lcore_id);
-#endif
+	if (likely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
+		if (unlikely(softexp))
+			handle_inb_soft_exp(0, pkt, lcore_id);
 
-	if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && inl_inb_oop))
-		handle_inb_oop(pkt);
+		if (unlikely(inl_inb_oop))
+			handle_inb_oop(pkt);
+	}
+#endif
 
 	rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
 	/* Drop packets received with offload failure */
@@ -3152,8 +3201,13 @@ handle_inb_event(uint32_t lcore_id, struct rte_mbuf *pkt)
 
 	info->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
 #if !defined(MSNS_CN9K)
-	if (ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp)
-		handle_inb_soft_exp(0, pkt, lcore_id);
+	if (likely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
+		if (unlikely(softexp))
+			handle_inb_soft_exp(0, pkt, lcore_id);
+
+		if (unlikely(inl_inb_oop))
+			handle_inb_oop(pkt);
+	}
 #endif
 
 	/* Drop packets received with offload failure */
@@ -3439,6 +3493,11 @@ poll_mode_inb_worker(void *args)
 				rte_pktmbuf_free(pkt);
 				continue;
 			}
+
+#if !defined(MSNS_CN9K)
+			if (unlikely((ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD) && inl_inb_oop))
+				handle_inb_oop(pkt);
+#endif
 
 			tx_pkts[k++] = pkt;
 		}
@@ -4021,8 +4080,16 @@ ipsec_inb_outb_perf(void)
 		goto inb_sas_destroy;
 	}
 
-	if (action_alg == DEFAULT_SEC_ACTION_ALG)
-		create_default_ipsec_flow(portid);
+	if (action_alg == DEFAULT_SEC_ACTION_ALG) {
+		if (inl_inb_oop)
+			/* OOP will be applied to all SAs, so pass any one SA
+			 * to config OOP flow rule, else Individual ESP rule per
+			 * SA can be created to work with particular NPC profile
+			 */
+			create_default_ipsec_oop_flow(portid, inb_sas[1].sa);
+		else
+			create_default_ipsec_flow(portid);
+	}
 
 	printf("\n");
 
@@ -4151,8 +4218,16 @@ ipsec_inb_perf(void)
 		return ret;
 	}
 
-	if (action_alg == DEFAULT_SEC_ACTION_ALG)
-		create_default_ipsec_flow(portid);
+	if (action_alg == DEFAULT_SEC_ACTION_ALG) {
+		if (inl_inb_oop)
+			/* OOP will be applied to all SAs, so pass any one SA
+			 * to config OOP flow rule, else Individual ESP rule per
+			 * SA can be created to work with particular NPC profile
+			 */
+			create_default_ipsec_oop_flow(portid, inb_sas[1].sa);
+		else
+			create_default_ipsec_flow(portid);
+	}
 
 	printf("\n");
 
