@@ -179,6 +179,10 @@ roc_eswitch_npc_mcam_delete_rule(struct roc_npc *roc_npc, struct roc_npc_flow *f
 	struct mbox *mbox = npc->mbox;
 	int rc = 0;
 
+	rc = npc_rss_group_free(npc, flow);
+	if (rc)
+		plt_err("Failed to free rss group");
+
 	/* Removing the VLAN TX config */
 	if (flow->nix_intf == NIX_INTF_TX) {
 		rc = eswitch_vtag_cfg_delete(roc_npc, flow);
