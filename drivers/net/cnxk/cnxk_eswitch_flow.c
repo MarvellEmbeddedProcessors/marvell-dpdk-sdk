@@ -385,6 +385,33 @@ fail:
 }
 
 int
+cnxk_eswitch_pfvf_flow_rules_destroy(struct cnxk_eswitch_dev *eswitch_dev)
+{
+	struct roc_npc_flow *flow_iter = NULL;
+	bool esw_vf_entry_found = false;
+	struct flow_list *list;
+	int rc = 0;
+
+	list = &eswitch_dev->esw_flow_list;
+	TAILQ_FOREACH(flow_iter, list, next) {
+		if (flow_iter->mcam_id == eswitch_dev->esw_vf_entry)
+			esw_vf_entry_found = true;
+	}
+	if (!esw_vf_entry_found)
+		roc_npc_mcam_free_entry(&eswitch_dev->npc, eswitch_dev->esw_vf_entry);
+
+	rc = cnxk_eswitch_flow_rules_remove_list(eswitch_dev, &eswitch_dev->esw_flow_list,
+						 eswitch_dev->npc.pf_func);
+	if (rc) {
+		plt_err("Failed to delete rules for hw func %x", eswitch_dev->npc.pf_func);
+		goto fail;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+int
 cnxk_eswitch_pfvf_flow_rules_install(struct cnxk_eswitch_dev *eswitch_dev, bool is_vf)
 {
 	struct roc_npc_flow *flow, *flow_iter;

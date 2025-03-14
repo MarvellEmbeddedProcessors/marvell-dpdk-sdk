@@ -164,6 +164,35 @@ exit:
 }
 
 int
+cnxk_eswitch_nix_rsrc_stop(struct cnxk_eswitch_dev *eswitch_dev)
+{
+	int rc;
+
+	/* Disable Rx in NPC */
+	rc = roc_nix_npc_rx_ena_dis(&eswitch_dev->nix, false);
+	if (rc) {
+		plt_err("Failed to disable NPC rx %d", rc);
+		goto done;
+	}
+
+	rc = roc_npc_mcam_enable_all_entries(&eswitch_dev->npc, 0);
+	if (rc) {
+		plt_err("Failed to disable NPC entries %d", rc);
+		goto done;
+	}
+
+	/* Cleanup NPC rxtx flow rules */
+	rc = cnxk_eswitch_pfvf_flow_rules_destroy(eswitch_dev);
+	if (rc) {
+		plt_err("Failed to destroy rxtx rules, rc %d", rc);
+		goto done;
+	}
+
+done:
+	return 0;
+}
+
+int
 cnxk_eswitch_nix_rsrc_start(struct cnxk_eswitch_dev *eswitch_dev)
 {
 	int rc;
