@@ -180,6 +180,7 @@ cnxk_eswitch_pmd_priv(void)
 
 /* HW Resources */
 int cnxk_eswitch_nix_rsrc_start(struct cnxk_eswitch_dev *eswitch_dev);
+int cnxk_eswitch_nix_rsrc_stop(struct cnxk_eswitch_dev *eswitch_dev);
 int cnxk_eswitch_representor_id(struct cnxk_eswitch_dev *eswitch_dev, uint16_t hw_func,
 				uint16_t *rep_id);
 struct cnxk_esw_repr_hw_info *cnxk_eswitch_representor_hw_info(struct cnxk_eswitch_dev *eswitch_dev,
@@ -201,6 +202,7 @@ int cnxk_eswitch_txq_stop(struct cnxk_eswitch_dev *eswitch_dev, uint16_t qid);
 int cnxk_eswitch_flow_rules_install(struct cnxk_eswitch_dev *eswitch_dev, uint16_t hw_func);
 int cnxk_eswitch_flow_rules_delete(struct cnxk_eswitch_dev *eswitch_dev, uint16_t hw_func);
 int cnxk_eswitch_pfvf_flow_rules_install(struct cnxk_eswitch_dev *eswitch_dev, bool is_vf);
+int cnxk_eswitch_pfvf_flow_rules_destroy(struct cnxk_eswitch_dev *eswitch_dev);
 int cnxk_eswitch_flow_rule_shift(uint16_t hw_func, uint16_t *new_entry);
 int cnxk_eswitch_flow_rules_remove_list(struct cnxk_eswitch_dev *eswitch_dev,
 					struct flow_list *list, uint16_t hw_func);

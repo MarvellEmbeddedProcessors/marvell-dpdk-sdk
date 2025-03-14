@@ -300,12 +300,22 @@ cnxk_rep_dev_stop(struct rte_eth_dev *ethdev)
 {
 	struct cnxk_rep_dev *rep_dev = cnxk_rep_pmd_priv(ethdev);
 	struct rte_eth_link link;
+	int rc;
+
+	if (!ethdev->data->dev_started)
+		return 0;
 
 	ethdev->rx_pkt_burst = cnxk_rep_rx_burst_dummy;
 	ethdev->tx_pkt_burst = cnxk_rep_tx_burst_dummy;
 	cnxk_rep_rx_queue_stop(ethdev, 0);
 	cnxk_rep_tx_queue_stop(ethdev, 0);
 	rep_dev->parent_dev->repr_cnt.nb_repr_started--;
+
+	if (!rep_dev->parent_dev->repr_cnt.nb_repr_started) {
+		rc = cnxk_eswitch_nix_rsrc_stop(rep_dev->parent_dev);
+		if (rc)
+			plt_err("Failed to stop nix dev, rc %d", rc);
+	}
 
 	/* Bring down link status internally */
 	memset(&link, 0, sizeof(link));
