@@ -1209,6 +1209,26 @@ nix_lso_fmt_setup(struct cnxk_eth_dev *dev)
 	return nix_lso_tun_fmt_update(dev);
 }
 
+static int
+nix_restore_mac_table(struct rte_eth_dev *eth_dev)
+{
+	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+	struct rte_ether_addr *macs = NULL;
+	struct roc_nix *nix = &dev->nix;
+	int i, rc;
+
+	macs = eth_dev->data->mac_addrs;
+	for (i = 1; i < dev->dmac_filter_count; i++) {
+		rc = roc_nix_mac_addr_add(nix, macs[i].addr_bytes);
+		if (rc < 0) {
+			plt_err("Failed to restore mac addr table, rc=%d", rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
 int
 cnxk_nix_configure(struct rte_eth_dev *eth_dev)
 {
@@ -1505,6 +1525,10 @@ skip_lbk_setup:
 	 */
 	if (dev->configured == 1) {
 		rc = nix_restore_queue_cfg(eth_dev);
+		if (rc)
+			goto sec_release;
+
+		rc = nix_restore_mac_table(eth_dev);
 		if (rc)
 			goto sec_release;
 	}
