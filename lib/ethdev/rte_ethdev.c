@@ -2939,14 +2939,54 @@ rte_eth_link_to_str(char *str, size_t len, const struct rte_eth_link *eth_link)
 	if (eth_link->link_status == RTE_ETH_LINK_DOWN)
 		ret = snprintf(str, len, "Link down");
 	else
-		ret = snprintf(str, len, "Link up at %s %s %s",
+		ret = snprintf(str, len, "Link up at %s %s %s %s",
 			rte_eth_link_speed_to_str(eth_link->link_speed),
 			(eth_link->link_duplex == RTE_ETH_LINK_FULL_DUPLEX) ?
 			"FDX" : "HDX",
 			(eth_link->link_autoneg == RTE_ETH_LINK_AUTONEG) ?
-			"Autoneg" : "Fixed");
+			"Autoneg" : "Fixed",
+			rte_eth_link_type_to_str(eth_link->link_type));
 
 	rte_eth_trace_link_to_str(len, eth_link, str, ret);
+
+	return ret;
+}
+
+const char *
+rte_eth_link_type_to_str(uint8_t link_type)
+{
+	const char *ret;
+
+	switch (link_type) {
+	case RTE_ETH_LINK_TYPE_NONE:
+		ret = "None";
+		break;
+	case RTE_ETH_LINK_TYPE_TP:
+		ret = "Twisted Pair";
+		break;
+	case RTE_ETH_LINK_TYPE_AUI:
+		ret = "AUI";
+		break;
+	case RTE_ETH_LINK_TYPE_MII:
+		ret = "MII";
+		break;
+	case RTE_ETH_LINK_TYPE_FIBRE:
+		ret = "Fibre";
+		break;
+	case RTE_ETH_LINK_TYPE_BNC:
+		ret = "BNC";
+		break;
+	case RTE_ETH_LINK_TYPE_DA:
+		ret = "Direct Attach Copper";
+		break;
+	case RTE_ETH_LINK_TYPE_OTHER:
+		ret = "Other";
+		break;
+	default:
+		ret = "Invalid";
+	}
+
+	rte_eth_trace_link_type_to_str(link_type, ret);
 
 	return ret;
 }

@@ -219,6 +219,7 @@ EXPERIMENTAL {
 	rte_eth_hairpin_unbind;
 	rte_eth_link_speed_to_str;
 	rte_eth_link_to_str;
+	rte_eth_link_type_to_str;
 	rte_eth_fec_get_capability;
 	rte_eth_fec_get;
 	rte_eth_fec_set;
