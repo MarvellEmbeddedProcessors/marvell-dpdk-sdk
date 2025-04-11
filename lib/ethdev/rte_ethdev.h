@@ -328,6 +328,19 @@ struct rte_eth_stats {
 #define RTE_ETH_SPEED_NUM_UNKNOWN UINT32_MAX /**< Unknown */
 /**@}*/
 
+/**@{@name PORT type
+ * Ethernet port type
+ */
+#define RTE_ETH_LINK_TYPE_NONE  0x00 /**< Not defined */
+#define RTE_ETH_LINK_TYPE_TP    0x01 /**< Twisted Pair */
+#define RTE_ETH_LINK_TYPE_AUI   0x02 /**< Attachment Unit Interface */
+#define RTE_ETH_LINK_TYPE_MII   0x03 /**< Media Independent Interface */
+#define RTE_ETH_LINK_TYPE_FIBRE 0x04 /**< Fibre */
+#define RTE_ETH_LINK_TYPE_BNC   0x05 /**< BNC */
+#define RTE_ETH_LINK_TYPE_DA    0x06 /**< Direct Attach copper */
+#define RTE_ETH_LINK_TYPE_OTHER 0x1F /**< Other type */
+/**@}*/
+
 /**
  * A structure used to retrieve link-level information of an Ethernet port.
  */
@@ -337,6 +350,7 @@ struct rte_eth_link {
 	uint16_t link_duplex  : 1;  /**< RTE_ETH_LINK_[HALF/FULL]_DUPLEX */
 	uint16_t link_autoneg : 1;  /**< RTE_ETH_LINK_[AUTONEG/FIXED] */
 	uint16_t link_status  : 1;  /**< RTE_ETH_LINK_[DOWN/UP] */
+	uint16_t link_type    : 5;  /**< RTE_ETH_LINK_TYPE_XXX */
 } __rte_aligned(8);      /**< aligned for atomic64 read/write */
 
 /**@{@name Link negotiation
@@ -3084,6 +3098,20 @@ int rte_eth_link_get_nowait(uint16_t port_id, struct rte_eth_link *link);
  */
 __rte_experimental
 const char *rte_eth_link_speed_to_str(uint32_t link_speed);
+
+/**
+ * @warning
+ * @b EXPERIMENTAL: this API may change without prior notice.
+ *
+ * This function converts an Ethernet link type to a string.
+ *
+ * @param link_type
+ *   The link type to convert.
+ * @return
+ *   The string representation of the link type.
+ */
+__rte_experimental
+const char *rte_eth_link_type_to_str(uint8_t link_type);
 
 /**
  * @warning
