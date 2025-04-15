@@ -1294,7 +1294,7 @@ roc_nix_cq_init(struct roc_nix *roc_nix, struct roc_nix_cq *cq)
 		/* CQ drop is disabled by default when inline device in use and
 		 * force_tail_drop disabled, so will not configure drop threshold.
 		 */
-		drop_thresh = force_tail_drop ? NIX_CQ_THRESH_LEVEL_REF1 : 0;
+		drop_thresh = force_tail_drop ? NIX_CQ_SEC_THRESH_LEVEL_REF1 : 0;
 		bp_thresh = force_tail_drop ? NIX_CQ_SEC_BP_THRESH_LEVEL_REF1 :
 					      NIX_CQ_SEC_BP_THRESH_LEVEL;
 	}

@@ -19,8 +19,9 @@
 #define NIX_CQ_SEC_BP_THRESH_LEVEL (25 * 256 / 100)
 
 /* Applicable when force_tail_drop is enabled */
-#define NIX_CQ_THRESH_LEVEL_REF1	(20 * 256 / 100)
-#define NIX_CQ_BP_THRESH_LEVEL_REF1	(30 * 256 / 100)
+#define NIX_CQ_THRESH_LEVEL_REF1	(50 * 256 / 100)
+#define NIX_CQ_SEC_THRESH_LEVEL_REF1	(20 * 256 / 100)
+#define NIX_CQ_BP_THRESH_LEVEL_REF1	(60 * 256 / 100)
 #define NIX_CQ_SEC_BP_THRESH_LEVEL_REF1 (50 * 256 / 100)
 #define NIX_CQ_LBP_THRESH_FRAC_REF1	(80 * 16 / 100)
 
