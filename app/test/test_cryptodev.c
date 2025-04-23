@@ -13999,6 +13999,16 @@ test_authenticated_encryption_oop(const struct aead_test_data *tdata)
 static int
 test_AES_GCM_authenticated_encryption_oop_test_case_1(void)
 {
+	if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
+		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
+		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 	return test_authenticated_encryption_oop(&gcm_test_case_5);
 }
 
@@ -14115,6 +14125,16 @@ test_authenticated_decryption_oop(const struct aead_test_data *tdata)
 static int
 test_AES_GCM_authenticated_decryption_oop_test_case_1(void)
 {
+	if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN9K_PMD)))
+		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN10K_PMD)))
+		return TEST_SKIPPED;
+	else if (gbl_driver_id == rte_cryptodev_driver_id_get(
+			RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+		return TEST_SKIPPED;
+
 	return test_authenticated_decryption_oop(&gcm_test_case_5);
 }
 
