@@ -36,7 +36,7 @@ launch_testpmd_rx()
 {
 	#local out=testpmd.out.$1
 	testpmd_launch $1 \
-		"-c 0x700 -a $PORT1" \
+		"-c 0x700 -a $PORT1,disable_xqe_drop=1" \
 		"--nb-cores=1 --forward-mode=rxonly" \
 		</dev/null 2>/dev/null &
 	sleep 1
@@ -49,7 +49,7 @@ launch_testpmd_rx()
 launch_testpmd_tx_outb()
 {
 	testpmd_launch $1 \
-		"-c 0xF800 -a $PORT0" \
+		"-c 0xF800 -a $PORT0,disable_xqe_drop=1" \
 		"--nb-cores=3 --forward-mode=txonly --tx-ip=192.168.$2.1,192.168.$2.2 --txq=3 --rxq=3" \
 		</dev/null 2>/dev/null &
 	sleep 1
@@ -62,7 +62,7 @@ launch_testpmd_tx_outb()
 launch_testpmd_tx_inb()
 {
 	testpmd_launch $1 \
-		"-c 0x3F800 --vdev net_pcap0,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,infinite_rx=1 -a $PORT0" \
+		"-c 0x3F800 --vdev net_pcap0,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,rx_pcap=$2,infinite_rx=1 -a $PORT0,disable_xqe_drop=1" \
 		"--nb-cores=5 --txq=5 --rxq=5 --no-flush-rx" \
 		</dev/null 2>/dev/null &
 	sleep 1

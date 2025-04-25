@@ -223,15 +223,15 @@ function pmd_tx_launch_for_inb()
 	local pcap4=$CNXKTESTPATH/pcap/enc_$1_reas_$2_4.pcap
 	if [[ $Y -gt 2 && $2 -eq 64 ]]; then
 		testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,rx_pcap=$pcap4,infinite_rx=1 -a $LIF1" \
+		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,rx_pcap=$pcap4,infinite_rx=1 -a $LIF1,disable_xqe_drop=1" \
 		"--nb-cores=4 --txq=4 --rxq=4 --no-flush-rx"
 	elif [[ $Y -gt 2 ]]; then
 		testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,infinite_rx=1 -a $LIF1" \
+		"-c 0xF800 --vdev net_pcap0,rx_pcap=$pcap1,rx_pcap=$pcap2,rx_pcap=$pcap3,infinite_rx=1 -a $LIF1,disable_xqe_drop=1" \
 		"--nb-cores=4 --txq=3 --rxq=3 --no-flush-rx"
 	else
 		testpmd_launch "$TPMD_TX_PREFIX" \
-		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap1,infinite_rx=1 -a $LIF1" \
+		"-c 0x3800 --vdev net_pcap0,rx_pcap=$pcap1,infinite_rx=1 -a $LIF1,disable_xqe_drop=1" \
 		"--nb-cores=2 --no-flush-rx"
 	fi
 	testpmd_cmd $TPMD_TX_PREFIX "port stop 0"
@@ -245,7 +245,7 @@ function pmd_tx_launch_for_inb()
 function pmd_rx_launch()
 {
 	testpmd_launch "$TPMD_RX_PREFIX" \
-		"-c 0x700 -a $LIF4" \
+		"-c 0x700 -a $LIF4,disable_xqe_drop=1" \
 		"--nb-cores=2 --forward-mode=rxonly"
 	testpmd_cmd $TPMD_RX_PREFIX "port stop 0"
 	testpmd_cmd $TPMD_RX_PREFIX "set flow_ctrl rx off 0"
