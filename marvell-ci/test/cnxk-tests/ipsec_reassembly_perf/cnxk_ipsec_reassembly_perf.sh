@@ -150,7 +150,7 @@ function run_ipsec_secgw_inb()
 
 	echo "ipsec-secgw inb"
 
-	local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128 -a $LIF3,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
+	local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $LIF2,ipsec_in_max_spi=128,disable_xqe_drop=1 -a $LIF3,ipsec_in_max_spi=128,disable_xqe_drop=1 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
 	case "$Y" in
 		0)
 			# Inline Protocol Event Mode

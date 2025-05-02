@@ -346,7 +346,7 @@ function run_ipsec_secgw()
 
 	echo "ipsec-secgw outb"
 	if [[ $IS_CN10K -ne 0 ]]; then
-		local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3"
+		local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128,disable_xqe_drop=1 -a $IF1,ipsec_in_max_spi=128,disable_xqe_drop=1 --file-prefix $IPSEC_PREFIX -- -P -p 0x3"
 		if is_inline_proto_test; then
 			IS_RXPPS_TXTPMD=1
 		fi
@@ -418,7 +418,7 @@ function run_ipsec_secgw_inb()
 
 	echo "ipsec-secgw inb"
 	if [[ $IS_CN10K -ne 0 ]]; then
-		local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 -a $IF1,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
+		local env="$IPSECGW_BIN -c $COREMASK -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128,disable_xqe_drop=1 -a $IF1,ipsec_in_max_spi=128,disable_xqe_drop=1 --file-prefix $IPSEC_PREFIX -- -P -p 0x3 -u 0x3"
 		if is_inline_proto_test; then
 			IS_RXPPS_TXTPMD=1
 		fi
