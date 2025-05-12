@@ -1217,26 +1217,6 @@ nix_lso_fmt_setup(struct cnxk_eth_dev *dev)
 	return nix_lso_tun_fmt_update(dev);
 }
 
-static int
-nix_restore_mac_table(struct rte_eth_dev *eth_dev)
-{
-	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-	struct rte_ether_addr *macs = NULL;
-	struct roc_nix *nix = &dev->nix;
-	int i, rc;
-
-	macs = eth_dev->data->mac_addrs;
-	for (i = 1; i < dev->dmac_filter_count; i++) {
-		rc = roc_nix_mac_addr_add(nix, macs[i].addr_bytes);
-		if (rc < 0) {
-			plt_err("Failed to restore mac addr table, rc=%d", rc);
-			return rc;
-		}
-	}
-
-	return 0;
-}
-
 int
 cnxk_nix_configure(struct rte_eth_dev *eth_dev)
 {
@@ -1251,8 +1231,8 @@ cnxk_nix_configure(struct rte_eth_dev *eth_dev)
 	uint16_t nb_rxq, nb_txq, nb_cq;
 	struct rte_ether_addr *ea;
 	uint64_t rx_cfg;
+	int rc, i;
 	void *qs;
-	int rc;
 
 	rc = -EINVAL;
 
@@ -1307,6 +1287,12 @@ cnxk_nix_configure(struct rte_eth_dev *eth_dev)
 		roc_nix_tm_fini(nix);
 		nix_rxchan_cfg_disable(dev);
 		roc_nix_lf_free(nix);
+
+		/* Reset to invalid */
+		for (i = 0; i < dev->max_mac_entries; i++)
+			dev->dmac_idx_map[i] = CNXK_NIX_DMAC_IDX_INVALID;
+
+		dev->dmac_filter_count = 1;
 	}
 
 	dev->rx_offloads = rxmode->offloads;
@@ -1533,10 +1519,6 @@ skip_lbk_setup:
 	 */
 	if (dev->configured == 1) {
 		rc = nix_restore_queue_cfg(eth_dev);
-		if (rc)
-			goto sec_release;
-
-		rc = nix_restore_mac_table(eth_dev);
 		if (rc)
 			goto sec_release;
 	}
@@ -1916,7 +1898,7 @@ cnxk_eth_dev_init(struct rte_eth_dev *eth_dev)
 	struct rte_security_ctx *sec_ctx;
 	struct roc_nix *nix = &dev->nix;
 	struct rte_pci_device *pci_dev;
-	int rc, max_entries;
+	int rc, max_entries, i;
 
 	eth_dev->dev_ops = &cnxk_eth_dev_ops;
 	eth_dev->rx_queue_count = cnxk_nix_rx_queue_count;
@@ -2018,6 +2000,17 @@ cnxk_eth_dev_init(struct rte_eth_dev *eth_dev)
 		goto free_mac_addrs;
 	}
 
+	dev->dmac_addrs = rte_malloc("dmac_addrs", max_entries * RTE_ETHER_ADDR_LEN, 0);
+	if (dev->dmac_addrs == NULL) {
+		plt_err("Failed to allocate memory for dmac addresses");
+		rc = -ENOMEM;
+		goto free_mac_addrs;
+	}
+
+	/* Reset to invalid */
+	for (i = 0; i < max_entries; i++)
+		dev->dmac_idx_map[i] = CNXK_NIX_DMAC_IDX_INVALID;
+
 	dev->max_mac_entries = max_entries;
 	dev->dmac_filter_count = 1;
 
@@ -2076,6 +2069,8 @@ cnxk_eth_dev_init(struct rte_eth_dev *eth_dev)
 
 free_mac_addrs:
 	rte_free(eth_dev->data->mac_addrs);
+	rte_free(dev->dmac_addrs);
+	dev->dmac_addrs = NULL;
 	rte_free(dev->dmac_idx_map);
 dev_fini:
 	roc_nix_dev_fini(nix);
@@ -2206,6 +2201,9 @@ cnxk_eth_dev_uninit(struct rte_eth_dev *eth_dev, bool reset)
 
 	rte_free(dev->dmac_idx_map);
 	dev->dmac_idx_map = NULL;
+
+	rte_free(dev->dmac_addrs);
+	dev->dmac_addrs = NULL;
 
 	rte_free(eth_dev->data->mac_addrs);
 	eth_dev->data->mac_addrs = NULL;
