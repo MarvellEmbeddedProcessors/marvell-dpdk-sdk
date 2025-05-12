@@ -183,7 +183,7 @@
 #define RVU_MBOX_PF_INT_VEC_VFPF_MBOX1	(0x5ull)
 #define RVU_MBOX_PF_INT_VEC_VFPF1_MBOX0 (0x6ull)
 #define RVU_MBOX_PF_INT_VEC_VFPF1_MBOX1 (0x7ull)
-#define RVU_MBOX_PF_INT_VEC_AFPF_MBOX	(0x8ull)
+#define RVU_MBOX_PF_INT_VEC_AFPF_MBOX	(0x30ull)
 
 #define RVU_MBOX_PF_VFPF_INTX(a)	 (0x1000 | (a) << 3)
 #define RVU_MBOX_PF_VFPF_INT_W1SX(a)	 (0x1020 | (a) << 3)
