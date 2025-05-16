@@ -31,7 +31,12 @@
 #define CN10K_DPI_MAX_PRI		    2
 #define CNXK_DPI_MAX_VCHANS_PER_QUEUE	    128
 #define CNXK_DPI_QUEUE_BUF_SIZE		    16256
-#define CNXK_DPI_QUEUE_BUF_SIZE_V2	    130944
+/* Maximum pool size supported by device is 128 * 1024. When RTE_LIBRTE_MEMPOOL_DEBUG is enabled
+ * mempool->trailer size will be increased by 8B. Additionally if the pool is not created with
+ * RTE_MEMPOOL_F_NO_CACHE_ALIGN, trailer will be expanded to cache line size.
+ * To allow future needs, limit the max size to 127KB
+ */
+#define CNXK_DPI_QUEUE_BUF_SIZE_V2	    130048
 #define CNXK_DPI_POOL_MAX_CACHE_SZ	    (16)
 #define CNXK_DPI_DW_PER_SINGLE_CMD	    8
 #define CNXK_DPI_HDR_LEN		    4
