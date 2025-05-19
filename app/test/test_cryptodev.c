@@ -2592,6 +2592,7 @@ test_queue_pair_descriptor_count(void)
 
 		rte_pktmbuf_free(ops_deq[i]->sym->m_src);
 		rte_crypto_op_free(ops_deq[i]);
+		ops_deq[i] = NULL;
 	}
 
 	return TEST_SUCCESS;
@@ -14781,6 +14782,7 @@ test_multi_session(void)
 
 		/* free crypto operation structure */
 		rte_crypto_op_free(ut_params->op);
+		ut_params->op = NULL;
 
 		/*
 		 * free mbuf - both obuf and ibuf are usually the same,
@@ -14926,6 +14928,7 @@ test_multi_session_random_usage(void)
 					ut_paramz[j].iv);
 
 		rte_crypto_op_free(ut_paramz[j].ut_params.op);
+		ut_paramz[j].ut_params.op = NULL;
 
 		/*
 		 * free mbuf - both obuf and ibuf are usually the same,
