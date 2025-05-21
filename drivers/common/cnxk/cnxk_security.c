@@ -305,7 +305,7 @@ ot_ipsec_inb_tunnel_hdr_fill(struct roc_ot_ipsec_inb_sa *sa,
 int
 cnxk_ot_ipsec_inb_sa_fill(struct roc_ot_ipsec_inb_sa *sa,
 			  struct rte_security_ipsec_xform *ipsec_xfrm,
-			  struct rte_crypto_sym_xform *crypto_xfrm)
+			  struct rte_crypto_sym_xform *crypto_xfrm, uint8_t ctx_ilen)
 {
 	uint16_t sport = 4500, dport = 4500;
 	union roc_ot_ipsec_sa_word2 w2;
@@ -379,6 +379,9 @@ cnxk_ot_ipsec_inb_sa_fill(struct roc_ot_ipsec_inb_sa *sa,
 		 ROC_CTX_UNIT_128B) -
 		1;
 
+	if (sa->w0.s.ctx_size < ctx_ilen)
+		sa->w0.s.ctx_size = ctx_ilen;
+
 	/**
 	 * CPT MC triggers expiry when counter value changes from 2 to 1. To
 	 * mitigate this behaviour add 1 to the life counter values provided.
@@ -414,7 +417,7 @@ cnxk_ot_ipsec_inb_sa_fill(struct roc_ot_ipsec_inb_sa *sa,
 int
 cnxk_ot_ipsec_outb_sa_fill(struct roc_ot_ipsec_outb_sa *sa,
 			   struct rte_security_ipsec_xform *ipsec_xfrm,
-			   struct rte_crypto_sym_xform *crypto_xfrm)
+			   struct rte_crypto_sym_xform *crypto_xfrm, uint8_t ctx_ilen)
 {
 	struct rte_security_ipsec_tunnel_param *tunnel = &ipsec_xfrm->tunnel;
 	uint16_t sport = 4500, dport = 4500;
@@ -535,6 +538,9 @@ skip_tunnel_info:
 	sa->w0.s.ctx_size = (PLT_ALIGN_CEIL(offset, ROC_CTX_UNIT_128B) /
 			     ROC_CTX_UNIT_128B) -
 			    1;
+
+	if (sa->w0.s.ctx_size < ctx_ilen)
+		sa->w0.s.ctx_size = ctx_ilen;
 
 	/* IPID gen */
 	sa->w2.s.ipid_gen = 1;
