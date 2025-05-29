@@ -208,7 +208,7 @@ function run_l2fwd_macsec()
 {
 	echo "l2fwd-macsec outb"
 	if [[ $IS_CN103 -ne 0 ]]; then
-		local env="$L2FWD_MACSEC_BIN -c $COREMASK -a $IF0  --file-prefix $MACSEC_PREFIX -- -P -p 0x1"
+		local env="$L2FWD_MACSEC_BIN -c $COREMASK -a $IF0,disable_xqe_drop=1  --file-prefix $MACSEC_PREFIX -- -P -p 0x1"
 		if is_inline_proto_test; then
 			IS_RXPPS_TXTPMD=1
 		fi
@@ -227,7 +227,7 @@ function run_l2fwd_macsec_inb()
 {
 	echo "l2fwd-macsec inb"
 	if [[ $IS_CN103 -ne 0 ]]; then
-		local env="$L2FWD_MACSEC_BIN -c $COREMASK -a $IF0 --file-prefix $MACSEC_PREFIX -- -P -p 0x1"
+		local env="$L2FWD_MACSEC_BIN -c $COREMASK -a $IF0,disable_xqe_drop=1 --file-prefix $MACSEC_PREFIX -- -P -p 0x1"
 		if is_inline_proto_test; then
 			IS_RXPPS_TXTPMD=1
 		fi
