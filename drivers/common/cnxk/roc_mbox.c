@@ -275,7 +275,7 @@ mbox_msg_send_data(struct mbox *mbox, int devid, uint8_t data)
 	tx_hdr->msg_size = mdev->msg_size;
 	mdev->msg_size = 0;
 	mdev->rsp_size = 0;
-	mdev->msgs_acked = 0;
+	plt_atomic_store_explicit(&mdev->msgs_acked, 0, plt_memory_order_release);
 
 	/* num_msgs != 0 signals to the peer that the buffer has a number of
 	 * messages. So this should be written after copying txmem
@@ -417,7 +417,8 @@ mbox_wait(struct mbox *mbox, int devid, uint32_t rst_timo)
 	 * mdev->msgs_acked are incremented at process_msgs() in interrupt
 	 * thread context.
 	 */
-	while (mdev->num_msgs > mdev->msgs_acked) {
+	while (mdev->num_msgs >
+	       plt_atomic_load_explicit(&mdev->msgs_acked, plt_memory_order_acquire)) {
 		plt_delay_us(sleep);
 		timeout += sleep;
 		if (timeout >= rst_timo) {
@@ -433,13 +434,12 @@ mbox_wait(struct mbox *mbox, int devid, uint32_t rst_timo)
 				"(tx/rx num_msgs: %d/%d), msg_size: %d, "
 				"rsp_size: %d",
 				devid, timeout, mdev->num_msgs,
-				mdev->msgs_acked, tx_hdr->num_msgs,
-				rx_hdr->num_msgs, mdev->msg_size,
-				mdev->rsp_size);
+				plt_atomic_load_explicit(&mdev->msgs_acked,
+							 plt_memory_order_acquire),
+				tx_hdr->num_msgs, rx_hdr->num_msgs, mdev->msg_size, mdev->rsp_size);
 
 			return -EIO;
 		}
-		plt_rmb();
 	}
 	return 0;
 }
