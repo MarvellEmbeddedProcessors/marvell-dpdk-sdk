@@ -278,7 +278,8 @@ roc_nix_mac_link_info_set(struct roc_nix *roc_nix,
 	req->args.duplex = link_info->full_duplex;
 	req->args.an = link_info->autoneg;
 
-	rc = mbox_process(mbox);
+	/* Link mode changes takes more time. */
+	rc = mbox_process_tmo(mbox, mbox->rsp_tmo * 4);
 exit:
 	mbox_put(mbox);
 	return rc;

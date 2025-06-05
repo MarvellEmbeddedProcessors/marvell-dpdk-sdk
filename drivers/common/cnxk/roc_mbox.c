@@ -459,8 +459,6 @@ mbox_wait_for_rsp_tmo(struct mbox *mbox, int devid, uint32_t tmo)
 		tmo = tmo * 2;
 	}
 
-	/* Link mode changes takes more time. */
-	tmo = tmo * 4;
 	/* Wait message */
 	if (plt_thread_is_intr())
 		rc = mbox_poll(mbox, tmo);
