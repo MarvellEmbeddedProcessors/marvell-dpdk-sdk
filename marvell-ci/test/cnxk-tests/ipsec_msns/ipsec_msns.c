@@ -45,6 +45,8 @@
 #define NB_MBUF 10240U
 #define MAX_PKT_BURST 32
 
+int create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint32_t spi,
+			       uint16_t sa_lo, uint16_t sa_hi, uint32_t sa_index);
 enum test_mode {
 	IPSEC_MSNS,
 	EVENT_IPSEC_INBOUND_MSNS_PERF,
@@ -151,6 +153,7 @@ struct ethaddr_info ethaddr_tbl[RTE_MAX_ETHPORTS] = {
 
 /* Example usage, max entries 4K */
 #define MAX_SA_SIZE (4 * 1024)
+#define DEFAULT_SEC_ACTION_ALG 0xFF /* Default is no action alg */
 
 struct ipsec_sa_info inb_sas[MAX_SA_SIZE + 1];
 struct ipsec_sa_info outb_sas[MAX_SA_SIZE + 1];
@@ -172,6 +175,8 @@ static int nb_event_ports;
 static uint32_t num_sas = 1;
 static bool softexp;
 static bool inl_inb_oop;
+static bool ipsec_stats;
+static uint8_t action_alg = DEFAULT_SEC_ACTION_ALG;
 static uint32_t soft_limit = 8 * 1024 * 1024;
 static uint32_t esn_ar;
 static struct ipsec_session_data *sess_conf = &conf_aes_128_gcm;
@@ -735,6 +740,46 @@ create_ipsec_perf_session(struct ipsec_session_data *sa, uint16_t portid,
 		.userdata = NULL,
 	};
 	struct rte_security_ctx *sec_ctx;
+	uint32_t sa_index = sa->ipsec_xform.spi;
+	uint16_t sa_hi = 0, sa_lo = 0;
+	uint32_t spi = 0;
+	bool inbound;
+	int ret;
+
+	switch (action_alg) {
+	case RTE_PMD_CNXK_SEC_ACTION_ALG0:
+		spi = (0x2 << 28 | sa_index);
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = 0x0;
+		break;
+	case RTE_PMD_CNXK_SEC_ACTION_ALG1:
+		/* Only SPI[31:28] are considered as SA[3:0] hence use.
+		 * rest from SPI[15:4].
+		 */
+		spi = ((sa_index & 0xF) << 28) | ((sa_index >> 4) << 4);
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = 0x0000;
+		break;
+	case RTE_PMD_CNXK_SEC_ACTION_ALG2:
+		/* Only SPI[27:25] are considered as SA[2:0] hence use.
+		 * rest from SPI[15:3].
+		 */
+		spi = ((sa_index & 0x7) << 25) | ((sa_index >> 3) << 3);
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = 0x0000;
+		break;
+	case RTE_PMD_CNXK_SEC_ACTION_ALG3:
+		/* Only SPI[28:25] are considered as SA[3:0] hence use.
+		 * rest from SPI[15:4].
+		 */
+		spi = ((sa_index & 0xF) << 25) | ((sa_index >> 4) << 4);
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = 0x0000;
+		break;
+	default:
+		spi = sa_index;
+		break;
+	}
 
 	sa->spi = sa->ipsec_xform.spi;
 	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
@@ -760,13 +805,40 @@ create_ipsec_perf_session(struct ipsec_session_data *sa, uint16_t portid,
 		memcpy(&sess_conf.ipsec.tunnel.ipv6.dst_addr, &dst_v6, sizeof(dst_v6));
 	}
 	sess_conf.ipsec.options.esn = !!esn_ar;
-	sess_conf.ipsec.options.stats = 1;
+	sess_conf.ipsec.options.stats = ipsec_stats;
 	sess_conf.ipsec.replay_win_sz = esn_ar;
 
 	*ses = rte_security_session_create(sec_ctx, &sess_conf, sess_pool);
 	if (*ses == NULL) {
 		printf("SEC Session init failed\n");
 		return -1;
+	}
+
+	inbound = sa->ipsec_xform.direction;
+	printf("Port %d: Created %s session with SPI = 0x%x\n", portid,
+	       inbound ? "inbound" : "outbound", sa->spi);
+
+	sess_conf.ipsec.spi = spi;
+	ret = rte_security_session_update(sec_ctx, *ses, &sess_conf);
+	if (ret) {
+		printf("Port %d: %s session update failed for SA Index=%d SPI: %d\n", portid,
+		       sa->ipsec_xform.direction ? "inbound" : "outbound", sa_index, spi);
+		rte_security_session_destroy(sec_ctx, *ses);
+		return -1;
+	}
+
+	printf("Port %d: Updated %s session with SPI = 0x%x\n", portid,
+	       inbound ? "inbound" : "outbound", spi);
+
+	if (inbound && (action_alg != DEFAULT_SEC_ACTION_ALG)) {
+		/* Create all flow rules on port 0 and it would get applied on all ports due
+		 * to channel mask.
+		 */
+		ret = create_default_flow(portid, action_alg, spi, sa_lo, sa_hi, sa_index);
+		if (ret) {
+			printf("Flow creation failed\n");
+			return -1;
+		}
 	}
 
 	return 0;
@@ -803,7 +875,7 @@ handle_inb_soft_exp(uint16_t port_id, struct rte_mbuf *mbuf, uint32_t lcore_id)
 
 	sec_ctx = rte_eth_dev_get_sec_ctx(port_id);
 	sa_data = (struct ipsec_session_data *) *rte_security_dynfield(mbuf);
-	spi = res->cn10k.spi;
+	spi = sa_data->spi;
 
 	in_ses = inb_sas[spi].sa;
 	if (unlikely(in_ses == NULL)) {
@@ -1010,7 +1082,7 @@ init_pktmbuf_pool(uint32_t portid, unsigned int nb_mbuf)
 	return 0;
 }
 
-static int
+int
 create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint32_t spi,
 		    uint16_t sa_lo, uint16_t sa_hi, uint32_t sa_index)
 {
@@ -1421,6 +1493,8 @@ print_usage(const char *name)
 		"[--softexp-en]"
 		"[--softlimit <packet_count>]"
 		"[--inl-inb-oop]"
+		"[--action-alg]"
+		"[--ipsec-stats-en]"
 		"[--algo <aes_128_gcm|aes_256_gcm>]\n", name);
 }
 
@@ -1491,6 +1565,25 @@ parse_args(int argc, char **argv)
 			inl_inb_oop = true;
 			argc--;
 			argv++;
+			continue;
+		}
+
+		if (!strcmp(argv[0], "--ipsec-stats-en")) {
+			ipsec_stats = true;
+			argc--;
+			argv++;
+			continue;
+		}
+
+		if (!strcmp(argv[0], "--action-alg") && (argc > 1)) {
+			action_alg = strtoul(argv[1], NULL, 0);
+			argc -= 2;
+			argv += 2;
+			if (action_alg > RTE_PMD_CNXK_SEC_ACTION_ALG4) {
+				printf("Not supported security action alg %d\n", action_alg);
+				printf("Default IPsec flow will be applied\n");
+				action_alg = DEFAULT_SEC_ACTION_ALG; /* Default flow */
+			}
 			continue;
 		}
 
@@ -2402,16 +2495,20 @@ print_inb_outb_stats(void)
 	struct outb_sa_exp_info *sa_exp, *sa_exp_next;
 	uint64_t last_rx = 0, last_tx = 0;
 	uint64_t curr_rx = 0, curr_tx = 0;
+	struct rte_security_ctx *sec_ctx;
+	struct rte_security_stats stats;
 	uint64_t curr_ipsec_failed = 0;
 	uint64_t curr_rx_ipsec = 0;
 	uint64_t curr_inb_sas = 0;
 	uint64_t last_inb_sas = 0;
 	uint64_t curr_outb_sas = 0;
 	uint64_t last_outb_sas = 0;
+	uint32_t portid = 0;
 	int timeout = 5;
 	uint16_t lcore_id;
 	struct timespec tv;
 	struct timeval now;
+	int i;
 
 	while (!force_quit) {
 		curr_rx = 0;
@@ -2431,11 +2528,33 @@ print_inb_outb_stats(void)
 
 		printf("%" PRIu64 " Rx pps(%" PRIu64 " ipsec pkts), %" PRIu64 " Tx pps,\n"
 		       "%" PRIu64 " drops, %" PRIu64 " ipsec_failed, " "%" PRIu64 " Inb SAs ps, "
-		       "%" PRIu64 " Outb SAs ps\n\n",
+		       "%" PRIu64 " Outb SAs ps\n",
 		       (curr_rx - last_rx) / timeout, curr_rx_ipsec, (curr_tx - last_tx) / timeout,
 		       curr_rx - curr_tx, curr_ipsec_failed,
 		       (curr_inb_sas - last_inb_sas) / timeout,
 		       (curr_outb_sas - last_outb_sas) / timeout);
+
+		if (ipsec_stats) {
+			sec_ctx = rte_eth_dev_get_sec_ctx(portid);
+			for (i = 0; i <= (int)num_sas; i++) {
+				if (inb_sas[i].sa) {
+					rte_security_session_stats_get(sec_ctx, inb_sas[i].sa,
+								       &stats);
+					printf("[SPI 0x%x] %" PRIu64 " inb_pkts, ",
+					       inb_sas[i].sa_data->spi, stats.ipsec.ipackets);
+				}
+				if (outb_sas[i].sa) {
+					rte_security_session_stats_get(sec_ctx, outb_sas[i].sa,
+								       &stats);
+					printf("[SPI 0x%x] %" PRIu64 " outb_pkts",
+					       outb_sas[i].sa_data->spi, stats.ipsec.opackets);
+				}
+
+				if (inb_sas[i].sa || outb_sas[i].sa)
+					printf("\n");
+			}
+		}
+		printf("\n");
 
 		gettimeofday(&now, NULL);
 		tv.tv_sec = now.tv_sec + 5; /* Wait for 5 seconds */
@@ -2583,14 +2702,6 @@ poll_mode_inb_outb_worker(void *args)
 			/* Drop packets received with offload failure */
 			if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
 				lconf->ipsec_failed += 1;
-#if !defined(MSNS_CN9K)
-				union rte_pmd_cnxk_cpt_res_s *res;
-
-				res = rte_pmd_cnxk_inl_ipsec_res(pkt);
-				if (res)
-					printf("uc_compcode = %x compcode = %x\n",
-					       res->cn10k.uc_compcode, res->cn10k.compcode);
-#endif
 				rte_pktmbuf_free(pkt);
 				continue;
 			}
@@ -2598,6 +2709,10 @@ poll_mode_inb_outb_worker(void *args)
 			if (likely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
 				struct ipsec_session_data *sa_data;
 
+#if !defined(MSNS_CN9K)
+				if (unlikely(softexp))
+					handle_inb_soft_exp(portid, pkt, lcore_id);
+#endif
 				lconf->rx_ipsec_pkts += 1;
 				sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
 				sa_index = sa_data->spi;
@@ -3004,9 +3119,6 @@ setup_ipsec_inb_sessions(int portid, struct ipsec_session_data *conf,
 			goto exit;
 		}
 		inb_sas[sa_index].sa_data = sa_data;
-
-		printf("Port %d: Created Inbound session with SPI = %u\n",
-			portid, sa_data->ipsec_xform.spi);
 	}
 	return 0;
 
@@ -3087,9 +3199,6 @@ setup_ipsec_outb_sessions(int portid, struct ipsec_session_data *conf,
 			goto exit;
 		}
 		outb_sas[sa_index].sa_data = sa_data;
-
-		printf("Port %d: Created Outbound session with SPI = %u\n",
-			portid, sa_data->ipsec_xform.spi);
 	}
 	if (softexp && testmode != EVENT_IPSEC_INB_LAOUTB_PERF)
 		rte_eth_dev_callback_register(portid, RTE_ETH_EVENT_IPSEC,
@@ -3136,15 +3245,17 @@ event_ipsec_inb_laoutb_perf(void)
 	 */
 	ret = setup_ipsec_inb_sessions(portid, sess_conf, tun_type);
 	if (ret) {
-		printf("IPsec sessions creation failed\n");
+		printf("IPsec inbound sessions creation failed\n");
 		return ret;
 	}
 	ret = setup_ipsec_outb_sessions(portid, sess_conf, tun_type);
 	if (ret) {
-		printf("IPsec sessions creation failed\n");
+		printf("IPsec outbound sessions creation failed\n");
 		goto inb_sas_destroy;
 	}
-	create_default_ipsec_flow(portid);
+
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		create_default_ipsec_flow(portid);
 
 	printf("\n");
 
@@ -3161,7 +3272,10 @@ event_ipsec_inb_laoutb_perf(void)
 			break;
 	}
 
-	destroy_default_ipsec_flow(portid);
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		destroy_default_ipsec_flow(portid);
+	else
+		destroy_default_flow(portid);
 
 	for (i = 1; i <= (int)num_sas; i++) {
 		if (outb_sas[i].sa)
@@ -3201,15 +3315,17 @@ ipsec_inb_outb_perf(void)
 	 */
 	ret = setup_ipsec_inb_sessions(portid, sess_conf, tun_type);
 	if (ret) {
-		printf("IPsec sessions creation failed\n");
+		printf("IPsec inbound sessions creation failed\n");
 		return ret;
 	}
 	ret = setup_ipsec_outb_sessions(portid, sess_conf, tun_type);
 	if (ret) {
-		printf("IPsec sessions creation failed\n");
+		printf("IPsec outbound sessions creation failed\n");
 		goto inb_sas_destroy;
 	}
-	create_default_ipsec_flow(portid);
+
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		create_default_ipsec_flow(portid);
 
 	printf("\n");
 
@@ -3230,18 +3346,21 @@ ipsec_inb_outb_perf(void)
 			break;
 	}
 
-	destroy_default_ipsec_flow(portid);
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		destroy_default_ipsec_flow(portid);
+	else
+		destroy_default_flow(portid);
 
 	if (softexp)
 		rte_eth_dev_callback_unregister(portid, RTE_ETH_EVENT_IPSEC,
 						outb_sa_exp_event_callback, NULL);
-	for (i = 0; i < (int)num_sas; i++) {
+	for (i = 0; i <= (int)num_sas; i++) {
 		if (outb_sas[i].sa)
 			rte_security_session_destroy(sec_ctx, outb_sas[i].sa);
 		rte_free(outb_sas[i].sa_data);
 	}
 inb_sas_destroy:
-	for (i = 0; i < (int)num_sas; i++) {
+	for (i = 0; i <= (int)num_sas; i++) {
 		if (inb_sas[i].sa)
 			rte_security_session_destroy(sec_ctx, inb_sas[i].sa);
 		rte_free(inb_sas[i].sa_data);
@@ -3266,10 +3385,12 @@ event_ipsec_inb_perf(void)
 	}
 	ret = setup_ipsec_inb_sessions(portid, sess_conf, tun_type);
 	if (ret) {
-		printf("IPsec sessions creation failed\n");
+		printf("IPsec inbound sessions creation failed\n");
 		return ret;
 	}
-	create_default_ipsec_flow(portid);
+
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		create_default_ipsec_flow(portid);
 
 	printf("\n");
 
@@ -3286,9 +3407,13 @@ event_ipsec_inb_perf(void)
 		if (rte_eal_wait_lcore(lcore_id) < 0)
 			break;
 	}
-	destroy_default_ipsec_flow(portid);
 
-	for (i = 0; i < (int)num_sas; i++) {
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		destroy_default_ipsec_flow(portid);
+	else
+		destroy_default_flow(portid);
+
+	for (i = 0; i <= (int)num_sas; i++) {
 		if (inb_sas[i].sa)
 			rte_security_session_destroy(sec_ctx, inb_sas[i].sa);
 		rte_free(inb_sas[i].sa_data);
