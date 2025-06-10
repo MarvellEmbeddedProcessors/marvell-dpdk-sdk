@@ -183,6 +183,9 @@ mvtvm_ml_vdev_remove(struct rte_vdev_device *vdev)
 	if (dev == NULL)
 		return -ENODEV;
 
+	if (rte_eal_process_type() == RTE_PROC_SECONDARY)
+		return 0;
+
 	return rte_ml_dev_pmd_destroy(dev);
 }
 

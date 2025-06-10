@@ -696,6 +696,7 @@ cnxk_ml_dev_close(struct rte_ml_dev *dev)
 	struct cnxk_ml_qp *qp;
 	uint16_t model_id;
 	uint16_t qp_id;
+	int ret = 0;
 
 	if (dev == NULL)
 		return -EINVAL;
@@ -714,6 +715,7 @@ cnxk_ml_dev_close(struct rte_ml_dev *dev)
 	}
 
 	rte_free(cnxk_mldev->index_map);
+	cnxk_mldev->index_map = NULL;
 
 	/* Stop and unload all models */
 	for (model_id = 0; model_id < dev->data->nb_models; model_id++) {
@@ -732,6 +734,7 @@ cnxk_ml_dev_close(struct rte_ml_dev *dev)
 	}
 
 	rte_free(dev->data->models);
+	dev->data->models = NULL;
 
 	/* Destroy all queue pairs */
 	for (qp_id = 0; qp_id < dev->data->nb_queue_pairs; qp_id++) {
@@ -744,11 +747,17 @@ cnxk_ml_dev_close(struct rte_ml_dev *dev)
 	}
 
 	rte_free(dev->data->queue_pairs);
-
-	cnxk_mldev->state = ML_CNXK_DEV_STATE_CLOSED;
+	dev->data->queue_pairs = NULL;
 
 	/* Remove PCI device */
-	return rte_dev_remove(dev->device);
+	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+		cnxk_mldev->state = ML_CNXK_DEV_STATE_CLOSED;
+		ret = rte_dev_remove(dev->device);
+	} else {
+		cnxk_mldev->state = ML_CNXK_DEV_STATE_PROBED;
+	}
+
+	return ret;
 }
 
 static int

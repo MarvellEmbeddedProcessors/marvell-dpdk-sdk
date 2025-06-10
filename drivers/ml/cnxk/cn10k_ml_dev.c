@@ -344,14 +344,14 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv, struct rte_pci_device *pci_de
 	cnxk_mldev->mldev = dev;
 	cn10k_mldev = &cnxk_mldev->cn10k_mldev;
 
+	ret = cn10k_mldev_parse_devargs(dev->device->devargs, cn10k_mldev);
+	if (ret) {
+		plt_err("Failed to parse devargs ret = %d", ret);
+		goto pmd_destroy;
+	}
+
 	if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
 		cn10k_mldev->roc.pci_dev = pci_dev;
-
-		ret = cn10k_mldev_parse_devargs(dev->device->devargs, cn10k_mldev);
-		if (ret) {
-			plt_err("Failed to parse devargs ret = %d", ret);
-			goto pmd_destroy;
-		}
 
 		ret = roc_ml_dev_init(&cn10k_mldev->roc);
 		if (ret) {
@@ -361,8 +361,7 @@ cn10k_ml_pci_probe(struct rte_pci_driver *pci_drv, struct rte_pci_device *pci_de
 
 		dev->dev_ops = &cnxk_ml_ops;
 	} else {
-		plt_err("CN10K ML Ops are not supported on secondary process");
-		dev->dev_ops = &ml_dev_dummy_ops;
+		dev->dev_ops = &cnxk_ml_ops;
 	}
 
 	dev->enqueue_burst = NULL;
@@ -407,6 +406,8 @@ cn10k_ml_pci_remove(struct rte_pci_device *pci_dev)
 		ret = roc_ml_dev_fini(&cnxk_mldev->cn10k_mldev.roc);
 		if (ret)
 			return ret;
+	} else {
+		return 0;
 	}
 
 	return rte_ml_dev_pmd_destroy(dev);
