@@ -199,6 +199,17 @@ Runtime Config Options
    With the above configuration, LF 20 will be used by the device for RX Injection
    in security in fallback mechanism secnario.
 
+- ``Context ilen value`` (default ``0``)
+
+  Initial context fetch length value for CPT context.
+
+  For example::
+
+      -a 0002:20:00.1,ctx_ilen=4
+
+  With the above configuration, CPT initial context fetch size will be set to
+  4+1 128 bytes blocks.
+
 Debugging Options
 -----------------
 
