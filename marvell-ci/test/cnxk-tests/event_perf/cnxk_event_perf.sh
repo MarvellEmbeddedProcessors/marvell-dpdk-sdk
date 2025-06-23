@@ -41,7 +41,7 @@ get_test_args()
 	local num_cores=$2
 	local sched_mode=$3
 
-	local tx_cnt=$((num_cores * 50))
+	local tx_cnt=2048
 
 	case $test_name in
 		L2FWD_EVENT)
@@ -85,7 +85,7 @@ get_test_args()
 			echo "-l 0-$num_cores -n 4 -a $IF1 -a $IF2 -a $SSO_DEV -- " \
 				"--prod_type_ethdev --nb_pkts=0 --verbose 2" \
 				"--test=pipeline_atq --stlist=${sched_mode:0:1}" \
-				"--wlcores=1-$num_cores --tx_first 2048" \
+				"--wlcores=1-$num_cores --tx_first $tx_cnt" \
 				"--enable_vector --nb_eth_queues 2 --vector_size 128"
 			;;
 		CRYPTO_ADAPTER_FWD)

@@ -25,7 +25,7 @@ launch_testpmd()
 
 	# Limit the number forwarding cores on cn9/10k.
 	# Tx rate peaks (99 MPPS) after 10 cores and drop after 18.
-	fwd_cores=$(( fwd_cores < 12 ? fwd_cores : 12 ))
+	fwd_cores=$(( fwd_cores < 11 ? fwd_cores : 11 ))
 
 	testpmd_launch $PRFX \
 		"-l 0-$fwd_cores -a $IF0" \
