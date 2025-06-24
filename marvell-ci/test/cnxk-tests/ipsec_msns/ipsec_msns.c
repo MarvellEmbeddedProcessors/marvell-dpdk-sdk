@@ -49,20 +49,30 @@ int create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, 
 			       uint16_t sa_lo, uint16_t sa_hi, uint32_t sa_index);
 enum test_mode {
 	IPSEC_MSNS,
-	EVENT_IPSEC_INBOUND_MSNS_PERF,
-	EVENT_IPSEC_INBOUND_PERF,
+	EVENT_IPSEC_INB_MSNS_PERF,
+	EVENT_IPSEC_INB_PERF,
 	EVENT_IPSEC_INB_OUTB_PERF,
 	EVENT_IPSEC_INB_LAOUTB_PERF,
 	POLL_IPSEC_INB_OUTB_PERF,
 	/* Verify the RTE PMD APIs */
-	IPSEC_RTE_PMD_CNXK_API_TEST
+	IPSEC_RTE_PMD_CNXK_API_TEST,
+	POLL_IPSEC_INB_PERF,
+	POLL_IPSEC_OUTB_PERF,
+	EVENT_IPSEC_OUTB_PERF,
 };
 
 static struct rte_mempool *mbufpool[RTE_MAX_ETHPORTS];
+static struct rte_mempool *vector_pool[RTE_MAX_ETHPORTS];
 static struct rte_mempool *sess_pool;
 static struct rte_mempool *cryptodev_session_pool;
 /* ethernet addresses of ports */
 static struct rte_ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
+static uint16_t stats_tmo = 5;
+
+#define VECTOR_SIZE_DEFAULT   64
+#define VECTOR_TMO_NS_DEFAULT 1E6
+static uint16_t vector_en;
+static uint16_t vector_sz = VECTOR_SIZE_DEFAULT;
 
 static struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -179,6 +189,8 @@ static bool ipsec_stats;
 static uint8_t action_alg = DEFAULT_SEC_ACTION_ALG;
 static uint32_t soft_limit = 8 * 1024 * 1024;
 static uint32_t esn_ar;
+static bool esn_en;
+static bool verbose;
 static struct ipsec_session_data *sess_conf = &conf_aes_128_gcm;
 
 TAILQ_HEAD(outb_sa_expiry_q, outb_sa_exp_info);
@@ -202,10 +214,10 @@ ipsec_test_mode_to_string(enum test_mode testmode)
 	switch (testmode) {
 	case IPSEC_MSNS:
 		return "IPSEC_MSNS";
-	case EVENT_IPSEC_INBOUND_MSNS_PERF:
-		return "EVENT_IPSEC_INBOUND_MSNS_PERF";
-	case EVENT_IPSEC_INBOUND_PERF:
-		return "EVENT_IPSEC_INBOUND_PERF";
+	case EVENT_IPSEC_INB_MSNS_PERF:
+		return "EVENT_IPSEC_INB_MSNS_PERF";
+	case EVENT_IPSEC_INB_PERF:
+		return "EVENT_IPSEC_INB_PERF";
 	case EVENT_IPSEC_INB_OUTB_PERF:
 		return "EVENT_IPSEC_INB_OUTB_PERF";
 	case EVENT_IPSEC_INB_LAOUTB_PERF:
@@ -214,6 +226,13 @@ ipsec_test_mode_to_string(enum test_mode testmode)
 		return "POLL_IPSEC_INB_OUTB_PERF";
 	case IPSEC_RTE_PMD_CNXK_API_TEST:
 		return "IPSEC_RTE_PMD_CNXK_API_TEST";
+	case POLL_IPSEC_INB_PERF:
+		return "POLL_IPSEC_INB_PERF";
+	case POLL_IPSEC_OUTB_PERF:
+		return "POLL_IPSEC_OUTB_PERF";
+	case EVENT_IPSEC_OUTB_PERF:
+		return "EVENT_IPSEC_OUTB_PERF";
+
 	}
 	return NULL;
 }
@@ -576,17 +595,17 @@ dump_alg_data(struct ipsec_session_data *sess_conf)
 	int i;
 
 	if (sess_conf->aead && sess_conf->xform.aead.aead.algo == RTE_CRYPTO_AEAD_AES_GCM) {
-		printf("\nCrypto Alg: AES-GCM-%u\n", sess_conf->xform.aead.aead.key.length * 8);
+		printf("Crypto Alg: AES-GCM-%u\n", sess_conf->xform.aead.aead.key.length * 8);
 		printf("Crypto Key: ");
 		for (i = 0; i < sess_conf->xform.aead.aead.key.length - 1; i++)
-			printf("%02x:", sess_conf->key.data[i]);
-		printf("%02x\n", sess_conf->key.data[i]);
+			printf("%02X", sess_conf->key.data[i]);
+		printf("%02X\n", sess_conf->key.data[i]);
 
-		printf("Crypto Salt: %02x:%02x:%02x:%02x\n",
-		       sess_conf->ipsec_xform.salt >> 24,
-		       (sess_conf->ipsec_xform.salt >> 16) & 0xFF,
-		       (sess_conf->ipsec_xform.salt >> 8) & 0xFF,
-		       sess_conf->ipsec_xform.salt & 0xFF);
+		printf("Crypto Salt: %02X%02X%02X%02X\n",
+		       ((uint8_t *)(&sess_conf->ipsec_xform.salt))[0],
+		       ((uint8_t *)(&sess_conf->ipsec_xform.salt))[1],
+		       ((uint8_t *)(&sess_conf->ipsec_xform.salt))[2],
+		       ((uint8_t *)(&sess_conf->ipsec_xform.salt))[3]);
 	}
 }
 
@@ -804,7 +823,7 @@ create_ipsec_perf_session(struct ipsec_session_data *sa, uint16_t portid,
 		memcpy(&sess_conf.ipsec.tunnel.ipv6.src_addr, &src_v6, sizeof(src_v6));
 		memcpy(&sess_conf.ipsec.tunnel.ipv6.dst_addr, &dst_v6, sizeof(dst_v6));
 	}
-	sess_conf.ipsec.options.esn = !!esn_ar;
+	sess_conf.ipsec.options.esn = esn_en;
 	sess_conf.ipsec.options.stats = ipsec_stats;
 	sess_conf.ipsec.replay_win_sz = esn_ar;
 
@@ -1337,6 +1356,14 @@ ut_eventdev_setup(void)
 		queue_conf.ev.sched_type = RTE_SCHED_TYPE_PARALLEL;
 		queue_conf.ev.event_type = RTE_EVENT_TYPE_ETHDEV;
 
+		if (vector_en) {
+			/* Event vector enable */
+			queue_conf.vector_sz = vector_sz;
+			queue_conf.vector_timeout_ns = VECTOR_TMO_NS_DEFAULT;
+			queue_conf.vector_mp = vector_pool[portid];
+			queue_conf.rx_queue_flags |= RTE_EVENT_ETH_RX_ADAPTER_QUEUE_EVENT_VECTOR;
+		}
+
 		/* Add queue to the adapter */
 		ret = rte_event_eth_rx_adapter_queue_add(rx_adapter_id, portid,
 							 all_queues, &queue_conf);
@@ -1479,23 +1506,35 @@ print_usage(const char *name)
 {
 	printf("Invalid arguments\n");
 	printf("Usage: %s ", name);
-	fprintf(stderr, "Usage: %s [--testmode <0-6> 0: IPSEC_MSNS\n"
-		"\t\t\t1: EVENT_IPSEC_INBOUND_MSNS_PERF\n"
-		"\t\t\t2: EVENT_IPSEC_INBOUND_PERF\n"
+	fprintf(stderr, "Usage: %s [arguments]\n"
+		"\t[--testmode <N>]\n"
+		"\t\t\t0: IPSEC_MSNS\n"
+		"\t\t\t1: EVENT_IPSEC_INB_MSNS_PERF\n"
+		"\t\t\t2: EVENT_IPSEC_INB_PERF\n"
 		"\t\t\t3: EVENT_IPSEC_INB_OUTB_PERF\n"
 		"\t\t\t4: EVENT_IPSEC_INB_LAOUTB_PERF\n"
 		"\t\t\t5: POLL_IPSEC_INB_OUTB_PERF\n"
-		"\t\t\t6: IPSEC_RTE_PMD_CNXK_API_TEST]\n"
-		"[--pfc]"
-		"[--portmask]"
-		"[--nb-mbufs <count >]"
-		"[--num-sas <count>]"
-		"[--softexp-en]"
-		"[--softlimit <packet_count>]"
-		"[--inl-inb-oop]"
-		"[--action-alg]"
-		"[--ipsec-stats-en]"
-		"[--algo <aes_128_gcm|aes_256_gcm>]\n", name);
+		"\t\t\t6: IPSEC_RTE_PMD_CNXK_API_TEST\n"
+		"\t\t\t7: POLL_IPSEC_INB_PERF\n"
+		"\t\t\t8: POLL_IPSEC_OUTB_PERF\n"
+		"\t\t\t9: EVENT_IPSEC_OUTB_PERF\n"
+		"\t[--timeout <sec>]     Timeout in seconds for stats print\n"
+		"\t[--pfc]               Enable PFC with EVENT_IPSEC_INB_MSNS_PERF\n"
+		"\t[--portmask]	          Port mask to enable\n"
+		"\t[--nb-mbufs <count >]  MBUFs per packet pool\n"
+		"\t[--num-sas <count>]    Number of SA's to create\n"
+		"\t[--softexp-en]         Enable soft expiry on SA's\n"
+		"\t[--softlimit <count>]  Soft expiry pkt limit\n"
+		"\t[--inl-inb-oop]        Enable inline inbound OOP\n"
+		"\t[--action-alg]         Use SA_XOR action algo for perf test\n"
+		"\t[--ipsec-stats-en]     Enable IPSEC stats\n"
+		"\t[--vector-en]          Enable vector mode with eventdev. Default is disabled\n"
+		"\t[--vector-sz <size>]   Set vector size. Default is 32.\n"
+		"\t[--esn-ar <winsz>]     Enable ESN with anti-replay window size\n"
+		"\t[--esn]                Enable ESN on SAs\n"
+		"\t[--verbose]            Enable verbose mode\n"
+		"\t[--algo <aes_128_gcm|aes_256_gcm>] Cipher algorithm to use\n",
+		name);
 }
 
 static int
@@ -1508,13 +1547,14 @@ parse_args(int argc, char **argv)
 	while (argc) {
 		if (!strcmp(argv[0], "--testmode") && (argc > 1)) {
 			testmode = strtoul(argv[1], NULL, 0);
-			if (testmode == EVENT_IPSEC_INBOUND_MSNS_PERF ||
+			if (testmode == EVENT_IPSEC_INB_MSNS_PERF ||
 			    testmode == EVENT_IPSEC_INB_OUTB_PERF ||
 			    testmode == EVENT_IPSEC_INB_LAOUTB_PERF ||
-			    testmode == EVENT_IPSEC_INBOUND_PERF ||
+			    testmode == EVENT_IPSEC_INB_PERF ||
+			    testmode == EVENT_IPSEC_OUTB_PERF ||
 			    testmode == IPSEC_RTE_PMD_CNXK_API_TEST)
 				event_en = true;
-			else if (testmode == POLL_IPSEC_INB_OUTB_PERF)
+			else
 				poll_mode = true;
 
 			argc -= 2;
@@ -1551,6 +1591,13 @@ parse_args(int argc, char **argv)
 			}
 			argc -= 2;
 			argv += 2;
+			continue;
+		}
+
+		if (!strcmp(argv[0], "--verbose")) {
+			verbose = true;
+			argc--;
+			argv++;
 			continue;
 		}
 
@@ -1596,8 +1643,16 @@ parse_args(int argc, char **argv)
 
 		if (!strcmp(argv[0], "--esn-ar") && (argc > 1)) {
 			esn_ar = atoi(argv[1]);
+			esn_en = true;
 			argc -= 2;
 			argv += 2;
+			continue;
+		}
+
+		if (!strcmp(argv[0], "--esn")) {
+			esn_en = true;
+			argc -= 1;
+			argv += 1;
 			continue;
 		}
 
@@ -1615,6 +1670,26 @@ parse_args(int argc, char **argv)
 			} else {
 				printf("Invalid algo %s\n", alg);
 			}
+		}
+
+		if (!strcmp(argv[0], "--vector-en")) {
+			vector_en = true;
+			argc--;
+			argv++;
+			continue;
+		}
+		if (!strcmp(argv[0], "--vector-sz") && (argc > 1)) {
+			vector_sz = strtoul(argv[1], NULL, 0);
+			argc -= 2;
+			argv += 2;
+			continue;
+		}
+
+		if (!strcmp(argv[0], "--timeout") && (argc > 1)) {
+			stats_tmo = strtoul(argv[1], NULL, 0);
+			argc -= 2;
+			argv += 2;
+			continue;
 		}
 
 		/* Unknown args */
@@ -1637,6 +1712,23 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 	if (ret) {
 		printf("Failed to setup pktmbuf pool for port=%d, ret=%d", portid, ret);
 		return ret;
+	}
+
+	if (vector_en && vector_pool[portid] == NULL) {
+		unsigned int nb_vec;
+		char s[64];
+
+		nb_vec = (nb_mbufs + vector_sz - 1) / vector_sz;
+		nb_vec = RTE_MAX(512U, nb_vec);
+		nb_vec += rte_lcore_count() * 32;
+		snprintf(s, sizeof(s), "vector_pool_%d", portid);
+		vector_pool[portid] = rte_event_vector_pool_create(s, nb_vec, 32, vector_sz,
+								   socketid);
+		if (vector_pool[portid] == NULL) {
+			printf("Failed to create vector pool for port %d\n", portid);
+			return -ENOMEM;
+		}
+		printf("Allocated vector pool for port %d\n", portid);
 	}
 
 	/* Enable loopback mode for non perf test */
@@ -1679,6 +1771,7 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 			return ret;
 		}
 
+		printf("Setup rxq=%u,%d,%d\n", lcore_id, queueid, socketid);
 		ret = rte_eth_rx_queue_setup(portid, queueid, nb_rxd, socketid, &rx_conf,
 					     mbufpool[portid]);
 		if (ret < 0) {
@@ -1757,7 +1850,12 @@ ut_setup(int argc, char **argv)
 		if ((ethdev_port_mask & RTE_BIT64(portid)) == 0)
 			continue;
 
-		if (testmode == POLL_IPSEC_INB_OUTB_PERF)
+		if (testmode == POLL_IPSEC_INB_OUTB_PERF ||
+		    testmode == POLL_IPSEC_INB_PERF ||
+		    testmode == POLL_IPSEC_OUTB_PERF ||
+		    testmode == EVENT_IPSEC_INB_PERF ||
+		    testmode == EVENT_IPSEC_OUTB_PERF ||
+		    testmode == EVENT_IPSEC_INB_OUTB_PERF)
 			ret = port_init(portid, nb_mbufs, nb_lcores - 1, nb_lcores - 1,
 					nb_rxd, nb_txd);
 		else
@@ -2504,7 +2602,6 @@ print_inb_outb_stats(void)
 	uint64_t curr_outb_sas = 0;
 	uint64_t last_outb_sas = 0;
 	uint32_t portid = 0;
-	int timeout = 5;
 	uint16_t lcore_id;
 	struct timespec tv;
 	struct timeval now;
@@ -2528,11 +2625,11 @@ print_inb_outb_stats(void)
 
 		printf("%" PRIu64 " Rx pps(%" PRIu64 " ipsec pkts), %" PRIu64 " Tx pps,\n"
 		       "%" PRIu64 " drops, %" PRIu64 " ipsec_failed, " "%" PRIu64 " Inb SAs ps, "
-		       "%" PRIu64 " Outb SAs ps\n",
-		       (curr_rx - last_rx) / timeout, curr_rx_ipsec, (curr_tx - last_tx) / timeout,
+		       "%" PRIu64 " Outb SAs ps\n", (curr_rx - last_rx) / stats_tmo,
+		       curr_rx_ipsec, (curr_tx - last_tx) / stats_tmo,
 		       curr_rx - curr_tx, curr_ipsec_failed,
-		       (curr_inb_sas - last_inb_sas) / timeout,
-		       (curr_outb_sas - last_outb_sas) / timeout);
+		       (curr_inb_sas - last_inb_sas) / stats_tmo,
+		       (curr_outb_sas - last_outb_sas) / stats_tmo);
 
 		if (ipsec_stats) {
 			sec_ctx = rte_eth_dev_get_sec_ctx(portid);
@@ -2557,7 +2654,7 @@ print_inb_outb_stats(void)
 		printf("\n");
 
 		gettimeofday(&now, NULL);
-		tv.tv_sec = now.tv_sec + 5; /* Wait for 5 seconds */
+		tv.tv_sec = now.tv_sec + stats_tmo; /* Wait for 5 seconds */
 		tv.tv_nsec = now.tv_usec * 1000;
 
 wait_timeout:
@@ -2594,7 +2691,6 @@ print_stats(void)
 	uint64_t curr_rx_ipsec = 0;
 	uint64_t curr_inb_sas = 0;
 	uint64_t last_inb_sas = 0;
-	int timeout = 5;
 	uint16_t lcore_id;
 
 	while (!force_quit) {
@@ -2613,12 +2709,12 @@ print_stats(void)
 
 		printf("%" PRIu64 " Rx pps(%" PRIu64 " ipsec pkts), %" PRIu64 " Tx pps,\n"
 		       "%" PRIu64 " drops, %" PRIu64 " ipsec_failed, " "%" PRIu64
-		       " Inb SAs ps,\n\n",
-		       (curr_rx - last_rx) / timeout, curr_rx_ipsec, (curr_tx - last_tx) / timeout,
+		       " Inb SAs ps,\n\n", (curr_rx - last_rx) / stats_tmo,
+		       curr_rx_ipsec, (curr_tx - last_tx) / stats_tmo,
 		       curr_rx - curr_tx, curr_ipsec_failed,
-		       (curr_inb_sas - last_inb_sas) / timeout);
+		       (curr_inb_sas - last_inb_sas) / stats_tmo);
 
-		sleep(timeout);
+		sleep(stats_tmo);
 
 		last_rx = curr_rx;
 		last_tx = curr_tx;
@@ -2639,7 +2735,7 @@ ipsec_event_port_flush(uint8_t eventdev_id __rte_unused, struct rte_event ev,
 	rte_pktmbuf_free(ev.mbuf);
 }
 
-static inline bool
+static __rte_always_inline bool
 pkt_type_valid(struct rte_mbuf *pkt)
 {
 	enum pkt_type type;
@@ -2674,6 +2770,7 @@ poll_mode_inb_outb_worker(void *args)
 	uint32_t lcore_id;
 	uint16_t portid;
 	uint16_t queueid;
+	uint64_t ol_flags;
 
 	(void)args;
 	lcore_id = rte_lcore_id();
@@ -2699,14 +2796,15 @@ poll_mode_inb_outb_worker(void *args)
 		/* Send pkts out */
 		for (j = 0, k = 0; j < nb_rx; j++) {
 			pkt = pkts[j];
+			ol_flags = pkt->ol_flags;
 			/* Drop packets received with offload failure */
-			if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+			if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
 				lconf->ipsec_failed += 1;
 				rte_pktmbuf_free(pkt);
 				continue;
 			}
 
-			if (likely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
+			if (likely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
 				struct ipsec_session_data *sa_data;
 
 #if !defined(MSNS_CN9K)
@@ -2721,7 +2819,7 @@ poll_mode_inb_outb_worker(void *args)
 			}
 			sa = outb_sas[sa_index].sa;
 			rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
-			pkt->ol_flags |= RTE_MBUF_F_TX_SEC_OFFLOAD;
+			pkt->ol_flags = RTE_MBUF_F_TX_SEC_OFFLOAD;
 			pkt->l2_len = RTE_ETHER_HDR_LEN;
 
 			tx_pkts[k++] = pkt;
@@ -2738,6 +2836,23 @@ poll_mode_inb_outb_worker(void *args)
 	}
 
 	return 0;
+}
+
+static void
+free_event(struct rte_event *ev)
+{
+	struct rte_event_vector *vec;
+	int i;
+
+	if (ev->event_type == RTE_EVENT_TYPE_ETHDEV) {
+		if (ev->mbuf)
+			rte_pktmbuf_free(ev->mbuf);
+	} else if (ev->event_type == RTE_EVENT_TYPE_VECTOR) {
+		vec = ev->vec;
+		for (i = 0; i < vec->nb_elem; i++)
+			rte_pktmbuf_free(vec->mbufs[i]);
+		rte_mempool_put(rte_mempool_from_obj(vec), vec);
+	}
 }
 
 static int
@@ -2786,7 +2901,7 @@ event_inb_laoutb_worker(void *args)
 
 		pkt = ev.mbuf;
 
-		if (!pkt_type_valid(pkt))
+		if (unlikely(!pkt_type_valid(pkt)))
 			continue;
 
 		info->rx_pkts += nb_rx;
@@ -2802,15 +2917,15 @@ event_inb_laoutb_worker(void *args)
 		rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
 		/* Drop packets received with offload failure */
 		if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
-			rte_pktmbuf_free(ev.mbuf);
 			info->ipsec_failed += 1;
 #if !defined(MSNS_CN9K)
 			union rte_pmd_cnxk_cpt_res_s *res;
 
 			res = rte_pmd_cnxk_inl_ipsec_res(pkt);
-			if (res)
+			if (res && verbose)
 				printf("compcode = %x\n", res->cn10k.uc_compcode);
 #endif
+			rte_pktmbuf_free(ev.mbuf);
 			continue;
 		}
 		if (likely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
@@ -2838,17 +2953,70 @@ event_inb_laoutb_worker(void *args)
 	return 0;
 }
 
+static __rte_always_inline int
+handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rte_mbuf *pkt)
+{
+	struct lcore_cfg *info = &lcore_cfg[lcore_id];
+	uint64_t ol_flags = pkt->ol_flags;
+	struct rte_security_session *sa;
+	uint16_t sa_index = 0;
+
+	if (unlikely(!pkt_type_valid(pkt)))
+		return -1;
+
+	info->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
+#if !defined(MSNS_CN9K)
+	if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp))
+		handle_inb_soft_exp(0, pkt, lcore_id);
+#endif
+
+	if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && inl_inb_oop))
+		handle_inb_oop(pkt);
+
+	rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
+	/* Drop packets received with offload failure */
+	if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+		info->ipsec_failed += 1;
+
+#if !defined(MSNS_CN9K)
+		union rte_pmd_cnxk_cpt_res_s *res;
+
+		res = rte_pmd_cnxk_inl_ipsec_res(pkt);
+		if (res && verbose)
+			printf("compcode = %x\n", res->cn10k.uc_compcode);
+#endif
+		rte_pktmbuf_free(pkt);
+		return -1;
+	}
+
+	if (likely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
+		struct ipsec_session_data *sa_data;
+
+		sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
+		sa_index = sa_data->spi;
+	} else {
+		sa_index = rte_rand_max(num_sas - 1) + 1;
+	}
+	sa = outb_sas[sa_index].sa;
+	rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
+
+	/* Provide L2 len for Outbound processing */
+	pkt->l2_len = RTE_ETHER_HDR_LEN;
+	pkt->ol_flags = RTE_MBUF_F_TX_SEC_OFFLOAD;
+	return 0;
+}
+
 static int
 event_inb_outb_worker(void *args)
 {
 	uint32_t lcore_id = rte_lcore_id();
 	struct lcore_cfg *info = &lcore_cfg[lcore_id];
 	struct rte_security_ctx *sec_ctx = NULL;
+	struct rte_event_vector *vec;
 	unsigned int nb_rx = 0, nb_tx;
-	struct rte_security_session *sa;
 	struct rte_mbuf *pkt;
 	struct rte_event ev;
-	uint16_t sa_index = 0;
+	uint16_t i, j;
 
 	(void)args;
 
@@ -2864,72 +3032,64 @@ event_inb_outb_worker(void *args)
 
 		switch (ev.event_type) {
 		case RTE_EVENT_TYPE_ETHDEV:
+		case RTE_EVENT_TYPE_VECTOR:
 			break;
 		default:
 			printf("Invalid event type %u", ev.event_type);
 			continue;
 		}
 
-		pkt = ev.mbuf;
+		if (ev.event_type == RTE_EVENT_TYPE_VECTOR) {
+			vec = ev.vec;
+			nb_rx = vec->nb_elem;
+			info->rx_pkts += nb_rx;
+			pkt = vec->mbufs[0];
+			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
+			vec->attr_valid = 1;
+			vec->port = pkt->port;
 
-		if (!pkt_type_valid(pkt))
-			continue;
-
-		info->rx_pkts += nb_rx;
-		info->rx_ipsec_pkts += !!(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
-#if !defined(MSNS_CN9K)
-		if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp))
-			handle_inb_soft_exp(0, ev.mbuf, lcore_id);
-#endif
-
-		if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && inl_inb_oop))
-			handle_inb_oop(ev.mbuf);
-
-		rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
-		/* Drop packets received with offload failure */
-		if (unlikely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
-			rte_pktmbuf_free(ev.mbuf);
-			info->ipsec_failed += 1;
-
-#if !defined(MSNS_CN9K)
-			union rte_pmd_cnxk_cpt_res_s *res;
-
-			res = rte_pmd_cnxk_inl_ipsec_res(pkt);
-			if (res)
-				printf("compcode = %x\n", res->cn10k.uc_compcode);
-#endif
-			continue;
-		}
-		sec_ctx = rte_eth_dev_get_sec_ctx(0);
-
-		if (likely(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
-			struct ipsec_session_data *sa_data;
-
-			sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
-			sa_index = sa_data->spi;
+			/* Process vector events */
+			j = 0;
+			for (i = 0; i < nb_rx; i++) {
+				pkt = vec->mbufs[i];
+				if (unlikely(handle_inb_outb_event(lcore_id, sec_ctx, pkt)))
+					continue;
+				vec->mbufs[j++] = pkt;
+			}
+			if (unlikely(!j)) {
+				/* All packets were dropped */
+				rte_mempool_put(rte_mempool_from_obj(vec), vec);
+				continue;
+			}
+			vec->nb_elem = j;
+			nb_tx = j;
 		} else {
-			sa_index = rte_rand_max(num_sas - 1) + 1;
-		}
-		sa = outb_sas[sa_index].sa;
-		rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
+			/* Process single event */
+			info->rx_pkts += nb_rx;
+			pkt = ev.mbuf;
+			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
+			if (unlikely(handle_inb_outb_event(lcore_id, sec_ctx, pkt)))
+				continue;
 
-		/* Provide L2 len for Outbound processing */
-		pkt->l2_len = RTE_ETHER_HDR_LEN;
-		pkt->ol_flags |= RTE_MBUF_F_TX_SEC_OFFLOAD;
-		/* Save eth queue for Tx */
-		rte_event_eth_tx_adapter_txq_set(pkt, 0);
+			/* Save eth queue for Tx */
+			rte_event_eth_tx_adapter_txq_set(pkt, 0);
+			nb_tx = 1;
+		}
+
 		/*
 		 * Since tx internal port is available, events can be
 		 * directly enqueued to the adapter and it would be
 		 * internally submitted to the eth device.
 		 */
-		nb_tx = rte_event_eth_tx_adapter_enqueue(info->eventdev_id,
-							 info->event_port_id,
-							 &ev, /* events */
-							 1,   /* nb_events */
-							 0 /* flags */);
-		if (!nb_tx)
-			rte_pktmbuf_free(ev.mbuf);
+		if (!rte_event_eth_tx_adapter_enqueue(info->eventdev_id,
+						      info->event_port_id,
+						      &ev, /* events */
+						      1,   /* nb_events */
+						      0 /* flags */)) {
+			free_event(&ev);
+			continue;
+		}
+
 		info->tx_pkts += nb_tx;
 	}
 
@@ -2944,14 +3104,44 @@ event_inb_outb_worker(void *args)
 	return 0;
 }
 
+static __rte_always_inline int
+handle_inb_event(uint32_t lcore_id, struct rte_mbuf *pkt)
+{
+	struct lcore_cfg *info = &lcore_cfg[lcore_id];
+	uint64_t ol_flags = pkt->ol_flags;
+
+	info->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
+#if !defined(MSNS_CN9K)
+	if (ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp)
+		handle_inb_soft_exp(0, pkt, lcore_id);
+#endif
+
+	/* Drop packets received with offload failure */
+	if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+		info->ipsec_failed += 1;
+#if !defined(MSNS_CN9K)
+			union rte_pmd_cnxk_cpt_res_s *res;
+
+			res = rte_pmd_cnxk_inl_ipsec_res(pkt);
+			if (res && verbose)
+				printf("compcode = %x\n", res->cn10k.uc_compcode);
+#endif
+		rte_pktmbuf_free(pkt);
+		return -1;
+	}
+	return 0;
+}
+
 static int
 event_inb_worker(void *args)
 {
 	uint32_t lcore_id = rte_lcore_id();
 	struct lcore_cfg *info = &lcore_cfg[lcore_id];
 	unsigned int nb_rx = 0, nb_tx;
+	struct rte_event_vector *vec;
 	struct rte_mbuf *pkt;
 	struct rte_event ev;
+	uint16_t i, j;
 
 	(void)args;
 
@@ -2967,43 +3157,63 @@ event_inb_worker(void *args)
 
 		switch (ev.event_type) {
 		case RTE_EVENT_TYPE_ETHDEV:
+		case RTE_EVENT_TYPE_VECTOR:
 			break;
 		default:
 			printf("Invalid event type %u", ev.event_type);
 			continue;
 		}
 
-		pkt = ev.mbuf;
+		if (ev.event_type == RTE_EVENT_TYPE_VECTOR) {
+			vec = ev.vec;
+			nb_rx = vec->nb_elem;
+			info->rx_pkts += nb_rx;
+			pkt = vec->mbufs[0];
+			vec->attr_valid = 1;
+			vec->port = pkt->port;
 
-		rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
+			/* Process vector events */
+			j = 0;
+			for (i = 0; i < nb_rx; i++) {
+				pkt = vec->mbufs[i];
+				if (unlikely(handle_inb_event(lcore_id, pkt)))
+					continue;
+				vec->mbufs[j++] = pkt;
+			}
+			if (unlikely(!j)) {
+				/* All packets were dropped */
+				rte_mempool_put(rte_mempool_from_obj(vec), vec);
+				continue;
+			}
+			vec->nb_elem = j;
+			nb_tx = j;
+		} else {
+			/* Process single event */
+			info->rx_pkts += nb_rx;
+			pkt = ev.mbuf;
+			rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
 
-		info->rx_pkts += nb_rx;
-		info->rx_ipsec_pkts += !!(pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
-#if !defined(MSNS_CN9K)
-		if (pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD && softexp)
-			handle_inb_soft_exp(0, ev.mbuf, lcore_id);
-#endif
+			if (unlikely(handle_inb_event(lcore_id, pkt)))
+				continue;
 
-		/* Drop packets received with offload failure */
-		if (pkt->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED) {
-			rte_pktmbuf_free(ev.mbuf);
-			info->ipsec_failed += 1;
-			continue;
+			/* Save eth queue for Tx */
+			rte_event_eth_tx_adapter_txq_set(pkt, 0);
+			nb_tx = 1;
 		}
-		/* Save eth queue for Tx */
-		rte_event_eth_tx_adapter_txq_set(pkt, 0);
+
 		/*
 		 * Since tx internal port is available, events can be
 		 * directly enqueued to the adapter and it would be
 		 * internally submitted to the eth device.
 		 */
-		nb_tx = rte_event_eth_tx_adapter_enqueue(info->eventdev_id,
-							 info->event_port_id,
-							 &ev, /* events */
-							 1,   /* nb_events */
-							 0 /* flags */);
-		if (!nb_tx)
-			rte_pktmbuf_free(ev.mbuf);
+		if (!rte_event_eth_tx_adapter_enqueue(info->eventdev_id,
+						      info->event_port_id,
+						      &ev, /* events */
+						      1,   /* nb_events */
+						      0 /* flags */)) {
+			free_event(&ev);
+			continue;
+		}
 		info->tx_pkts += nb_tx;
 	}
 
@@ -3015,6 +3225,256 @@ event_inb_worker(void *args)
 
 	rte_event_port_quiesce(info->eventdev_id, info->event_port_id,
 			       ipsec_event_port_flush, NULL);
+	return 0;
+}
+
+static __rte_always_inline int
+handle_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rte_mbuf *pkt)
+{
+	struct rte_security_session *sa;
+	uint16_t sa_index = 0;
+
+	RTE_SET_USED(lcore_id);
+	if (unlikely(!pkt_type_valid(pkt)))
+		return -1;
+
+	sa_index = rte_rand_max(num_sas - 1) + 1;
+	sa = outb_sas[sa_index].sa;
+	rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
+
+	/* Provide L2 len for Outbound processing */
+	pkt->l2_len = RTE_ETHER_HDR_LEN;
+	pkt->ol_flags = RTE_MBUF_F_TX_SEC_OFFLOAD;
+	return 0;
+}
+
+static int
+event_outb_worker(void *args)
+{
+	uint32_t lcore_id = rte_lcore_id();
+	struct lcore_cfg *info = &lcore_cfg[lcore_id];
+	struct rte_security_ctx *sec_ctx = NULL;
+	unsigned int nb_rx = 0, nb_tx;
+	struct rte_event_vector *vec;
+	struct rte_mbuf *pkt;
+	struct rte_event ev;
+	uint16_t i, j;
+
+	(void)args;
+
+	printf("Launching event mode worker on lcore=%u, event_port_id=%u\n", lcore_id,
+	       info->event_port_id);
+
+	while (!force_quit) {
+		/* Read packet from event queues */
+		nb_rx = rte_event_dequeue_burst(info->eventdev_id, info->event_port_id,
+						&ev, 1, 0);
+		if (nb_rx == 0)
+			continue;
+
+		switch (ev.event_type) {
+		case RTE_EVENT_TYPE_ETHDEV:
+		case RTE_EVENT_TYPE_VECTOR:
+			break;
+		default:
+			printf("Invalid event type %u", ev.event_type);
+			continue;
+		}
+
+		if (ev.event_type == RTE_EVENT_TYPE_VECTOR) {
+			vec = ev.vec;
+			nb_rx = vec->nb_elem;
+			info->rx_pkts += nb_rx;
+			pkt = vec->mbufs[0];
+			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
+			vec->attr_valid = 1;
+			vec->port = pkt->port;
+
+			/* Process vector events */
+			j = 0;
+			for (i = 0; i < nb_rx; i++) {
+				pkt = vec->mbufs[i];
+				if (unlikely(handle_outb_event(lcore_id, sec_ctx, pkt)))
+					continue;
+				vec->mbufs[j++] = pkt;
+			}
+			if (unlikely(!j)) {
+				/* All packets were dropped */
+				rte_mempool_put(rte_mempool_from_obj(vec), vec);
+				continue;
+			}
+			vec->nb_elem = j;
+			nb_tx = j;
+		} else {
+			/* Process single event */
+			info->rx_pkts += nb_rx;
+			pkt = ev.mbuf;
+			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
+			rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
+
+			if (unlikely(handle_outb_event(lcore_id, sec_ctx, pkt)))
+				continue;
+
+			/* Save eth queue for Tx */
+			rte_event_eth_tx_adapter_txq_set(pkt, 0);
+			nb_tx = 1;
+		}
+
+		/*
+		 * Since tx internal port is available, events can be
+		 * directly enqueued to the adapter and it would be
+		 * internally submitted to the eth device.
+		 */
+		if (!rte_event_eth_tx_adapter_enqueue(info->eventdev_id,
+						      info->event_port_id,
+						      &ev, /* events */
+						      1,   /* nb_events */
+						      0 /* flags */)) {
+			free_event(&ev);
+			continue;
+		}
+		info->tx_pkts += nb_tx;
+	}
+
+	if (ev.u64) {
+		ev.op = RTE_EVENT_OP_RELEASE;
+		rte_event_enqueue_burst(info->eventdev_id,
+					info->event_port_id, &ev, 1);
+	}
+
+	rte_event_port_quiesce(info->eventdev_id, info->event_port_id,
+			       ipsec_event_port_flush, NULL);
+	return 0;
+}
+
+
+static int
+poll_mode_inb_worker(void *args)
+{
+	struct rte_mbuf *pkts[MAX_PKT_BURST], *pkt;
+	struct rte_mbuf *tx_pkts[MAX_PKT_BURST];
+	uint32_t nb_rx, nb_tx, j, k;
+	struct lcore_cfg *lconf;
+	uint64_t ol_flags;
+	uint32_t lcore_id;
+	uint16_t portid;
+	uint16_t queueid;
+
+	(void)args;
+	lcore_id = rte_lcore_id();
+	lconf = &lcore_cfg[lcore_id];
+	queueid = lconf->queueid;
+
+	printf("IPSEC: entering main loop on lcore %u\n", lcore_id);
+
+	portid = lconf->portid;
+
+	while (!force_quit) {
+
+		/* Read packets from RX queues */
+		nb_rx = rte_eth_rx_burst(portid, queueid,
+					 pkts, MAX_PKT_BURST);
+
+		if (nb_rx <= 0)
+			continue;
+
+		lconf->rx_pkts += nb_rx;
+
+		/* Send pkts out */
+		for (j = 0, k = 0; j < nb_rx; j++) {
+			pkt = pkts[j];
+			ol_flags = pkt->ol_flags;
+			lconf->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
+			/* Drop packets received with offload failure */
+			if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+				lconf->ipsec_failed += 1;
+#if !defined(MSNS_CN9K)
+				union rte_pmd_cnxk_cpt_res_s *res;
+
+				res = rte_pmd_cnxk_inl_ipsec_res(pkt);
+				if (res && verbose)
+					printf("uc_compcode = %x compcode = %x\n",
+					       res->cn10k.uc_compcode, res->cn10k.compcode);
+#endif
+				rte_pktmbuf_free(pkt);
+				continue;
+			}
+
+			tx_pkts[k++] = pkt;
+		}
+		nb_tx = rte_eth_tx_burst(portid, queueid, tx_pkts, k);
+
+		lconf->tx_pkts += nb_tx;
+
+		if (unlikely(nb_tx < k)) {
+			do {
+				rte_pktmbuf_free(tx_pkts[nb_tx]);
+			} while (++nb_tx < k);
+		}
+	}
+
+	return 0;
+}
+
+
+static int
+poll_mode_outb_worker(void *args)
+{
+	struct rte_mbuf *pkts[MAX_PKT_BURST], *pkt;
+	struct rte_mbuf *tx_pkts[MAX_PKT_BURST];
+	struct rte_security_ctx *sec_ctx;
+	struct rte_security_session *sa;
+	uint32_t nb_rx, nb_tx, j, k;
+	struct lcore_cfg *lconf;
+	uint16_t sa_index = 0;
+	uint32_t lcore_id;
+	uint16_t portid;
+	uint16_t queueid;
+
+	(void)args;
+	lcore_id = rte_lcore_id();
+	lconf = &lcore_cfg[lcore_id];
+	queueid = lconf->queueid;
+
+	printf("IPSEC: entering main loop on lcore %u\n", lcore_id);
+
+	portid = lconf->portid;
+
+	while (!force_quit) {
+
+		/* Read packets from RX queues */
+		nb_rx = rte_eth_rx_burst(portid, queueid,
+					 pkts, MAX_PKT_BURST);
+
+		if (nb_rx <= 0)
+			continue;
+
+		lconf->rx_pkts += nb_rx;
+
+		sec_ctx = rte_eth_dev_get_sec_ctx(portid);
+		/* Send pkts out */
+		for (j = 0, k = 0; j < nb_rx; j++) {
+			pkt = pkts[j];
+			sa_index = rte_rand_max(num_sas - 1) + 1;
+
+			sa = outb_sas[sa_index].sa;
+			rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
+			pkt->ol_flags = RTE_MBUF_F_TX_SEC_OFFLOAD;
+			pkt->l2_len = RTE_ETHER_HDR_LEN;
+
+			tx_pkts[k++] = pkt;
+		}
+		nb_tx = rte_eth_tx_burst(portid, queueid, tx_pkts, k);
+
+		lconf->tx_pkts += nb_tx;
+
+		if (unlikely(nb_tx < k)) {
+			do {
+				rte_pktmbuf_free(tx_pkts[nb_tx]);
+			} while (++nb_tx < k);
+		}
+	}
+
 	return 0;
 }
 
@@ -3370,13 +3830,15 @@ inb_sas_destroy:
 }
 
 static int
-event_ipsec_inb_perf(void)
+ipsec_inb_perf(void)
 {
 	enum rte_security_ipsec_tunnel_type tun_type = RTE_SECURITY_IPSEC_TUNNEL_IPV4;
 	struct rte_security_ctx *sec_ctx;
 	unsigned int portid = 0;
 	uint16_t lcore_id;
 	int ret = 0, i;
+
+	dump_alg_data(sess_conf);
 
 	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
 	if (sec_ctx == NULL) {
@@ -3394,11 +3856,16 @@ event_ipsec_inb_perf(void)
 
 	printf("\n");
 
-	/* Start event dev */
-	ut_eventdev_start();
+	if (event_en) {
+		/* Start event dev */
+		ut_eventdev_start();
 
-	/* launch per-lcore init on every lcore */
-	rte_eal_mp_remote_launch(event_inb_worker, NULL, SKIP_MAIN);
+		/* launch per-lcore init on every lcore */
+		rte_eal_mp_remote_launch(event_inb_worker, NULL, SKIP_MAIN);
+	} else if (poll_mode) {
+		/* launch per-lcore init on every lcore */
+		rte_eal_mp_remote_launch(poll_mode_inb_worker, NULL, SKIP_MAIN);
+	}
 
 	/* Print stats */
 	print_stats();
@@ -3417,6 +3884,62 @@ event_ipsec_inb_perf(void)
 		if (inb_sas[i].sa)
 			rte_security_session_destroy(sec_ctx, inb_sas[i].sa);
 		rte_free(inb_sas[i].sa_data);
+	}
+
+	return ret;
+}
+
+static int
+ipsec_outb_perf(void)
+{
+	enum rte_security_ipsec_tunnel_type tun_type = RTE_SECURITY_IPSEC_TUNNEL_IPV4;
+	struct rte_security_ctx *sec_ctx;
+	unsigned int portid = 0;
+	uint16_t lcore_id;
+	int ret = 0, i;
+
+	TAILQ_INIT(&sa_exp_q);
+
+	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
+	if (sec_ctx == NULL) {
+		printf("Ethernet device doesn't support security features.\n");
+		return -1;
+	}
+
+	dump_alg_data(sess_conf);
+	ret = setup_ipsec_outb_sessions(portid, sess_conf, tun_type);
+	if (ret) {
+		printf("IPsec sessions creation failed\n");
+		return -1;
+	}
+
+	printf("\n");
+
+	/* launch per-lcore init on every lcore */
+	if (event_en) {
+		/* Start event dev */
+		ut_eventdev_start();
+
+		rte_eal_mp_remote_launch(event_outb_worker, NULL, SKIP_MAIN);
+	} else if (poll_mode) {
+		rte_eal_mp_remote_launch(poll_mode_outb_worker, NULL, SKIP_MAIN);
+	}
+
+	/* Print stats */
+	print_inb_outb_stats();
+
+	RTE_LCORE_FOREACH_WORKER(lcore_id) {
+		if (rte_eal_wait_lcore(lcore_id) < 0)
+			break;
+	}
+
+	if (softexp)
+		rte_eth_dev_callback_unregister(portid, RTE_ETH_EVENT_IPSEC,
+						outb_sa_exp_event_callback, NULL);
+	for (i = 0; i < (int)num_sas; i++) {
+		if (outb_sas[i].sa)
+			rte_security_session_destroy(sec_ctx, outb_sas[i].sa);
+		rte_free(outb_sas[i].sa_data);
 	}
 
 	return ret;
@@ -3577,22 +4100,18 @@ main(int argc, char **argv)
 		return rc;
 	}
 
+	printf("\n");
 	switch (testmode) {
-	case EVENT_IPSEC_INBOUND_MSNS_PERF:
+	case EVENT_IPSEC_INB_MSNS_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		rc = event_ipsec_inb_msns_perf();
 		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
 		break;
-	case EVENT_IPSEC_INBOUND_PERF:
+	case EVENT_IPSEC_INB_PERF:
+	case POLL_IPSEC_INB_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
-		rc = event_ipsec_inb_perf();
-		if (rc)
-			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
-		break;
-	case EVENT_IPSEC_INB_OUTB_PERF:
-		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
-		rc = ipsec_inb_outb_perf();
+		rc = ipsec_inb_perf();
 		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
 		break;
@@ -3606,6 +4125,14 @@ main(int argc, char **argv)
 		if (rc)
 			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
 		break;
+	case EVENT_IPSEC_OUTB_PERF:
+	case POLL_IPSEC_OUTB_PERF:
+		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
+		rc = ipsec_outb_perf();
+		if (rc)
+			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
+		break;
+	case EVENT_IPSEC_INB_OUTB_PERF:
 	case POLL_IPSEC_INB_OUTB_PERF:
 		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
 		rc = ipsec_inb_outb_perf();
