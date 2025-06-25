@@ -2188,9 +2188,8 @@ roc_nix_inl_inb_tag_update(struct roc_nix *roc_nix, uint32_t tag_const,
 	cfg.max_sa = nix->inb_spi_mask + 1;
 	cfg.tt = tt;
 	cfg.tag_const = tag_const;
-	if (roc_nix->res_addr_offset) {
+	if (roc_nix->res_addr_offset)
 		cfg.res_addr_offset = roc_nix->res_addr_offset;
-	}
 
 	return roc_nix_lf_inl_ipsec_cfg(roc_nix, &cfg, true);
 }
@@ -2304,7 +2303,7 @@ roc_nix_inl_ctx_write(struct roc_nix *roc_nix, void *sa_dptr, void *sa_cptr,
 
 	if (roc_nix) {
 		if (inb && roc_nix->custom_inb_sa && sa_len > ROC_NIX_INL_INB_CUSTOM_SA_SZ) {
-			plt_nix_dbg("SA length: %u is more than allocated length: %u\n", sa_len,
+			plt_nix_dbg("SA length: %u is more than allocated length: %u", sa_len,
 				    ROC_NIX_INL_INB_CUSTOM_SA_SZ);
 			return -EINVAL;
 		}
@@ -2384,12 +2383,12 @@ nix_inl_dev_cpt_lf_stats_get(struct roc_nix *roc_nix, struct roc_nix_cpt_lf_stat
 
 	if (inl_dev && inl_dev->attach_cptlf) {
 		if (idx >= inl_dev->nb_cptlf) {
-			plt_err("Invalid idx: %u total lfs: %d\n", idx, inl_dev->nb_cptlf);
+			plt_err("Invalid idx: %u total lfs: %d", idx, inl_dev->nb_cptlf);
 			return -EINVAL;
 		}
 		lf = &inl_dev->cpt_lf[idx];
 	} else {
-		plt_err("No CPT LF(s) are found for Inline Device\n");
+		plt_err("No CPT LF(s) are found for Inline Device");
 		return -EINVAL;
 	}
 	stats->enc_pkts = plt_read64(lf->rbase + CPT_LF_CTX_ENC_PKT_CNT);
@@ -2411,7 +2410,7 @@ nix_eth_dev_cpt_lf_stats_get(struct roc_nix *roc_nix, struct roc_nix_cpt_lf_stat
 		return -EINVAL;
 	nix = roc_nix_to_nix_priv(roc_nix);
 	if (idx >= nix->nb_cpt_lf) {
-		plt_err("Invalid idx: %u total lfs: %d\n", idx, nix->nb_cpt_lf);
+		plt_err("Invalid idx: %u total lfs: %d", idx, nix->nb_cpt_lf);
 		return -EINVAL;
 	}
 	lf = &nix->cpt_lf_base[idx];
@@ -2522,7 +2521,7 @@ roc_nix_inl_ts_pkind_set(struct roc_nix *roc_nix, bool ts_ena, bool inb_inl_dev,
 		return 0;
 	}
 
-	plt_err("Invalid NIX inline profile_id: %u\n", profile_id);
+	plt_err("Invalid NIX inline profile_id: %u", profile_id);
 	return -EINVAL;
 }
 

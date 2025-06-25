@@ -6,7 +6,8 @@
 #include "roc_priv.h"
 
 int
-roc_nix_vlan_mcam_entry_read(struct roc_nix *roc_nix, uint32_t index, void **rsp)
+roc_nix_vlan_mcam_entry_read(struct roc_nix *roc_nix, uint32_t index,
+			     void **rsp)
 {
 	struct nix *nix = roc_nix_to_nix_priv(roc_nix);
 	struct dev *dev = &nix->dev;

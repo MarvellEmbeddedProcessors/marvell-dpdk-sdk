@@ -56,7 +56,7 @@ enum rte_pmd_cnxk_cpt_q_stats_type {
 	 */
 	RTE_PMD_CNXK_CPT_Q_STATS_KERNEL,
 	/** Type to get CPT queue which is attached to ethdev statistics */
-	RTE_PMD_CNXK_CPT_Q_STATS_ETHDEV = 2,
+	RTE_PMD_CNXK_CPT_Q_STATS_ETHDEV,
 };
 
 /** CPT queue hardware statistics */
@@ -617,7 +617,7 @@ union rte_pmd_cnxk_ipsec_hw_sa *rte_pmd_cnxk_hw_session_base_get(uint16_t portid
  *   Determines the type of SA to be flushed, Inbound or Outbound.
  *
  * @return
- *   0 upon success, a negative errno value otherwise.
+ *   0 Upon success, a negative errno value otherwise.
  */
 __rte_experimental
 int rte_pmd_cnxk_sa_flush(uint16_t portid, union rte_pmd_cnxk_ipsec_hw_sa *sess, bool inb);
@@ -663,7 +663,7 @@ uint16_t rte_pmd_cnxk_inl_dev_submit(struct rte_pmd_cnxk_inl_dev_q *qptr, void *
  *   The index of the queue of a given type.
  *
  * @return
- *   0 upon success, a negative errno value otherwise.
+ *   0 Upon success, a negative errno value otherwise.
  */
 __rte_experimental
 int rte_pmd_cnxk_cpt_q_stats_get(uint16_t portid, enum rte_pmd_cnxk_cpt_q_stats_type type,

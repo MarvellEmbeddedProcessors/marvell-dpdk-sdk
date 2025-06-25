@@ -181,8 +181,8 @@ cn20k_nix_tx_compl_setup(struct cnxk_eth_dev *dev, struct cn20k_eth_txq *txq, st
 	txq->tx_compl.nb_desc_mask = (2 * rte_align32pow2(nb_desc)) - 1;
 	txq->tx_compl.ena = true;
 
-	txq->tx_compl.ptr = (struct rte_mbuf **)plt_zmalloc(
-		txq->tx_compl.nb_desc_mask * sizeof(struct rte_mbuf *), 0);
+	txq->tx_compl.ptr = (struct rte_mbuf **)plt_zmalloc(txq->tx_compl.nb_desc_mask *
+							    sizeof(struct rte_mbuf *), 0);
 	if (!txq->tx_compl.ptr)
 		return -1;
 
@@ -256,7 +256,7 @@ cn20k_nix_tx_queue_setup(struct rte_eth_dev *eth_dev, uint16_t qid, uint16_t nb_
 		txq->cpt_desc = inl_lf->nb_desc * 0.7;
 		txq->sa_base = (uint64_t)dev->outb.sa_base;
 		txq->sa_base |= (uint64_t)eth_dev->data->port_id;
-		PLT_STATIC_ASSERT(ROC_NIX_INL_SA_BASE_ALIGN == BIT_ULL(16));
+		PLT_STATIC_ASSERT(BIT_ULL(16) == ROC_NIX_INL_SA_BASE_ALIGN);
 	}
 
 	/* Restore marking flag from roc */
@@ -711,7 +711,7 @@ cn20k_rx_descriptor_dump(const struct rte_eth_dev *eth_dev, uint16_t qid, uint16
 	available_pkts = cn20k_nix_rx_avail_get(rxq);
 
 	if ((offset + num - 1) >= available_pkts) {
-		plt_err("Invalid BD num=%u\n", num);
+		plt_err("Invalid BD num=%u", num);
 		return -EINVAL;
 	}
 

@@ -101,9 +101,9 @@ cpt_cnxk_parse_hdr_dump(FILE *file, const struct cpt_parse_hdr_s *cpth)
 			 rxc_sg->w0.seg1_size, rxc_sg->w0.seg2_size, rxc_sg->w0.seg3_size);
 		cpt_dump(file, "W0: segs \t0x%x\t\tnxt_fst_frag \t0x%x\t\tblk_sz \t0x%x",
 			 rxc_sg->w0.segs, rxc_sg->w0.nxt_fst_frag, rxc_sg->w0.blk_sz);
-		cpt_dump(file, "W1: seg1_ptr \t0x%lx", rxc_sg->seg1_ptr);
-		cpt_dump(file, "W2: seg2_ptr \t0x%lx", rxc_sg->seg2_ptr);
-		cpt_dump(file, "W3: seg3_ptr \t0x%lx", rxc_sg->seg3_ptr);
+		cpt_dump(file, "W1: seg1_ptr \t0x%" PRIx64, rxc_sg->seg1_ptr);
+		cpt_dump(file, "W2: seg2_ptr \t0x%" PRIx64, rxc_sg->seg2_ptr);
+		cpt_dump(file, "W3: seg3_ptr \t0x%" PRIx64, rxc_sg->seg3_ptr);
 
 		rxc_sg++;
 	}
@@ -114,9 +114,9 @@ cpt_cnxk_parse_hdr_dump(FILE *file, const struct cpt_parse_hdr_s *cpth)
 			 rxc_sg->w0.seg1_size, rxc_sg->w0.seg2_size, rxc_sg->w0.seg3_size);
 		cpt_dump(file, "W0: segs \t0x%x\t\tnxt_fst_frag \t0x%x\t\tblk_sz \t0x%x",
 			 rxc_sg->w0.segs, rxc_sg->w0.nxt_fst_frag, rxc_sg->w0.blk_sz);
-		cpt_dump(file, "W1: seg1_ptr \t0x%lx", rxc_sg->seg1_ptr);
-		cpt_dump(file, "W2: seg2_ptr \t0x%lx", rxc_sg->seg2_ptr);
-		cpt_dump(file, "W3: seg3_ptr \t0x%lx", rxc_sg->seg3_ptr);
+		cpt_dump(file, "W1: seg1_ptr \t0x%" PRIx64, rxc_sg->seg1_ptr);
+		cpt_dump(file, "W2: seg2_ptr \t0x%" PRIx64, rxc_sg->seg2_ptr);
+		cpt_dump(file, "W3: seg3_ptr \t0x%" PRIx64, rxc_sg->seg3_ptr);
 
 		rxc_sg++;
 	}

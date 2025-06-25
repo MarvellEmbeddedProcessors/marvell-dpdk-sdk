@@ -1265,15 +1265,15 @@ roc_nix_inl_dev_qptr_get(uint8_t qid)
 		inl_dev = idev->nix_inl_dev;
 
 	if (!inl_dev) {
-		plt_nix_dbg("Inline Device could not be detected\n");
+		plt_nix_dbg("Inline Device could not be detected");
 		return NULL;
 	}
 	if (!inl_dev->attach_cptlf) {
-		plt_err("No CPT LFs are attached to Inline Device\n");
+		plt_err("No CPT LFs are attached to Inline Device");
 		return NULL;
 	}
 	if (qid >= inl_dev->nb_cptlf) {
-		plt_err("Invalid qid: %u total queues: %d\n", qid, inl_dev->nb_cptlf);
+		plt_err("Invalid qid: %u total queues: %d", qid, inl_dev->nb_cptlf);
 		return NULL;
 	}
 	return &inl_dev->q_info[qid];

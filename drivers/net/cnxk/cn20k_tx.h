@@ -546,9 +546,8 @@ cn20k_nix_prep_sec_vec(struct rte_mbuf *m, uint64x2_t *cmd0, uint64x2_t *cmd1,
 
 	/* CPT word 2 and 3 */
 	cmd23 = vdupq_n_u64(0);
-	cmd23 = vsetq_lane_u64(
-		(((uint64_t)RTE_EVENT_TYPE_CPU << 28) | tag | CNXK_ETHDEV_SEC_OUTB_EV_SUB << 20),
-		cmd23, 0);
+	cmd23 = vsetq_lane_u64((((uint64_t)RTE_EVENT_TYPE_CPU << 28) | tag |
+				CNXK_ETHDEV_SEC_OUTB_EV_SUB << 20), cmd23, 0);
 	cmd23 = vsetq_lane_u64((uintptr_t)m | 1, cmd23, 1);
 
 	/* Move to our line */
@@ -685,9 +684,8 @@ cn20k_nix_prep_sec(struct rte_mbuf *m, uint64_t *cmd, uintptr_t *nixtx_addr, uin
 
 	/* CPT word 2 and 3 */
 	cmd23 = vdupq_n_u64(0);
-	cmd23 = vsetq_lane_u64(
-		(((uint64_t)RTE_EVENT_TYPE_CPU << 28) | tag | CNXK_ETHDEV_SEC_OUTB_EV_SUB << 20),
-		cmd23, 0);
+	cmd23 = vsetq_lane_u64((((uint64_t)RTE_EVENT_TYPE_CPU << 28) | tag |
+				CNXK_ETHDEV_SEC_OUTB_EV_SUB << 20), cmd23, 0);
 	cmd23 = vsetq_lane_u64((uintptr_t)m | 1, cmd23, 1);
 
 	/* Move to our line */
@@ -2443,7 +2441,7 @@ again:
 			senddesc23_w1 = vshlq_n_u64(senddesc23_w1, 1);
 
 			/* Move OLFLAGS bits 55:52 to 51:48
-			 * with zeros preprended on the byte and rest
+			 * with zeros prepended on the byte and rest
 			 * don't care
 			 */
 			xtmp128 = vshrq_n_u8(xtmp128, 4);

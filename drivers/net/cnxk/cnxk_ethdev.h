@@ -504,8 +504,7 @@ cnxk_nix_tx_queue_sec_count(uint64_t *mem, uint16_t sqes_per_sqb_log2, uint64_t 
 }
 
 static inline int
-cnxk_nix_inl_fc_check(uint64_t __rte_atomic *fc, int32_t __rte_atomic *fc_sw, uint32_t nb_desc,
-		      uint16_t nb_inst)
+cnxk_nix_inl_fc_check(uint64_t __rte_atomic *fc, int32_t *fc_sw, uint32_t nb_desc, uint16_t nb_inst)
 {
 	uint8_t retry_count = 32;
 	int32_t val, newval;
@@ -515,15 +514,18 @@ cnxk_nix_inl_fc_check(uint64_t __rte_atomic *fc, int32_t __rte_atomic *fc_sw, ui
 		return -EINVAL;
 
 retry:
-	val = rte_atomic_fetch_sub_explicit(fc_sw, nb_inst, __ATOMIC_RELAXED) - nb_inst;
+	val = rte_atomic_fetch_sub_explicit((RTE_ATOMIC(int32_t)*)fc_sw, nb_inst,
+					    rte_memory_order_relaxed) - nb_inst;
 	if (likely(val >= 0))
 		return 0;
 
-	newval = (int64_t)nb_desc - rte_atomic_load_explicit(fc, __ATOMIC_RELAXED);
+	newval = (int64_t)nb_desc - rte_atomic_load_explicit((RTE_ATOMIC(uint64_t)*)fc,
+							     rte_memory_order_relaxed);
 	newval -= nb_inst;
 
-	if (!rte_atomic_compare_exchange_strong_explicit(fc_sw, &val, newval, __ATOMIC_RELEASE,
-							 __ATOMIC_RELAXED)) {
+	if (!rte_atomic_compare_exchange_strong_explicit((RTE_ATOMIC(int32_t)*)fc_sw, &val, newval,
+							 rte_memory_order_release,
+							 rte_memory_order_relaxed)) {
 		if (retry_count) {
 			retry_count--;
 			goto retry;

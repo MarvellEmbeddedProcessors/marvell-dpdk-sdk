@@ -88,6 +88,8 @@ typedef uint16_t unaligned_uint16_t;
 #define __rte_packed
 #else
 #define __rte_packed __attribute__((__packed__))
+#define __rte_packed_begin
+#define __rte_packed_end __attribute__((__packed__))
 #endif
 
 /**

@@ -52,9 +52,8 @@
 static inline void
 nix_mbuf_validate_next(struct rte_mbuf *m)
 {
-	if (m->nb_segs == 1 && m->next) {
+	if (m->nb_segs == 1 && m->next)
 		rte_panic("mbuf->next[%p] valid when mbuf->nb_segs is %d", m->next, m->nb_segs);
-	}
 }
 #else
 static inline void
@@ -307,9 +306,9 @@ nix_cqe_xtract_mseg(const union nix_rx_parse_u *rx, struct rte_mbuf *mbuf, uint6
 {
 	const struct cpt_parse_hdr_s *hdr = (const struct cpt_parse_hdr_s *)cpth;
 	struct cn20k_inb_priv_data *inb_priv = NULL;
+	const struct cpt_frag_info_s *finfo = NULL;
 	uint64_t fsz_w1 = 0, cq_w1, cq_w5, sg;
 	uint32_t offset = hdr->w2.ptr_offset;
-	const struct cpt_frag_info_s *finfo;
 	uint8_t num_frags = 0, nxt_frag = 0;
 	struct rte_mbuf *head, *last_mbuf;
 	uint16_t rlen = hdr->w3.rlen;
@@ -696,7 +695,6 @@ cn20k_nix_flush_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pk
 	const uint32_t qmask = rxq->qmask;
 	const uintptr_t desc = rxq->desc;
 	uint64_t buf_sz = rxq->mp_buf_sz;
-	uint64_t lbase = rxq->lmt_base;
 	uint16_t packets = 0, nb_pkts;
 	uint16_t lmt_id __rte_unused;
 	uint32_t head = rxq->head;
@@ -710,7 +708,6 @@ cn20k_nix_flush_recv_pkts(void *rx_queue, struct rte_mbuf **rx_pkts, uint16_t pk
 	if (flags & NIX_RX_OFFLOAD_SECURITY_F) {
 		sa_base = rxq->sa_base;
 		sa_base &= ~(ROC_NIX_INL_SA_BASE_ALIGN - 1);
-		ROC_LMT_BASE_ID_GET(lbase, lmt_id);
 	}
 
 	while (packets < nb_pkts) {
@@ -849,12 +846,11 @@ cn20k_nix_recv_pkts_vector(void *args, struct rte_mbuf **mbufs, uint16_t pkts, c
 	uint64x2_t rearm3 = vdupq_n_u64(mbuf_initializer);
 	struct rte_mbuf *mbuf0, *mbuf1, *mbuf2, *mbuf3;
 	uint8_t loff = 0, lnum = 0, shft = 0;
+	uint64_t lbase, laddr, buf_sz;
 	uint8x16_t f0, f1, f2, f3;
 	uint16_t lmt_id, d_off;
-	uint64_t lbase, laddr;
 	uintptr_t sa_base = 0;
 	uint16_t packets = 0;
-	uint64_t buf_sz = 0;
 	uint16_t pkts_left;
 	uint32_t head;
 	uintptr_t cq0;
