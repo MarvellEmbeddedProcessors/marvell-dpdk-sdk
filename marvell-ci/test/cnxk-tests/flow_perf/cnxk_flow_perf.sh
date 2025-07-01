@@ -54,13 +54,16 @@ function get_system_info()
 	local div=1000000
 
 	sysclk_dir="/sys/kernel/debug/clk"
-	fp_rclk="$sysclk_dir/rclk/clk_rate"
+	fp_rclk1="$sysclk_dir/rclk/clk_rate"
+	fp_rclk2="$sysclk_dir/refclkuaa/clk_rate"
 	fp_sclk="$sysclk_dir/sclk/clk_rate"
 
-	if $SUDO test -f "$fp_rclk"; then
-		RCLK=$(echo "`$SUDO cat $fp_rclk` / $div" | bc)
+	if $SUDO test -f "$fp_rclk1"; then
+		RCLK=$(echo "`$SUDO cat $fp_rclk1` / $div" | bc)
+	elif $SUDO test -f "$fp_rclk2"; then
+		RCLK=$(echo "`$SUDO cat $fp_rclk2` / $div" | bc)
 	else
-		echo "$fp_rclk not available"
+		echo "$fp_rclk1 or $fp_rclk2 not available"
 		exit 1
 	fi
 

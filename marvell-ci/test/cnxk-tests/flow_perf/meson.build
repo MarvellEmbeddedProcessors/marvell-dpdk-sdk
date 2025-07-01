@@ -18,6 +18,7 @@ run_command(copy_data, test_script)
 run_command(copy_data, 'ref_numbers/cn9k/rclk2200_sclk1000.96xx')
 run_command(copy_data, 'ref_numbers/cn9k/rclk2200_sclk1100.96xx')
 run_command(copy_data, 'ref_numbers/cn9k/rclk1800_sclk1000.96xx')
+run_command(copy_data, 'ref_numbers/cn9k/rclk16_sclk1000.96xx')
 
 # Add the meson test
 test(
