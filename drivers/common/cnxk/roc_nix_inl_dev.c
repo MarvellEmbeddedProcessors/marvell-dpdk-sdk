@@ -243,7 +243,7 @@ nix_cfg_fail:
 	cpt_req = mbox_alloc_msg_cpt_rx_inl_queue_cfg(mbox);
 	if (!cpt_req) {
 		rc |= -ENOSPC;
-	} else {
+	} else if (nix_req) {
 		nix_req->enable = false;
 		rc |= mbox_process(mbox);
 	}
