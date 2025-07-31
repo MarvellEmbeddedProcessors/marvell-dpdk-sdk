@@ -336,6 +336,14 @@ function supported_by_9k()
 	[[ " ${supported[*]} " =~ " $type " ]]
 }
 
+function run_on_cn103()
+{
+	local type=$1
+	local supported=(ip ip_ev ip_p ip_ev_ss ip_p_ss)
+
+	[[ " ${supported[*]} " =~ " $type " ]]
+}
+
 function run_test()
 {
 	local cmd=$1
@@ -1120,7 +1128,9 @@ function check_ref_files()
 		if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k $type; then
 			continue
 		fi
-
+		if [[ $DTC == "CN103XX" ]] && ! run_on_cn103 $type; then
+			continue
+		fi
 		# MSNS outbound-only tests: only check outb file
 		if [[ $type = "msns_event_outb" ]] || [[ $type = "msns_poll_outb" ]]; then
 			outb="$FPATH.$type.outb"
@@ -1150,8 +1160,6 @@ function check_ref_files()
 			fi
 			continue
 		fi
-
-		# Non-MSNS tests: check both inb and outb files
 		inb="$FPATH.$type.inb"
 		if [[ ! -f $inb ]]; then
 			echo "File $inb not present"
@@ -1201,6 +1209,10 @@ while [[ $Y -lt $NB_TYPES ]]; do
 	fi
 
 	if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k ${TYPE[$Y]}; then
+		((++Y))
+		continue
+	fi
+	if [[ $DTC == "CN103XX" ]] && ! run_on_cn103 ${TYPE[$Y]}; then
 		((++Y))
 		continue
 	fi
