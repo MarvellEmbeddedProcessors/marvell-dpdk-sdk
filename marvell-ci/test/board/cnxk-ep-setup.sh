@@ -36,6 +36,7 @@ set -euo pipefail
 HP=${HP:-8}
 AGENT_PATH=${AGENT_PATH:-/usr/bin}
 MODULE_PATH=${MODULE_PATH:-/usr/lib/modules/`uname -r`}
+PCI_DEVID_CN10K_RVU_PEM_PF="0xa06c"
 
 setup_hp() {
 	if ! mount | grep -q hugepages; then
@@ -83,27 +84,89 @@ setup_host()
 	$VFIO_DEVBIND -b vfio-pci $host_vf
 }
 
+function ep_device_unbind_driver()
+{
+	local s=$1
+	local dev=$2
+
+	if [[ -e /sys/bus/$s/devices/$dev/driver/unbind ]]; then
+		echo $dev > /sys/bus/$s/devices/$dev/driver/unbind
+		sleep 1
+		echo > /sys/bus/$s/devices/$dev/driver_override
+		sleep 1
+	fi
+}
+
+function ep_device_bind_driver()
+{
+        local s=$1
+        local dev=$2
+        local driver=$3
+
+        ep_device_unbind_driver $s $dev
+        echo $driver > /sys/bus/$s/devices/$dev/driver_override
+        echo $dev > /sys/bus/$s/drivers/$driver/bind
+        echo $dev > /sys/bus/$s/drivers_probe
+}
+
+function ep_device_pcie_addr_get()
+{
+	local devid=$1
+	local num=${2:-}
+
+	if [[ -z $num ]]; then
+		num=1
+	elif [[ $num == "all" ]]; then
+		num=100
+	fi
+
+	echo $(lspci -Dd :$devid | awk '{print $1}' | head -n$num)
+}
+
+function ep_device_hugepage_setup()
+{
+	local hp_sz=$1
+	local hp_num=$2
+	local hp_pool_sz=$3
+
+	# Check for hugepages
+	if mount | grep hugetlbfs | grep none; then
+		echo "Hugepages already mounted"
+	else
+		echo "Mounting Hugepages"
+		mkdir -p /dev/huge
+		mount -t hugetlbfs none /dev/huge
+	fi
+	echo $hp_num > /proc/sys/vm/nr_hugepages
+	echo $hp_pool_sz >/sys/kernel/mm/hugepages/hugepages-${hp_sz}kB/nr_hugepages
+}
+
 setup_board()
 {
 	local sdp_vf1
 	local sdp_vf1_if
 	local sdp_vf2
 
-	if [[ ! -e /sys/module/pcie_marvell_cnxk_ep ]]; then
-		if [[ -e $MODULE_PATH/pcie-marvell-cnxk-ep.ko ]]; then
-			insmod $MODULE_PATH/pcie-marvell-cnxk-ep.ko
-		elif modinfo pcie-marvell_cnxk_ep &> /dev/null; then
-			modprobe pcie-marvell_cnxk_ep
-		else
-			echo "Set MODULE_PATH to a valid pcie-marvell-cnxk-ep.ko location"
-			exit 1
-		fi
-	fi
+	export LD_LIBRARY_PATH=/usr/local/lib:
+	ep_device_hugepage_setup 524288 24 12
+
+	for dev in $(lspci -d :a0ef | awk -e '{print $1}'); do
+		# Bind the device to vfio-pci driver
+		ep_device_bind_driver pci $dev vfio-pci
+		echo "Device $dev configured."
+	done
+
+	pem_pf_pcie=$(ep_device_pcie_addr_get $PCI_DEVID_CN10K_RVU_PEM_PF)
+	ep_device_bind_driver pci $pem_pf_pcie vfio-pci
 
 	sdp_vf1=$(lspci -d :a0f7 | head -1 | awk -e '{ print $1 }')
 	sdp_vf1_if=$(ls /sys/bus/pci/devices/${sdp_vf1}/net)
 	ifconfig $sdp_vf1_if up
-	$AGENT_PATH/octep_cp_agent $AGENT_PATH/cnf105xx.cfg &> /tmp/octep_cp_agent_log.txt &
+	cp $AGENT_PATH/libconfig.so.11 /usr/lib/
+
+	$AGENT_PATH/octep_cp_agent \
+		$AGENT_PATH/$cfg  -- --sdp_rvu_pf 0002:18:00.0,0002:19:00.0 \
+		--pem_dev 0001:00:10.0  &> /tmp/octep_cp_agent_log.txt &
 
 	sdp_vf2=$(lspci -Dd :a0f7 | head -2 | tail -1 | awk -e '{ print $1 }')
 	$VFIO_DEVBIND -b vfio-pci $sdp_vf2
