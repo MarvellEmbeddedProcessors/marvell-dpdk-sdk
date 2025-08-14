@@ -125,8 +125,24 @@ odm_disable(struct odm_dev *odm)
 	return 0;
 }
 
+static uint8_t
+odm_get_ext_port_type(const struct rte_dma_vchan_conf *conf)
+{
+	uint8_t ext_port = ODM_EXT_PORT_NCB;
+
+	if (conf->src_port.port_type == RTE_DMA_PORT_PCIE ||
+	    conf->dst_port.port_type == RTE_DMA_PORT_PCIE) {
+		if (conf->src_port.pcie.coreid == 0 || conf->dst_port.pcie.coreid == 0)
+			ext_port = ODM_EXT_PORT_PEM0;
+		else if (conf->src_port.pcie.coreid == 1 || conf->dst_port.pcie.coreid == 1)
+			ext_port = ODM_EXT_PORT_PEM1;
+	}
+
+	return ext_port;
+}
+
 int
-odm_vchan_setup(struct odm_dev *odm, int vchan, int nb_desc)
+odm_vchan_setup(struct odm_dev *odm, int vchan, const struct rte_dma_vchan_conf *conf)
 {
 	struct odm_queue *vq = &odm->vq[vchan];
 	int isize, csize, max_nb_desc, rc = 0;
@@ -140,10 +156,25 @@ odm_vchan_setup(struct odm_dev *odm, int vchan, int nb_desc)
 	mbox_msg.u[0] = 0;
 	mbox_msg.u[1] = 0;
 
+	switch (conf->direction) {
+	case RTE_DMA_DIR_DEV_TO_MEM:
+		vq->xtype = ODM_XTYPE_INBOUND;
+		break;
+	case RTE_DMA_DIR_MEM_TO_DEV:
+		vq->xtype = ODM_XTYPE_OUTBOUND;
+		break;
+	case RTE_DMA_DIR_MEM_TO_MEM:
+		vq->xtype = ODM_XTYPE_INTERNAL;
+		break;
+	default:
+		break;
+	}
+
 	/* ODM PF driver expects vfid starts from index 0 */
 	mbox_msg.q.vfid = odm->vfid;
 	mbox_msg.q.cmd = ODM_QUEUE_OPEN;
 	mbox_msg.q.qidx = vchan;
+	mbox_msg.q.ext_port = odm_get_ext_port_type(conf);
 	rc = send_mbox_to_pf(odm, &mbox_msg, &mbox_msg);
 	if (rc < 0)
 		return rc;
@@ -151,7 +182,7 @@ odm_vchan_setup(struct odm_dev *odm, int vchan, int nb_desc)
 	/* Determine instruction & completion ring sizes. */
 
 	/* Create iring that can support nb_desc. Round up to a multiple of 1024. */
-	isize = RTE_ALIGN_CEIL(nb_desc * ODM_IRING_ENTRY_SIZE_MAX * 8, 1024);
+	isize = RTE_ALIGN_CEIL(conf->nb_desc * ODM_IRING_ENTRY_SIZE_MAX * 8, 1024);
 	isize = RTE_MIN(isize, ODM_IRING_MAX_SIZE);
 	snprintf(name, sizeof(name), "vq%d_iring%d", odm->vfid, vchan);
 	mz = rte_memzone_reserve_aligned(name, isize, SOCKET_ID_ANY, 0, 1024);
