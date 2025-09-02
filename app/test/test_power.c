@@ -27,7 +27,7 @@ test_power(void)
 static int
 test_power(void)
 {
-	int ret = -1;
+	int ret = -1, env_ret = -1;
 	enum power_management_env env;
 
 	/* Test setting an invalid environment */
@@ -56,21 +56,36 @@ test_power(void)
 	unsigned int i;
 	for (i = 0; i < RTE_DIM(envs); ++i) {
 
-		/* Test setting a valid environment */
-		ret = rte_power_set_env(envs[i]);
-		if (ret != 0) {
-			printf("Unexpectedly unsuccessful on setting a valid environment\n");
-			return -1;
+		/* Test if the environment is supported or not */
+		env_ret = rte_power_check_env_supported(envs[i]);
+		if (env_ret == 1) {
+
+			/* Test setting a valid environment */
+			ret = rte_power_set_env(envs[i]);
+			if (ret != 0) {
+				printf("Unexpectedly unsuccessful on setting a valid environment\n");
+				return -1;
+			}
+
+			/* Test that the environment has been set */
+			env = rte_power_get_env();
+			if (env != envs[i]) {
+				printf("Not expected environment configuration\n");
+				return -1;
+			}
+
+			rte_power_unset_env();
 		}
 
-		/* Test that the environment has been set */
-		env = rte_power_get_env();
-		if (env != envs[i]) {
-			printf("Not expected environment configuration\n");
-			return -1;
+		else if (env_ret == 0) {
+			printf("No environment support, skipping the test\n");
+			return 0;
 		}
 
-		rte_power_unset_env();
+		else {
+			printf("Error occurred while checking for environment support\n");
+			return -1;
+		}
 
 	}
 
