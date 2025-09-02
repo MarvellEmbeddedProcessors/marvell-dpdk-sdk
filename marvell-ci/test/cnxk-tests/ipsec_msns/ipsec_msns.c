@@ -68,6 +68,7 @@ static struct rte_mempool *cryptodev_session_pool;
 /* ethernet addresses of ports */
 static struct rte_ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
 static uint16_t stats_tmo = 5;
+static bool is_plat_cn20k;
 
 #define VECTOR_SIZE_DEFAULT   64
 #define VECTOR_TMO_NS_DEFAULT 1E6
@@ -2141,7 +2142,8 @@ pmd_cnxk_api_custom_inb_sa_verify(void)
 	}
 	/* Get meta buffer pointer from WQE, mbuf + 128 is the WQE pointer */
 	data = (uint32_t *)(*(uint64_t *)RTE_PTR_ADD(pkt, 128 + 72));
-	if (data[1] != SA_COOKIE) {
+	data += is_plat_cn20k ? 0 : 1;
+	if (data[0] != SA_COOKIE) {
 		printf("SA cookie is not matched in the meta packet\n");
 		rte_hexdump(stdout, NULL, data, pkt->pkt_len);
 		rc = -1;
@@ -2195,7 +2197,7 @@ pmd_cnxk_api_inl_dev_inst_submit(void *cptr)
 		memcpy(dptr, pkt->data, pkt->len);
 		inst->dptr = (uint64_t)((uintptr_t)dptr + RTE_ETHER_HDR_LEN);
 
-		inst->w7.s.egrp = CPT_DFLT_ENG_GRP_SE_IE;
+		inst->w7.s.egrp = is_plat_cn20k ? CPT_DFLT_ENG_GRP_SE : CPT_DFLT_ENG_GRP_SE_IE;
 		inst->w7.s.ctx_val = 1;
 		inst->w7.s.cptr = (uint64_t)(uintptr_t)cptr;
 
@@ -4089,6 +4091,7 @@ out:
 int
 main(int argc, char **argv)
 {
+	const char *pattern = "cn20k";
 	int rc = 0;
 
 	signal(SIGINT, signal_handler);
@@ -4100,6 +4103,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
+	is_plat_cn20k = strstr(rte_pmd_cnxk_model_str_get(), pattern) ? true : false;
 	printf("\n");
 	switch (testmode) {
 	case EVENT_IPSEC_INB_MSNS_PERF:

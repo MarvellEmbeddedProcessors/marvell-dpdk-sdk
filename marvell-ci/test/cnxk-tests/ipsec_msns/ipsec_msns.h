@@ -17,6 +17,7 @@
 #define CPT_COMP_WARN	  (0x6ull) /* [CN10K, .) */
 
 /* Default engine groups */
+#define CPT_DFLT_ENG_GRP_SE 0UL
 #define CPT_DFLT_ENG_GRP_SE_IE 1UL
 
 #define CPT_IE_OT_MAJOR_OP_PROCESS_OUTBOUND_IPSEC 0x28UL
