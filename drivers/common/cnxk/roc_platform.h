@@ -42,6 +42,7 @@
 	".arch_extension lse\n"
 #endif
 
+#define PLT_ATOMIC		 RTE_ATOMIC
 #define PLT_ASSERT		 RTE_ASSERT
 #define PLT_VERIFY		 RTE_VERIFY
 #define PLT_MEMZONE_NAMESIZE	 RTE_MEMZONE_NAMESIZE
@@ -214,16 +215,15 @@ plt_thread_is_valid(plt_thread_t thr)
 #define plt_io_rmb()		rte_io_rmb()
 #define plt_atomic_thread_fence rte_atomic_thread_fence
 
-#define plt_atomic_store_explicit rte_atomic_store_explicit
-#define plt_atomic_load_explicit  rte_atomic_load_explicit
 #define plt_memory_order_release  rte_memory_order_release
 #define plt_memory_order_acquire  rte_memory_order_acquire
 #define plt_memory_order_relaxed  rte_memory_order_relaxed
+#define plt_memory_order_seq_cst  rte_memory_order_seq_cst
 
 #define plt_atomic_store_explicit rte_atomic_store_explicit
 #define plt_atomic_load_explicit  rte_atomic_load_explicit
-#define plt_memory_order_release  rte_memory_order_release
-#define plt_memory_order_acquire  rte_memory_order_acquire
+#define plt_atomic_fetch_add_explicit rte_atomic_fetch_add_explicit
+#define plt_atomic_fetch_sub_explicit rte_atomic_fetch_sub_explicit
 
 #define plt_bit_relaxed_get32	rte_bit_relaxed_get32
 #define plt_bit_relaxed_set32	rte_bit_relaxed_set32
