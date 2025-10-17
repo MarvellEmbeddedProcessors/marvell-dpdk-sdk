@@ -487,6 +487,7 @@ INTERNAL {
 	roc_npc_mcam_alloc_entries;
 	roc_npc_mcam_alloc_entry;
 	roc_npc_mcam_clear_counter;
+	roc_npc_mcam_default_rule_action_get;
 	roc_npc_inl_mcam_clear_counter;
 	roc_npc_mcam_enable_all_entries;
 	roc_npc_mcam_ena_dis_entry;
