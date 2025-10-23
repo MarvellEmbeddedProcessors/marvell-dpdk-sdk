@@ -351,10 +351,15 @@ mbox_get_rsp(struct mbox *mbox, int devid, void **msg)
 static int
 mbox_poll(struct mbox *mbox, uint32_t wait)
 {
+	struct mbox_dev *mdev = &mbox->dev[0];
 	uint32_t timeout = 0, sleep = 1;
 	uint32_t wait_us = wait * 1000;
+	struct mbox_hdr *req_hdr;
+	struct mbox_msghdr *msg;
 	uint64_t rsp_reg = 0;
 	uintptr_t reg_addr;
+	int offset;
+	uint16_t i;
 
 	reg_addr = mbox->reg_base + mbox->intr_offset;
 	do {
@@ -368,6 +373,59 @@ mbox_poll(struct mbox *mbox, uint32_t wait)
 	} while (!rsp_reg);
 
 	plt_rmb();
+
+	req_hdr = (struct mbox_hdr *)((uintptr_t)mdev->mbase + mbox->rx_start);
+	if (req_hdr->num_msgs > 0) {
+		offset = mbox->rx_start + PLT_ALIGN(sizeof(*req_hdr), MBOX_MSG_ALIGN);
+		for (i = 0; i < req_hdr->num_msgs; i++) {
+			msg = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset);
+
+			switch (msg->id) {
+			case MBOX_MSG_READY:
+				/* Get our identity */
+				break;
+			case MBOX_MSG_CGX_PRIO_FLOW_CTRL_CFG:
+			case MBOX_MSG_CGX_CFG_PAUSE_FRM:
+				/* Handling the case where one VF tries to disable PFC
+				 * while PFC already configured on other VFs. This is
+				 * not an error but a warning which can be ignored.
+				 */
+				if (msg->rc) {
+					if (msg->rc == LMAC_AF_ERR_PERM_DENIED) {
+						plt_mbox_dbg(
+							"Receive Flow control disable not permitted "
+							"as its used by other PFVFs");
+						msg->rc = 0;
+					} else {
+						plt_err("Message (%s) response has err=%d",
+							mbox_id2name(msg->id), msg->rc);
+					}
+				}
+				break;
+			case MBOX_MSG_CGX_PROMISC_DISABLE:
+			case MBOX_MSG_CGX_PROMISC_ENABLE:
+				if (msg->rc) {
+					if (msg->rc == LMAC_AF_ERR_INVALID_PARAM) {
+						plt_mbox_dbg("Already in same promisc state");
+						msg->rc = 0;
+					} else {
+						plt_err("Message (%s) response has err=%d",
+							mbox_id2name(msg->id), msg->rc);
+					}
+				}
+				break;
+
+			default:
+				if (msg->rc) {
+					plt_err("Message (%s) response has err=%d (%s)",
+						mbox_id2name(msg->id), msg->rc,
+						roc_error_msg_get(msg->rc));
+				}
+				break;
+			}
+			offset = mbox->rx_start + msg->next_msgoff;
+		}
+	}
 
 	/* Clear interrupt */
 	plt_write64(rsp_reg, reg_addr);
