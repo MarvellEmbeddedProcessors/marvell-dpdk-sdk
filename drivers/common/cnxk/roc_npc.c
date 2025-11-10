@@ -644,6 +644,7 @@ npc_parse_actions(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 
 		case ROC_NPC_ACTION_TYPE_PORT_ID:
 			pf_func = dst_pf_func;
+			req_act |= ROC_NPC_ACTION_TYPE_PORT_ID;
 			req_act |= ROC_NPC_ACTION_TYPE_VF;
 			break;
 
@@ -874,7 +875,8 @@ npc_parse_actions(struct roc_npc *roc_npc, const struct roc_npc_attr *attr,
 		flow->npc_action = NIX_RX_ACTIONOP_UCAST;
 	} else if (req_act & (ROC_NPC_ACTION_TYPE_PF | ROC_NPC_ACTION_TYPE_VF)) {
 		/* Check if any other action is set */
-		if ((req_act == ROC_NPC_ACTION_TYPE_PF) || (req_act == ROC_NPC_ACTION_TYPE_VF)) {
+		if ((req_act == (ROC_NPC_ACTION_TYPE_PORT_ID | ROC_NPC_ACTION_TYPE_PF)) ||
+		    (req_act == (ROC_NPC_ACTION_TYPE_PORT_ID | ROC_NPC_ACTION_TYPE_VF))) {
 			flow->npc_action = npc_default_action;
 			npc_action_set = true;
 		} else {
