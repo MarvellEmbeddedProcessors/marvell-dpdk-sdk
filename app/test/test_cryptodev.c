@@ -12274,6 +12274,10 @@ test_tls_record_proto_all(const struct tls_record_test_flags *flags)
 
 	for (i = 0; i < RTE_DIM(sec_alg_list); i++) {
 		payload_len = TLS_RECORD_PLAINTEXT_MIN_LEN;
+		if (gbl_driver_id == rte_cryptodev_driver_id_get(
+				RTE_STR(CRYPTODEV_NAME_CN20K_PMD)))
+			payload_len = max_payload_len;
+
 		if (flags->nb_segs_in_mbuf)
 			payload_len = RTE_MAX(payload_len, flags->nb_segs_in_mbuf);
 
