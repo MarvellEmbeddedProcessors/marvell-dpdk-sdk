@@ -99,6 +99,9 @@ subdir('app')
 # build docs
 subdir('doc')
 
+# build marvell specific tests
+subdir('marvell-ci/test/cnxk-tests')
+
 # build any examples explicitly requested - useful for developers - and
 # install any example code into the appropriate install path
 subdir('examples')

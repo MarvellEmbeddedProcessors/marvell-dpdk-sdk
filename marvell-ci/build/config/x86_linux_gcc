@@ -1,0 +1,19 @@
+[binaries]
+c = 'gcc'
+cpp = 'g++'
+ar = 'ar'
+strip = 'strip'
+pkgconfig = 'pkg-config'
+#exe_wrapper = '/tmp/exe_wrapper.sh'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'x86_64'
+cpu = 'native'
+endian = 'little'
+
+[properties]
+platform = 'generic'
+needs_exe_wrapper = true
+
+[built-in options]
