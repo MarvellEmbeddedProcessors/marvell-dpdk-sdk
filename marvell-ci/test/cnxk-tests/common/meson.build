@@ -21,6 +21,7 @@ copy_data = find_program('copy_data.py')
 # to build a lean dpdk-test like binary with its own custom command.
 dpdk_test_sources = files('../../../../app/test/test.c')
 dpdk_test_sources += files('../../../../app/test/commands.c')
+dpdk_test_sources += files('../../../../app/test/test_debug.c')
 dpdk_test_sources += files('../../../../app/test/test_pmd_perf.c')
 dpdk_test_sources += files('../../../../app/test/packet_burst_generator.c')
 dpdk_test_sources += files('../../../../app/test/test_timer_secondary.c')
