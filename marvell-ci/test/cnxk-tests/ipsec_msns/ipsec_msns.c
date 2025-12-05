@@ -3487,12 +3487,12 @@ free_reassembly_fail_pkt(struct rte_mbuf *mb)
 static int
 event_reass_inb_worker(void *args)
 {
-	struct rte_mbuf *tx_pkts[MAX_PKT_BURST];
-	struct rte_event evs[MAX_PKT_BURST];
+	uint32_t nb_rx, nb_tx, i, j, enq_ev;
 	int eventdev_id, event_port_id;
-	uint32_t nb_rx, nb_tx, j, k;
+	struct rte_event_vector *vec;
 	struct lcore_cfg *lconf;
 	struct rte_mbuf *pkt;
+	struct rte_event evs;
 	uint64_t ol_flags;
 	uint32_t lcore_id;
 
@@ -3507,52 +3507,84 @@ event_reass_inb_worker(void *args)
 
 	while (!force_quit) {
 		nb_rx = rte_event_dequeue_burst(eventdev_id, event_port_id,
-						evs, MAX_PKT_BURST, 0);
-		if (!nb_rx) {
-			rte_pause();
+						&evs, 1, 0);
+		if (nb_rx == 0)
+			continue;
+
+		switch (evs.event_type) {
+		case RTE_EVENT_TYPE_ETHDEV:
+		case RTE_EVENT_TYPE_VECTOR:
+			break;
+		default:
+			printf("Invalid event type %u", evs.event_type);
 			continue;
 		}
 
-		for (j = 0, k = 0; j < nb_rx; j++) {
-			pkt = evs[j].mbuf;
+		if (evs.event_type == RTE_EVENT_TYPE_VECTOR) {
+			vec = evs.vec;
+			nb_rx = vec->nb_elem;
+			lconf->rx_pkts += nb_rx;
+			pkt = vec->mbufs[0];
+			vec->attr_valid = 1;
+			vec->port = pkt->port;
+
+			/* Process vector events */
+			j = 0;
+			for (i = 0; i < nb_rx; i++) {
+				pkt = vec->mbufs[i];
+				ol_flags = pkt->ol_flags;
+				/* Drop packets received with offload failure */
+				if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+					lconf->ipsec_failed += 1;
+					rte_pktmbuf_free(pkt);
+					continue;
+				}
+				if (unlikely(is_ip_reassembly_incomplete(pkt) > 0)) {
+					free_reassembly_fail_pkt(pkt);
+					lconf->reass_failed += 1;
+					continue;
+				}
+				vec->mbufs[j++] = pkt;
+			}
+			if (unlikely(!j)) {
+				/* All packets were dropped */
+				rte_mempool_put(rte_mempool_from_obj(vec), vec);
+				continue;
+			}
+			vec->nb_elem = j;
+			nb_tx = j;
+		} else {
+			/* Process single event */
+			lconf->rx_pkts += nb_rx;
+			pkt = evs.mbuf;
 			ol_flags = pkt->ol_flags;
-			/* Drop packets received with offload failure */
+			rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
 			if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
 				lconf->ipsec_failed += 1;
 				rte_pktmbuf_free(pkt);
 				continue;
 			}
-			if (unlikely(is_ip_reassembly_incomplete(pkt)) > 0) {
+			if (unlikely(is_ip_reassembly_incomplete(pkt) > 0)) {
 				free_reassembly_fail_pkt(pkt);
 				lconf->reass_failed += 1;
 				continue;
 			}
-			lconf->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
 
-			if (!rte_event_eth_tx_adapter_enqueue(lconf->eventdev_id,
-							      lconf->event_port_id,
-							      &evs[j], /* events */
-							      1,   /* nb_events */
-							      0 /* flags */)) {
-				free_event(&evs[j]);
-				continue;
-			}
-			evs[k] = evs[j];
-			tx_pkts[k++] = pkt;
+			rte_event_eth_tx_adapter_txq_set(pkt, 0);
+			nb_tx = 1;
 		}
+		lconf->rx_ipsec_pkts += nb_tx;
 
-		if (k == 0)
+		enq_ev = rte_event_eth_tx_adapter_enqueue(eventdev_id,
+							  event_port_id,
+							  &evs, /* events */
+							  1,   /* nb_events */
+							  0 /* flags */);
+		if (nb_tx != enq_ev) {
+			free_event(&evs);
 			continue;
-
-		nb_tx = rte_event_enqueue_burst(eventdev_id, event_port_id, evs, k);
-
-		lconf->tx_pkts += nb_tx;
-
-		if (unlikely(nb_tx < k)) {
-			do {
-				rte_pktmbuf_free(tx_pkts[nb_tx]);
-			} while (++nb_tx < k);
 		}
+		lconf->tx_pkts += enq_ev;
 	}
 	return 0;
 }
