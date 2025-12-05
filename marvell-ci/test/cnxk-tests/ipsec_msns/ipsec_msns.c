@@ -59,6 +59,8 @@ enum test_mode {
 	POLL_IPSEC_INB_PERF,
 	POLL_IPSEC_OUTB_PERF,
 	EVENT_IPSEC_OUTB_PERF,
+	POLL_REASSEMBLY_INB_PERF,
+	EVENT_REASSEMBLY_INB_PERF,
 };
 
 static struct rte_mempool *mbufpool[RTE_MAX_ETHPORTS];
@@ -74,6 +76,9 @@ static bool is_plat_cn20k;
 #define VECTOR_TMO_NS_DEFAULT 1E6
 static uint16_t vector_en;
 static uint16_t vector_sz = VECTOR_SIZE_DEFAULT;
+int ip_reassembly_dynfield_offset = -1;
+uint64_t ip_reassembly_dynflag;
+
 
 static struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -120,6 +125,7 @@ struct lcore_cfg {
 	uint64_t rx_ipsec_pkts;
 	uint64_t tx_pkts;
 	uint64_t ipsec_failed;
+	uint64_t reass_failed;
 	uint64_t num_inb_sas;
 	uint64_t num_outb_sas;
 };
@@ -192,6 +198,7 @@ static uint32_t soft_limit = 8 * 1024 * 1024;
 static uint32_t esn_ar;
 static bool esn_en;
 static bool verbose;
+static bool plain_reass_ena;
 static struct ipsec_session_data *sess_conf = &conf_aes_128_gcm;
 
 TAILQ_HEAD(outb_sa_expiry_q, outb_sa_exp_info);
@@ -233,6 +240,10 @@ ipsec_test_mode_to_string(enum test_mode testmode)
 		return "POLL_IPSEC_OUTB_PERF";
 	case EVENT_IPSEC_OUTB_PERF:
 		return "EVENT_IPSEC_OUTB_PERF";
+	case POLL_REASSEMBLY_INB_PERF:
+		return "POLL_REASSEMBLY_INB_PERF";
+	case EVENT_REASSEMBLY_INB_PERF:
+		return "EVENT_REASSEMBLY_INB_PERF";
 
 	}
 	return NULL;
@@ -1534,6 +1545,7 @@ print_usage(const char *name)
 		"\t[--esn-ar <winsz>]     Enable ESN with anti-replay window size\n"
 		"\t[--esn]                Enable ESN on SAs\n"
 		"\t[--verbose]            Enable verbose mode\n"
+		"\t[--plain-reass-ena]     Enable plain reassembly\n"
 		"\t[--algo <aes_128_gcm|aes_256_gcm>] Cipher algorithm to use\n",
 		name);
 }
@@ -1553,7 +1565,8 @@ parse_args(int argc, char **argv)
 			    testmode == EVENT_IPSEC_INB_LAOUTB_PERF ||
 			    testmode == EVENT_IPSEC_INB_PERF ||
 			    testmode == EVENT_IPSEC_OUTB_PERF ||
-			    testmode == IPSEC_RTE_PMD_CNXK_API_TEST)
+			    testmode == IPSEC_RTE_PMD_CNXK_API_TEST ||
+			    testmode == EVENT_REASSEMBLY_INB_PERF)
 				event_en = true;
 			else
 				poll_mode = true;
@@ -1693,6 +1706,13 @@ parse_args(int argc, char **argv)
 			continue;
 		}
 
+		if (!strcmp(argv[0], "--plain-reass-ena")) {
+			plain_reass_ena = true;
+			argc--;
+			argv++;
+			continue;
+		}
+
 		/* Unknown args */
 		print_usage(name);
 		return -1;
@@ -1735,6 +1755,9 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 	/* Enable loopback mode for non perf test */
 	port_conf.lpbk_mode = (testmode == IPSEC_MSNS || testmode == IPSEC_RTE_PMD_CNXK_API_TEST) ?
 			       1 : 0;
+
+	if (testmode == POLL_REASSEMBLY_INB_PERF || testmode == EVENT_REASSEMBLY_INB_PERF)
+		port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
 
 	/* port configure */
 	ret = rte_eth_dev_configure(portid, nb_rx_queue, nb_tx_queue, &port_conf);
@@ -1856,7 +1879,9 @@ ut_setup(int argc, char **argv)
 		    testmode == POLL_IPSEC_OUTB_PERF ||
 		    testmode == EVENT_IPSEC_INB_PERF ||
 		    testmode == EVENT_IPSEC_OUTB_PERF ||
-		    testmode == EVENT_IPSEC_INB_OUTB_PERF)
+		    testmode == EVENT_IPSEC_INB_OUTB_PERF ||
+		    testmode == POLL_REASSEMBLY_INB_PERF ||
+		    testmode == EVENT_REASSEMBLY_INB_PERF)
 			ret = port_init(portid, nb_mbufs, nb_lcores - 1, nb_lcores - 1,
 					nb_rxd, nb_txd);
 		else
@@ -1913,6 +1938,19 @@ ut_setup(int argc, char **argv)
 
 			printf("Enabled PFC class %u on port %d RX/TX\n", pfc_conf.rx_pause.tc,
 			       portid);
+		}
+
+		if (testmode == POLL_REASSEMBLY_INB_PERF ||
+		    testmode == EVENT_REASSEMBLY_INB_PERF) {
+			struct rte_eth_ip_reassembly_params reass_capa = {0};
+			ret = rte_eth_ip_reassembly_capability_get(portid, &reass_capa);
+			if (ret < 0) {
+				printf("rte_eth_ip_reassembly_capability_get: err=%d, port=%d\n",
+				       ret, portid);
+				return ret;
+			}
+			reass_capa.timeout_ms = 10 * 10000000;
+			rte_eth_ip_reassembly_conf_set(portid, &reass_capa);
 		}
 
 		/* Start device */
@@ -3419,6 +3457,171 @@ poll_mode_inb_worker(void *args)
 }
 
 
+static inline int
+is_ip_reassembly_incomplete(struct rte_mbuf *mbuf)
+{
+	if (unlikely(ip_reassembly_dynflag == 0))
+		return -1;
+	return (mbuf->ol_flags & ip_reassembly_dynflag) != 0;
+}
+
+static inline void
+free_reassembly_fail_pkt(struct rte_mbuf *mb)
+{
+	if (ip_reassembly_dynfield_offset >= 0) {
+		rte_eth_ip_reassembly_dynfield_t dynfield;
+
+		while (mb) {
+			dynfield = *RTE_MBUF_DYNFIELD(mb,
+					ip_reassembly_dynfield_offset,
+					rte_eth_ip_reassembly_dynfield_t *);
+			rte_pktmbuf_free(mb);
+			mb = dynfield.next_frag;
+		}
+
+	} else {
+		rte_pktmbuf_free(mb);
+	}
+}
+
+static int
+event_reass_inb_worker(void *args)
+{
+	struct rte_mbuf *tx_pkts[MAX_PKT_BURST];
+	struct rte_event evs[MAX_PKT_BURST];
+	int eventdev_id, event_port_id;
+	uint32_t nb_rx, nb_tx, j, k;
+	struct lcore_cfg *lconf;
+	struct rte_mbuf *pkt;
+	uint64_t ol_flags;
+	uint32_t lcore_id;
+
+	(void)args;
+	lcore_id = rte_lcore_id();
+	lconf = &lcore_cfg[lcore_id];
+	eventdev_id = lconf->eventdev_id;
+	event_port_id = lconf->event_port_id;
+
+	printf("Event worker started on lcore %u (event port %u)\n",
+		rte_lcore_id(), event_port_id);
+
+	while (!force_quit) {
+		nb_rx = rte_event_dequeue_burst(eventdev_id, event_port_id,
+						evs, MAX_PKT_BURST, 0);
+		if (!nb_rx) {
+			rte_pause();
+			continue;
+		}
+
+		for (j = 0, k = 0; j < nb_rx; j++) {
+			pkt = evs[j].mbuf;
+			ol_flags = pkt->ol_flags;
+			/* Drop packets received with offload failure */
+			if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+				lconf->ipsec_failed += 1;
+				rte_pktmbuf_free(pkt);
+				continue;
+			}
+			if (unlikely(is_ip_reassembly_incomplete(pkt)) > 0) {
+				free_reassembly_fail_pkt(pkt);
+				lconf->reass_failed += 1;
+				continue;
+			}
+			lconf->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
+
+			if (!rte_event_eth_tx_adapter_enqueue(lconf->eventdev_id,
+							      lconf->event_port_id,
+							      &evs[j], /* events */
+							      1,   /* nb_events */
+							      0 /* flags */)) {
+				free_event(&evs[j]);
+				continue;
+			}
+			evs[k] = evs[j];
+			tx_pkts[k++] = pkt;
+		}
+
+		if (k == 0)
+			continue;
+
+		nb_tx = rte_event_enqueue_burst(eventdev_id, event_port_id, evs, k);
+
+		lconf->tx_pkts += nb_tx;
+
+		if (unlikely(nb_tx < k)) {
+			do {
+				rte_pktmbuf_free(tx_pkts[nb_tx]);
+			} while (++nb_tx < k);
+		}
+	}
+	return 0;
+}
+
+static int
+poll_mode_reass_inb_worker(void *args)
+{
+	struct rte_mbuf *pkts[MAX_PKT_BURST], *pkt;
+	struct rte_mbuf *tx_pkts[MAX_PKT_BURST];
+	uint32_t nb_rx, nb_tx, j, k;
+	struct lcore_cfg *lconf;
+	uint64_t ol_flags;
+	uint32_t lcore_id;
+	uint16_t portid;
+	uint16_t queueid;
+
+	(void)args;
+	lcore_id = rte_lcore_id();
+	lconf = &lcore_cfg[lcore_id];
+	queueid = lconf->queueid;
+
+	printf("IPSEC: entering main loop on lcore %u\n", lcore_id);
+
+	portid = lconf->portid;
+
+	while (!force_quit) {
+
+		/* Read packets from RX queues */
+		nb_rx = rte_eth_rx_burst(portid, queueid,
+					 pkts, MAX_PKT_BURST);
+
+		if (nb_rx <= 0)
+			continue;
+
+		lconf->rx_pkts += nb_rx;
+		/* Send pkts out */
+		for (j = 0, k = 0; j < nb_rx; j++) {
+			pkt = pkts[j];
+			ol_flags = pkt->ol_flags;
+			/* Drop packets received with offload failure */
+			if (unlikely(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED)) {
+				lconf->ipsec_failed += 1;
+				rte_pktmbuf_free(pkt);
+				continue;
+			}
+			if (unlikely(is_ip_reassembly_incomplete(pkt) > 0)) {
+				free_reassembly_fail_pkt(pkt);
+				lconf->reass_failed += 1;
+				continue;
+			}
+			lconf->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
+
+			tx_pkts[k++] = pkt;
+		}
+		nb_tx = rte_eth_tx_burst(portid, queueid, tx_pkts, k);
+
+		lconf->tx_pkts += nb_tx;
+
+		if (unlikely(nb_tx < k)) {
+			do {
+				rte_pktmbuf_free(tx_pkts[nb_tx]);
+			} while (++nb_tx < k);
+		}
+	}
+
+	return 0;
+}
+
+
 static int
 poll_mode_outb_worker(void *args)
 {
@@ -3832,6 +4035,69 @@ inb_sas_destroy:
 }
 
 static int
+reassembly_inb_perf(void)
+{
+	enum rte_security_ipsec_tunnel_type tun_type = RTE_SECURITY_IPSEC_TUNNEL_IPV4;
+	struct rte_security_ctx *sec_ctx = NULL;
+	unsigned int portid = 0;
+	uint16_t lcore_id;
+	int ret = 0, i;
+
+	if (plain_reass_ena)
+		goto receive;
+	dump_alg_data(sess_conf);
+
+	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
+	if (sec_ctx == NULL) {
+		printf("Ethernet device doesn't support security features.\n");
+		return -1;
+	}
+	ret = setup_ipsec_inb_sessions(portid, sess_conf, tun_type);
+	if (ret) {
+		printf("IPsec inbound sessions creation failed\n");
+		return ret;
+	}
+
+	if (action_alg == DEFAULT_SEC_ACTION_ALG)
+		create_default_ipsec_flow(portid);
+
+	printf("\n");
+receive:
+	if (event_en) {
+		/* Start event dev */
+		ut_eventdev_start();
+
+		/* launch per-lcore init on every lcore */
+		rte_eal_mp_remote_launch(event_reass_inb_worker, NULL, SKIP_MAIN);
+	} else if (poll_mode) {
+		/* launch per-lcore init on every lcore */
+		rte_eal_mp_remote_launch(poll_mode_reass_inb_worker, NULL, SKIP_MAIN);
+	}
+
+	/* Print stats */
+	print_stats();
+
+	RTE_LCORE_FOREACH_WORKER(lcore_id) {
+		if (rte_eal_wait_lcore(lcore_id) < 0)
+			break;
+	}
+
+	if (!plain_reass_ena) {
+		if (action_alg == DEFAULT_SEC_ACTION_ALG)
+			destroy_default_ipsec_flow(portid);
+		else
+			destroy_default_flow(portid);
+
+		for (i = 0; i <= (int)num_sas; i++) {
+			if (inb_sas[i].sa)
+				rte_security_session_destroy(sec_ctx, inb_sas[i].sa);
+			rte_free(inb_sas[i].sa_data);
+		}
+	}
+	return ret;
+}
+
+static int
 ipsec_inb_perf(void)
 {
 	enum rte_security_ipsec_tunnel_type tun_type = RTE_SECURITY_IPSEC_TUNNEL_IPV4;
@@ -4153,6 +4419,13 @@ main(int argc, char **argv)
 		       ipsec_test_mode_to_string(testmode));
 		rc = rte_pmd_cnxk_api_test();
 		printf("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
+		break;
+	case POLL_REASSEMBLY_INB_PERF:
+	case EVENT_REASSEMBLY_INB_PERF:
+		printf("Test Mode: %s\n", ipsec_test_mode_to_string(testmode));
+		rc = reassembly_inb_perf();
+		if (rc)
+			printf("Failed to run mode: %s\n", ipsec_test_mode_to_string(testmode));
 		break;
 	}
 	ut_teardown();
