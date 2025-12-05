@@ -695,7 +695,7 @@ cn10k_ml_layer_load(void *device, uint16_t model_id, const char *layer_name, uin
 	layer->glow.ocm_map.wb_pages = wb_pages;
 	layer->glow.ocm_map.scratch_pages = scratch_pages;
 
-	/* Set slow-path request address and state */
+	/* Set slow-path request address */
 	layer->glow.req = PLT_PTR_ADD(mz->addr, layer_object_size + layer_scratch_size);
 
 	/* Reset burst and sync stats */
