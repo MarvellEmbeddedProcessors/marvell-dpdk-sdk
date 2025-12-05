@@ -480,6 +480,20 @@ l3:
 			return pkt_type;
 
 		pkt_type |= ptype_tunnel_without_udp(&proto, m, &off);
+		if ((pkt_type & RTE_PTYPE_TUNNEL_MASK) == RTE_PTYPE_TUNNEL_GRE ||
+		    (pkt_type & RTE_PTYPE_TUNNEL_MASK) == RTE_PTYPE_TUNNEL_NVGRE) {
+			const struct rte_gre_hdr *gh;
+
+			gh = rte_pktmbuf_read(m, prev_off, sizeof(*gh), NULL);
+			if (gh->k)
+				hdr_lens->inner_l2_len += 4;
+			if (gh->s)
+				hdr_lens->inner_l2_len += 4;
+			if (gh->c)
+				hdr_lens->inner_l2_len += 4;
+
+			hdr_lens->inner_l2_len += sizeof(struct rte_gre_hdr);
+		}
 		hdr_lens->tunnel_len = off - prev_off;
 		hdr_lens->inner_l2_len = off - prev_off;
 	}
