@@ -186,7 +186,7 @@ function configure_pf_vf()
 	echo "Testpmd running with $TESTPMD_PORT, Coremask=$TESTPMD_COREMASK"
 	testpmd_launch $PRFX \
 		"-c $TESTPMD_COREMASK -a $TESTPMD_PORT,flow_max_priority=8 \
-		--vfio-vf-token=$TOKEN --file-prefix=pf" \
+		--vfio-vf-token=$TOKEN" \
 		"--no-flush-rx --rxq=1 --txq=1 --nb-cores=1"
 	sleep 1
 	testpmd_cmd $PRFX "port stop all"
@@ -196,7 +196,7 @@ function configure_pf_vf()
 	echo "Testpmd running with $TESTPMD_VF_PORT, Coremask=$TESTPMD_COREMASK"
 	testpmd_launch $PRFX_VF \
 		"-c $TESTPMD_COREMASK -a $TESTPMD_VF_PORT,flow_max_priority=8 \
-		--vfio-vf-token=$TOKEN --file-prefix=vf" \
+		--vfio-vf-token=$TOKEN" \
 		"--no-flush-rx --rxq=1 --txq=1 --nb-cores=1"
 	testpmd_cmd $PRFX_VF "port stop all"
 	sleep 1
