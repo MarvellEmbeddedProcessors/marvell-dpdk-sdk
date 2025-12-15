@@ -263,6 +263,34 @@ mbox_wait_for_zero(struct mbox *mbox, int devid)
 	return data == 0;
 }
 
+static inline void
+mbox_debug_region(const char *ops, struct mbox *mbox, int devid, uint64_t intr_val, int rc)
+{
+	struct mbox_dev *mdev = &mbox->dev[devid];
+	struct mbox_msghdr *msg_rx, *msg_tx;
+	uint64_t offset_rx, offset_tx;
+	char buf[BUFSIZ];
+
+	if (!plt_trace_point_is_enabled(&__cnxk_trace_mbox_region))
+		return;
+
+	/* Get messages from mbox */
+	offset_tx = mbox->tx_start + PLT_ALIGN(sizeof(struct mbox_hdr), MBOX_MSG_ALIGN);
+
+	msg_tx = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset_tx);
+	snprintf(buf, BUFSIZ, "%s_TX", ops);
+	/* Only while sending message choose a rand identifier for the msg */
+	if (intr_val)
+		msg_tx->cookie = rand();
+	roc_trace_mbox_region(buf, mbox_id2name(msg_tx->id), msg_tx->pcifunc, (int)intr_val,
+			      msg_tx->cookie);
+
+	offset_rx = mbox->rx_start + PLT_ALIGN(sizeof(struct mbox_hdr), MBOX_MSG_ALIGN);
+	msg_rx = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset_rx);
+	snprintf(buf, BUFSIZ, "%s_RX", ops);
+	roc_trace_mbox_region(buf, mbox_id2name(msg_rx->id), msg_rx->pcifunc, rc, msg_rx->cookie);
+}
+
 static void
 mbox_msg_send_data(struct mbox *mbox, int devid, uint8_t data)
 {
@@ -291,6 +319,8 @@ mbox_msg_send_data(struct mbox *mbox, int devid, uint8_t data)
 		(volatile void *)(mbox->reg_base + (mbox->trigger | (devid << mbox->tr_shift))));
 
 	intr_val |= (uint64_t)data;
+
+	mbox_debug_region("SND_MSG", mbox, devid, intr_val, 0);
 	/* The interrupt should be fired after num_msgs is written
 	 * to the shared memory
 	 */
@@ -341,6 +371,8 @@ mbox_get_rsp(struct mbox *mbox, int devid, void **msg)
 	msghdr = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset);
 	if (msg != NULL)
 		*msg = msghdr;
+
+	mbox_debug_region("GET_RSP", mbox, devid, 0, msghdr->rc);
 
 	return msghdr->rc;
 }
@@ -437,6 +469,8 @@ mbox_wait(struct mbox *mbox, int devid, uint32_t rst_timo)
 				plt_atomic_load_explicit(&mdev->msgs_acked,
 							 plt_memory_order_acquire),
 				tx_hdr->num_msgs, rx_hdr->num_msgs, mdev->msg_size, mdev->rsp_size);
+
+			mbox_debug_region("MBX_TMO", mbox, devid, 0, -EIO);
 
 			return -EIO;
 		}

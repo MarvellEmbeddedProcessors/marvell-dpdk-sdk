@@ -26,7 +26,6 @@
 
 /* RVU PF interrupt status as received from AF*/
 #define RVU_PF_INTR_STATUS 0x3
-
 static void *
 mbox_mem_map(off_t off, size_t size)
 {
@@ -83,6 +82,7 @@ pf_af_sync_msg(struct dev *dev, struct mbox_msghdr **rsp)
 		timeout += sleep;
 		if (timeout >= mbox->rsp_tmo) {
 			plt_err("Message timeout: %dms", mbox->rsp_tmo);
+			roc_trace_mbox_error("AFPF_SYNC", "RSP_TMO", -EIO);
 			rc = -EIO;
 			break;
 		}
@@ -137,6 +137,7 @@ af_pf_wait_msg(struct dev *dev, uint16_t vf, int num_msg)
 		timeout++;
 		if (timeout >= mbox->rsp_tmo) {
 			plt_err("Routed messages %d timeout: %dms", num_msg, mbox->rsp_tmo);
+			roc_trace_mbox_error("AFPF_WAIT", "RTD_MSG_TMO", -EIO);
 			break;
 		}
 		int_status = plt_read64(dev->mbox_reg_base + RVU_PF_INT);
@@ -149,16 +150,18 @@ af_pf_wait_msg(struct dev *dev, uint16_t vf, int num_msg)
 	plt_write64(~0ull, dev->mbox_reg_base + RVU_PF_INT_ENA_W1S);
 
 	req_hdr = (struct mbox_hdr *)((uintptr_t)mdev->mbase + mbox->rx_start);
-	if (req_hdr->num_msgs != num_msg)
-		plt_err("Routed messages: %d received: %d", num_msg,
-			req_hdr->num_msgs);
+	if (req_hdr->num_msgs != num_msg) {
+		plt_err("Routed messages: %d received: %d", num_msg, req_hdr->num_msgs);
+		roc_trace_mbox_error("AFPF_WAIT", "RTD_INV_CNT", num_msg);
+	}
 
 	/* Get messages from mbox */
-	offset = mbox->rx_start +
-		 PLT_ALIGN(sizeof(struct mbox_hdr), MBOX_MSG_ALIGN);
+	offset = mbox->rx_start + PLT_ALIGN(sizeof(struct mbox_hdr), MBOX_MSG_ALIGN);
 	for (i = 0; i < req_hdr->num_msgs; i++) {
 		msg = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset);
 		size = mbox->rx_start + msg->next_msgoff - offset;
+		roc_trace_mbox_process("AFPF_WAIT", mbox_id2name(msg->id), req_hdr->num_msgs,
+				       msg->pcifunc);
 
 		/* Reserve PF/VF mbox message */
 		size = PLT_ALIGN(size, MBOX_MSG_ALIGN);
@@ -288,6 +291,8 @@ vf_pf_process_msgs(struct dev *dev, uint16_t vf)
 
 		/* RVU_PF_FUNC_S */
 		msg->pcifunc = dev_pf_func(dev->pf, vf);
+		roc_trace_mbox_process("VFPF_MSG", mbox_id2name(msg->id), req_hdr->num_msgs,
+				       msg->pcifunc);
 
 		if (msg->id == MBOX_MSG_READY) {
 			struct ready_msg_rsp *rsp;
@@ -333,8 +338,7 @@ vf_pf_process_msgs(struct dev *dev, uint16_t vf)
 	}
 
 	if (routed > 0) {
-		plt_base_dbg("pf:%d routed %d messages from vf:%d to AF",
-			     dev->pf, routed, vf);
+		roc_trace_mbox_vf_pf_handle("RTG_AF", dev_pf_func(dev->pf, vf), routed);
 		/* PF will send the messages to AF and wait for responses */
 		af_pf_wait_msg(dev, vf, routed);
 		mbox_reset(dev->mbox, 0);
@@ -343,8 +347,7 @@ vf_pf_process_msgs(struct dev *dev, uint16_t vf)
 
 	/* Send mbox responses to VF */
 	if (mdev->num_msgs) {
-		plt_base_dbg("pf:%d reply %d messages to vf:%d", dev->pf,
-			     mdev->num_msgs, vf);
+		roc_trace_mbox_vf_pf_handle("RSP_VF", dev_pf_func(dev->pf, vf), mdev->num_msgs);
 		mbox_msg_send(mbox, vf);
 	}
 
@@ -378,25 +381,24 @@ vf_pf_process_up_msgs(struct dev *dev, uint16_t vf)
 
 		switch (msg->id) {
 		case MBOX_MSG_CGX_LINK_EVENT:
-			plt_base_dbg("PF: Msg 0x%x (%s) fn:0x%x (pf:%d,vf:%d)",
-				     msg->id, mbox_id2name(msg->id),
-				     msg->pcifunc, dev_get_pf(msg->pcifunc),
-				     dev_get_vf(msg->pcifunc));
+			roc_trace_mbox_process("VFPF_UPMSG_CGX", mbox_id2name(msg->id),
+					       req_hdr->num_msgs, msg->pcifunc);
 			break;
 		case MBOX_MSG_CGX_PTP_RX_INFO:
-			plt_base_dbg("PF: Msg 0x%x (%s) fn:0x%x (pf:%d,vf:%d)",
-				     msg->id, mbox_id2name(msg->id),
-				     msg->pcifunc, dev_get_pf(msg->pcifunc),
-				     dev_get_vf(msg->pcifunc));
+			roc_trace_mbox_process("VFPF_UPMSG_PTP", mbox_id2name(msg->id),
+					       req_hdr->num_msgs, msg->pcifunc);
 			break;
 		default:
 			if (roc_rvu_lf_msg_id_range_check(dev->roc_rvu_lf, msg->id))
-				plt_base_dbg("PF: Msg 0x%x fn:0x%x (pf:%d,vf:%d)",
-					     msg->id, msg->pcifunc, dev_get_pf(msg->pcifunc),
+				plt_base_dbg("PF: Msg 0x%x fn:0x%x (pf:%d,vf:%d)", msg->id,
+					     msg->pcifunc, dev_get_pf(msg->pcifunc),
 					     dev_get_vf(msg->pcifunc));
-			else
-				plt_err("Not handled UP msg 0x%x (%s) func:0x%x",
-					msg->id, mbox_id2name(msg->id), msg->pcifunc);
+			else {
+				roc_trace_mbox_process("UNHND_UPMSG", mbox_id2name(msg->id),
+						       req_hdr->num_msgs, msg->pcifunc);
+				plt_err("Not handled UP msg 0x%x (%s) func:0x%x", msg->id,
+					mbox_id2name(msg->id), msg->pcifunc);
+			}
 		}
 		offset = mbox->rx_start + msg->next_msgoff;
 	}
@@ -446,8 +448,7 @@ roc_vf_pf_mbox_irq(void *param)
 		if (!intr)
 			continue;
 
-		plt_base_dbg("vfpf: %d intr: 0x%" PRIx64 " (pf:%d, vf:%d)", vfpf, intr, dev->pf,
-			     dev->vf);
+		roc_trace_mbox_interrupt("VFPF_IRQ", dev_pf_func(dev->pf, dev->vf), intr, 0);
 
 		/* Save and clear intr bits */
 		intrb.bits[vfpf] |= intr;
@@ -489,9 +490,8 @@ process_msgs(struct dev *dev, struct mbox *mbox)
 		msg = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset);
 
 		msgs_acked++;
-		plt_base_dbg("Message 0x%x (%s) pf:%d/vf:%d", msg->id,
-			     mbox_id2name(msg->id), dev_get_pf(msg->pcifunc),
-			     dev_get_vf(msg->pcifunc));
+		roc_trace_mbox_process("PRC_MSG", mbox_id2name(msg->id), req_hdr->num_msgs,
+				       msg->pcifunc);
 
 		switch (msg->id) {
 			/* Add message id's that are handled here */
@@ -514,6 +514,8 @@ process_msgs(struct dev *dev, struct mbox *mbox)
 				} else {
 					plt_err("Message (%s) response has err=%d",
 						mbox_id2name(msg->id), msg->rc);
+					roc_trace_mbox_error("PRC_MSG_ERR", mbox_id2name(msg->id),
+							     msg->rc);
 				}
 			}
 			break;
@@ -526,14 +528,19 @@ process_msgs(struct dev *dev, struct mbox *mbox)
 				} else {
 					plt_err("Message (%s) response has err=%d",
 						mbox_id2name(msg->id), msg->rc);
+					roc_trace_mbox_error("PRC_MSG_ERR", mbox_id2name(msg->id),
+							     msg->rc);
 				}
 			}
 			break;
 
 		default:
-			if (msg->rc)
+			if (msg->rc) {
 				plt_err("Message (%s) response has err=%d (%s)",
 					mbox_id2name(msg->id), msg->rc, roc_error_msg_get(msg->rc));
+				roc_trace_mbox_error("PRC_MSG_INV_RSP", mbox_id2name(msg->id),
+						     msg->rc);
+			}
 			break;
 		}
 		offset = mbox->rx_start + msg->next_msgoff;
@@ -564,8 +571,8 @@ pf_vf_mbox_send_up_msg(struct dev *dev, void *rec_msg)
 		if (!(dev->active_vfs[vf / max_bits] & (BIT_ULL(vf))))
 			continue;
 
-		plt_base_dbg("(%s) size: %zx to VF: %d",
-			     mbox_id2name(msg->hdr.id), size, vf);
+		roc_trace_mbox_process("PFVF_SND_UPMSG", mbox_id2name(msg->hdr.id), 1,
+				       (uint16_t)dev_pf_func(dev->pf, vf));
 
 		/* Reserve PF/VF mbox message */
 		vf_msg = mbox_alloc_msg(vf_mbox, vf, size);
@@ -895,9 +902,10 @@ process_msgs_up(struct dev *dev, struct mbox *mbox)
 	for (i = 0; i < req_hdr->num_msgs; i++) {
 		msg = (struct mbox_msghdr *)((uintptr_t)mdev->mbase + offset);
 
-		plt_base_dbg("Message 0x%x (%s) pf:%d/vf:%d", msg->id,
-			     mbox_id2name(msg->id), dev_get_pf(msg->pcifunc),
-			     dev_get_vf(msg->pcifunc));
+		plt_base_dbg("Message 0x%x (%s) pf:%d/vf:%d", msg->id, mbox_id2name(msg->id),
+			     dev_get_pf(msg->pcifunc), dev_get_vf(msg->pcifunc));
+		roc_trace_mbox_process("PRC_UPMSG", mbox_id2name(msg->id), req_hdr->num_msgs,
+				       msg->pcifunc);
 		if (roc_rvu_lf_msg_id_range_check(dev->roc_rvu_lf, msg->id)) {
 			size = mbox->rx_start + msg->next_msgoff - offset;
 			err = process_rvu_lf_msgs_up(dev, msg, size);
@@ -905,9 +913,11 @@ process_msgs_up(struct dev *dev, struct mbox *mbox)
 				plt_err("Error %d handling 0x%x RVU_LF up msg", err, msg->id);
 		} else {
 			err = mbox_process_msgs_up(dev, msg);
-			if (err)
+			if (err) {
+				roc_trace_mbox_error("PRC_UPMSG_ERR", mbox_id2name(msg->id), err);
 				plt_err("Error %d handling 0x%x (%s)", err, msg->id,
 					mbox_id2name(msg->id));
+			}
 		}
 		offset = mbox->rx_start + msg->next_msgoff;
 	}
@@ -930,7 +940,7 @@ roc_pf_vf_mbox_irq_cn20k(void *param)
 		plt_base_dbg("Proceeding to check mbox UP messages if any");
 
 	plt_write64(intr, dev->mbox_reg_base + RVU_VF_INT);
-	plt_base_dbg("Irq 0x%" PRIx64 "(pf:%d,vf:%d)", intr, dev->pf, dev->vf);
+	roc_trace_mbox_interrupt("PFVF_IRQ_20K", dev_pf_func(dev->pf, dev->vf), intr, 0);
 
 	/* If interrupt occurred for down message */
 	if (intr & BIT_ULL(1))
@@ -954,7 +964,7 @@ roc_af_pf_mbox_irq_cn20k(void *param)
 		plt_base_dbg("Proceeding to check mbox UP messages if any");
 
 	plt_write64(intr, dev->mbox_reg_base + RVU_PF_INT);
-	plt_base_dbg("Irq 0x%" PRIx64 "(pf:%d,vf:%d)", intr, dev->pf, dev->vf);
+	roc_trace_mbox_interrupt("AFPF_IRQ_20K", dev_pf_func(dev->pf, dev->vf), intr, 0);
 
 	/* If interrupt occurred for down message */
 	if (intr & BIT_ULL(1))
@@ -978,12 +988,12 @@ roc_pf_vf_mbox_irq(void *param)
 		plt_base_dbg("Proceeding to check mbox UP messages if any");
 
 	plt_write64(intr, dev->mbox_reg_base + RVU_VF_INT);
-	plt_base_dbg("Irq 0x%" PRIx64 "(pf:%d,vf:%d)", intr, dev->pf, dev->vf);
 
 	/* Reading for UP/DOWN message, next message sending will be delayed
 	 * by 1ms until this region is zeroed mbox_wait_for_zero()
 	 */
 	mbox_data = plt_read64(dev->mbox_reg_base + RVU_VF_VFPF_MBOX0);
+	roc_trace_mbox_interrupt("PFVF_IRQ", dev_pf_func(dev->pf, dev->vf), intr, mbox_data);
 	/* If interrupt occurred for down message */
 	if (mbox_data & MBOX_DOWN_MSG) {
 		mbox_data &= ~MBOX_DOWN_MSG;
@@ -1015,12 +1025,12 @@ roc_af_pf_mbox_irq(void *param)
 		plt_base_dbg("Proceeding to check mbox UP messages if any");
 
 	plt_write64(intr, dev->mbox_reg_base + RVU_PF_INT);
-	plt_base_dbg("Irq 0x%" PRIx64 "(pf:%d,vf:%d)", intr, dev->pf, dev->vf);
 
 	/* Reading for UP/DOWN message, next message sending will be delayed
 	 * by 1ms until this region is zeroed mbox_wait_for_zero()
 	 */
 	mbox_data = plt_read64(dev->mbox_reg_base + RVU_PF_PFAF_MBOX0);
+	roc_trace_mbox_interrupt("AFPF_IRQ", dev_pf_func(dev->pf, dev->vf), intr, mbox_data);
 	/* If interrupt occurred for down message */
 	if (mbox_data & MBOX_DOWN_MSG) {
 		mbox_data &= ~MBOX_DOWN_MSG;
@@ -1327,8 +1337,7 @@ vf_flr_handle_msg(void *param, dev_intr_t *flr)
 
 	for (vf = 0; vf < max_vf; vf++) {
 		if (flr->bits[vf / max_bits] & BIT_ULL(vf % max_bits)) {
-			plt_base_dbg("Process FLR vf:%d request (pf:%d, vf:%d)",
-				     vf, dev->pf, dev->vf);
+			roc_trace_mbox_vf_flr("PRC_VFFLR", vf, dev_pf_func(dev->pf, dev->vf));
 			/* Inform AF about VF reset */
 			vf_flr_send_msg(dev, vf);
 			flr->bits[vf / max_bits] &= ~(BIT_ULL(vf % max_bits));

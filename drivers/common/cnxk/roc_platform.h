@@ -5,12 +5,12 @@
 #ifndef _ROC_PLATFORM_H_
 #define _ROC_PLATFORM_H_
 
-#include <rte_compat.h>
+#include <bus_pci_driver.h>
 #include <rte_alarm.h>
 #include <rte_bitmap.h>
-#include <bus_pci_driver.h>
 #include <rte_byteorder.h>
 #include <rte_common.h>
+#include <rte_compat.h>
 #include <rte_cycles.h>
 #include <rte_ether.h>
 #include <rte_interrupts.h>
@@ -25,6 +25,7 @@
 #include <rte_string_fns.h>
 #include <rte_tailq.h>
 #include <rte_telemetry.h>
+#include <rte_trace_point.h>
 
 #include "eal_filesystem.h"
 
@@ -273,6 +274,9 @@ plt_thread_is_valid(plt_thread_t thr)
 #define plt_telemetry_register_cmd   rte_telemetry_register_cmd
 #define __plt_atomic __rte_atomic
 
+/* Trace */
+#define plt_trace_point_is_enabled rte_trace_point_is_enabled
+
 /* Log */
 extern int cnxk_logtype_base;
 #define RTE_LOGTYPE_base cnxk_logtype_base
@@ -394,9 +398,82 @@ plt_lmt_region_reserve_aligned(const char *name, size_t len, uint32_t align)
 	/* To ensure returned memory is physically contiguous, bounding
 	 * the start and end address in 2M range.
 	 */
-	return rte_memzone_reserve_bounded(name, len, SOCKET_ID_ANY,
-					   RTE_MEMZONE_IOVA_CONTIG,
-					   align, RTE_PGSIZE_2M);
+	return rte_memzone_reserve_bounded(name, len, SOCKET_ID_ANY, RTE_MEMZONE_IOVA_CONTIG, align,
+					   RTE_PGSIZE_2M);
+}
+
+/* ROC trace points */
+RTE_TRACE_POINT(cnxk_trace_mbox_region,
+		RTE_TRACE_POINT_ARGS(const char *func, const char *msg, uint16_t pcifunc, int data,
+				     uint16_t cookie),
+		rte_trace_point_emit_string(func);
+		rte_trace_point_emit_string(msg); rte_trace_point_emit_u16(pcifunc);
+		rte_trace_point_emit_int(data); rte_trace_point_emit_u16(cookie);)
+
+RTE_TRACE_POINT(cnxk_trace_mbox_process,
+		RTE_TRACE_POINT_ARGS(const char *func, const char *msg, uint16_t num_msgs,
+				     uint16_t pcifunc),
+		rte_trace_point_emit_string(func);
+		rte_trace_point_emit_string(msg); rte_trace_point_emit_u16(num_msgs);
+		rte_trace_point_emit_u16(pcifunc);)
+
+RTE_TRACE_POINT(cnxk_trace_mbox_interrupt,
+		RTE_TRACE_POINT_ARGS(const char *func, int pcifunc, uint64_t intr,
+				     uint64_t mbox_data),
+		rte_trace_point_emit_string(func);
+		rte_trace_point_emit_int(pcifunc); rte_trace_point_emit_u64(intr);
+		rte_trace_point_emit_u64(mbox_data);)
+
+RTE_TRACE_POINT(cnxk_trace_mbox_vf_flr,
+		RTE_TRACE_POINT_ARGS(const char *func, uint16_t from_vf, uint16_t pcifunc),
+		rte_trace_point_emit_string(func);
+		rte_trace_point_emit_u16(from_vf); rte_trace_point_emit_u16(pcifunc);)
+
+RTE_TRACE_POINT(cnxk_trace_mbox_vf_pf_handle,
+		RTE_TRACE_POINT_ARGS(const char *ops, uint16_t pcifunc, int data),
+		rte_trace_point_emit_string(ops);
+		rte_trace_point_emit_u16(pcifunc); rte_trace_point_emit_int(data);)
+
+RTE_TRACE_POINT(cnxk_trace_mbox_error,
+		RTE_TRACE_POINT_ARGS(const char *func, const char *msg, int data),
+		rte_trace_point_emit_string(func);
+		rte_trace_point_emit_string(msg); rte_trace_point_emit_int(data);)
+
+static inline void
+roc_trace_mbox_region(const char *func, const char *msg, uint16_t pcifunc, int data,
+		      uint16_t cookie)
+{
+	cnxk_trace_mbox_region(func, msg, pcifunc, data, cookie);
+}
+
+static inline void
+roc_trace_mbox_process(const char *func, const char *msg, uint16_t num_msgs, uint16_t pcifunc)
+{
+	cnxk_trace_mbox_process(func, msg, num_msgs, pcifunc);
+}
+
+static inline void
+roc_trace_mbox_interrupt(const char *func, int pcifunc, uint64_t intr, uint64_t mbox_data)
+{
+	cnxk_trace_mbox_interrupt(func, pcifunc, intr, mbox_data);
+}
+
+static inline void
+roc_trace_mbox_vf_pf_handle(const char *func, uint16_t pcifunc, int data)
+{
+	cnxk_trace_mbox_vf_pf_handle(func, pcifunc, data);
+}
+
+static inline void
+roc_trace_mbox_error(const char *func, const char *msg, int data)
+{
+	cnxk_trace_mbox_error(func, msg, data);
+}
+
+static inline void
+roc_trace_mbox_vf_flr(const char *func, uint16_t from_vf, uint16_t pcifunc)
+{
+	cnxk_trace_mbox_vf_flr(func, from_vf, pcifunc);
 }
 
 #endif /* _ROC_PLATFORM_H_ */

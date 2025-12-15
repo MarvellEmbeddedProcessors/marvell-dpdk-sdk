@@ -32,6 +32,8 @@ struct mbox_msghdr {
 	uint16_t __io ver;
 	/* Offset of next msg within mailbox region */
 	uint16_t __io next_msgoff;
+	/* Unique ID for trace debug */
+	uint16_t __io cookie;
 	int __io rc; /* Msg processed response code */
 };
 
