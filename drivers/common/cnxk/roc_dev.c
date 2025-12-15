@@ -401,8 +401,7 @@ vf_pf_process_up_msgs(struct dev *dev, uint16_t vf)
 		offset = mbox->rx_start + msg->next_msgoff;
 	}
 	mbox_reset(mbox, vf);
-	mdev->msgs_acked = msgs_acked;
-	plt_wmb();
+	plt_atomic_store_explicit(&mdev->msgs_acked, msgs_acked, plt_memory_order_release);
 
 	return i;
 }
@@ -542,8 +541,7 @@ process_msgs(struct dev *dev, struct mbox *mbox)
 
 	mbox_reset(mbox, 0);
 	/* Update acked if someone is waiting a message - mbox_wait is waiting */
-	mdev->msgs_acked = msgs_acked;
-	plt_wmb();
+	plt_atomic_store_explicit(&mdev->msgs_acked, msgs_acked, plt_memory_order_release);
 }
 
 /* Copies the message received from AF and sends it to VF */
@@ -922,10 +920,57 @@ process_msgs_up(struct dev *dev, struct mbox *mbox)
 
 /* IRQ to VF from PF - VF context (interrupt thread) */
 static void
+roc_pf_vf_mbox_irq_cn20k(void *param)
+{
+	struct dev *dev = param;
+	uint64_t intr;
+
+	intr = plt_read64(dev->mbox_reg_base + RVU_VF_INT);
+	if (intr == 0)
+		plt_base_dbg("Proceeding to check mbox UP messages if any");
+
+	plt_write64(intr, dev->mbox_reg_base + RVU_VF_INT);
+	plt_base_dbg("Irq 0x%" PRIx64 "(pf:%d,vf:%d)", intr, dev->pf, dev->vf);
+
+	/* If interrupt occurred for down message */
+	if (intr & BIT_ULL(1))
+		/* First process all configuration messages */
+		process_msgs(dev, dev->mbox);
+
+	/* If interrupt occurred for UP message */
+	if (intr & BIT_ULL(0))
+		process_msgs_up(dev, &dev->mbox_up);
+}
+
+/* IRQ to PF from AF - PF context (interrupt thread) */
+static void
+roc_af_pf_mbox_irq_cn20k(void *param)
+{
+	struct dev *dev = param;
+	uint64_t intr;
+
+	intr = plt_read64(dev->mbox_reg_base + RVU_PF_INT);
+	if (intr == 0)
+		plt_base_dbg("Proceeding to check mbox UP messages if any");
+
+	plt_write64(intr, dev->mbox_reg_base + RVU_PF_INT);
+	plt_base_dbg("Irq 0x%" PRIx64 "(pf:%d,vf:%d)", intr, dev->pf, dev->vf);
+
+	/* If interrupt occurred for down message */
+	if (intr & BIT_ULL(1))
+		process_msgs(dev, dev->mbox);
+
+	/* If interrupt occurred for up message */
+	if (intr & BIT_ULL(0))
+		process_msgs_up(dev, &dev->mbox_up);
+}
+
+/* IRQ to VF from PF - VF context (interrupt thread) */
+static void
 roc_pf_vf_mbox_irq(void *param)
 {
 	struct dev *dev = param;
-	uint64_t mbox_data;
+	uint64_t mbox_data = 0;
 	uint64_t intr;
 
 	intr = plt_read64(dev->mbox_reg_base + RVU_VF_INT);
@@ -940,7 +985,7 @@ roc_pf_vf_mbox_irq(void *param)
 	 */
 	mbox_data = plt_read64(dev->mbox_reg_base + RVU_VF_VFPF_MBOX0);
 	/* If interrupt occurred for down message */
-	if (mbox_data & MBOX_DOWN_MSG || intr & BIT_ULL(1)) {
+	if (mbox_data & MBOX_DOWN_MSG) {
 		mbox_data &= ~MBOX_DOWN_MSG;
 		plt_write64(mbox_data, dev->mbox_reg_base + RVU_VF_VFPF_MBOX0);
 
@@ -948,7 +993,7 @@ roc_pf_vf_mbox_irq(void *param)
 		process_msgs(dev, dev->mbox);
 	}
 	/* If interrupt occurred for UP message */
-	if (mbox_data & MBOX_UP_MSG || intr & BIT_ULL(0)) {
+	if (mbox_data & MBOX_UP_MSG) {
 		mbox_data &= ~MBOX_UP_MSG;
 		plt_write64(mbox_data, dev->mbox_reg_base + RVU_VF_VFPF_MBOX0);
 
@@ -962,7 +1007,7 @@ static void
 roc_af_pf_mbox_irq(void *param)
 {
 	struct dev *dev = param;
-	uint64_t mbox_data;
+	uint64_t mbox_data = 0;
 	uint64_t intr;
 
 	intr = plt_read64(dev->mbox_reg_base + RVU_PF_INT);
@@ -977,7 +1022,7 @@ roc_af_pf_mbox_irq(void *param)
 	 */
 	mbox_data = plt_read64(dev->mbox_reg_base + RVU_PF_PFAF_MBOX0);
 	/* If interrupt occurred for down message */
-	if (mbox_data & MBOX_DOWN_MSG || intr & BIT_ULL(1)) {
+	if (mbox_data & MBOX_DOWN_MSG) {
 		mbox_data &= ~MBOX_DOWN_MSG;
 		plt_write64(mbox_data, dev->mbox_reg_base + RVU_PF_PFAF_MBOX0);
 
@@ -985,7 +1030,7 @@ roc_af_pf_mbox_irq(void *param)
 		process_msgs(dev, dev->mbox);
 	}
 	/* If interrupt occurred for up message */
-	if (mbox_data & MBOX_UP_MSG || intr & BIT_ULL(0)) {
+	if (mbox_data & MBOX_UP_MSG) {
 		mbox_data &= ~MBOX_UP_MSG;
 		plt_write64(mbox_data, dev->mbox_reg_base + RVU_PF_PFAF_MBOX0);
 
@@ -1045,7 +1090,8 @@ mbox_register_pf_irq(struct plt_pci_device *pci_dev, struct dev *dev)
 		}
 	}
 	/* MBOX interrupt AF <-> PF */
-	rc = dev_irq_register(intr_handle, roc_af_pf_mbox_irq, dev, dev->mbox_plat->pfaf_vec);
+	rc = dev_irq_register(intr_handle, dev->mbox_plat->ops->af_pf_mbox_irq, dev,
+			      dev->mbox_plat->pfaf_vec);
 	if (rc) {
 		plt_err("Fail to register AF<->PF mbox irq");
 		return rc;
@@ -1073,7 +1119,8 @@ mbox_register_vf_irq(struct plt_pci_device *pci_dev, struct dev *dev)
 	plt_write64(~0ull, dev->mbox_reg_base + RVU_VF_INT_ENA_W1C);
 
 	/* MBOX interrupt PF <-> VF */
-	rc = dev_irq_register(intr_handle, roc_pf_vf_mbox_irq, dev, RVU_VF_INT_VEC_MBOX);
+	rc = dev_irq_register(intr_handle, dev->mbox_plat->ops->pf_vf_mbox_irq, dev,
+			      RVU_VF_INT_VEC_MBOX);
 	if (rc) {
 		plt_err("Fail to register PF<->VF mbox irq");
 		return rc;
@@ -1127,7 +1174,8 @@ mbox_unregister_pf_irq(struct plt_pci_device *pci_dev, struct dev *dev)
 	}
 
 	/* MBOX interrupt AF <-> PF */
-	dev_irq_unregister(intr_handle, roc_af_pf_mbox_irq, dev, dev->mbox_plat->pfaf_vec);
+	dev_irq_unregister(intr_handle, dev->mbox_plat->ops->af_pf_mbox_irq, dev,
+			   dev->mbox_plat->pfaf_vec);
 }
 
 static void
@@ -1139,7 +1187,8 @@ mbox_unregister_vf_irq(struct plt_pci_device *pci_dev, struct dev *dev)
 	plt_write64(~0ull, dev->mbox_reg_base + RVU_VF_INT_ENA_W1C);
 
 	/* Unregister the interrupt handler */
-	dev_irq_unregister(intr_handle, roc_pf_vf_mbox_irq, dev, RVU_VF_INT_VEC_MBOX);
+	dev_irq_unregister(intr_handle, dev->mbox_plat->ops->pf_vf_mbox_irq, dev,
+			   RVU_VF_INT_VEC_MBOX);
 }
 
 void
@@ -1599,10 +1648,17 @@ dev_cache_line_size_valid(void)
 	return true;
 }
 
-static void
+static int
 mbox_platform_changes(struct mbox_platform *mbox_plat, uintptr_t bar2, uintptr_t bar4, bool is_vf)
 {
-	int i;
+	int i, rc = 0;
+
+	/* Allocate memory for device ops */
+	mbox_plat->ops = plt_zmalloc(sizeof(struct mbox_ops), 0);
+	if (mbox_plat->ops == NULL) {
+		rc = -ENOMEM;
+		goto fail;
+	}
 
 	if (roc_model_is_cn20k()) {
 		/* For CN20K, AF allocates mbox memory in DRAM and writes PF
@@ -1613,6 +1669,9 @@ mbox_platform_changes(struct mbox_platform *mbox_plat, uintptr_t bar2, uintptr_t
 		mbox_plat->mbox_region_base =
 			bar2 + (RVU_PFX_FUNC_PFAF_MBOX +
 				((uint64_t)RVU_BLOCK_ADDR_MBOX << RVU_FUNC_BLKADDR_SHIFT));
+		/* Mbox operations */
+		mbox_plat->ops->af_pf_mbox_irq = roc_af_pf_mbox_irq_cn20k;
+		mbox_plat->ops->pf_vf_mbox_irq = roc_pf_vf_mbox_irq_cn20k;
 		/* Interrupt vectors */
 		mbox_plat->pfaf_vec = RVU_MBOX_PF_INT_VEC_AFPF_MBOX;
 		mbox_plat->pfvf_mbox0_vec = RVU_MBOX_PF_INT_VEC_VFPF_MBOX0;
@@ -1630,6 +1689,9 @@ mbox_platform_changes(struct mbox_platform *mbox_plat, uintptr_t bar2, uintptr_t
 	} else {
 		mbox_plat->mbox_reg_base = bar2;
 		mbox_plat->mbox_region_base = bar4;
+		/* Mbox operations */
+		mbox_plat->ops->af_pf_mbox_irq = roc_af_pf_mbox_irq;
+		mbox_plat->ops->pf_vf_mbox_irq = roc_pf_vf_mbox_irq;
 		mbox_plat->pfaf_vec = RVU_PF_INT_VEC_AFPF_MBOX;
 		mbox_plat->pfvf_mbox0_vec = RVU_PF_INT_VEC_VFPF_MBOX0;
 		mbox_plat->pfvf_mbox1_vec = RVU_PF_INT_VEC_VFPF_MBOX1;
@@ -1647,6 +1709,8 @@ mbox_platform_changes(struct mbox_platform *mbox_plat, uintptr_t bar2, uintptr_t
 		if (roc_model_is_cn10k())
 			mbox_plat->mbox_region_base = bar2 + RVU_VF_MBOX_REGION;
 	}
+fail:
+	return rc;
 }
 
 int
@@ -1678,7 +1742,12 @@ dev_init(struct dev *dev, struct plt_pci_device *pci_dev)
 		rc = -ENOMEM;
 		goto fail;
 	}
-	mbox_platform_changes(dev->mbox_plat, bar2, bar4, is_vf);
+
+	if (mbox_platform_changes(dev->mbox_plat, bar2, bar4, is_vf)) {
+		plt_err("Failed to populate platform specific changes");
+		rc = -ENOMEM;
+		goto mbox_plat_free;
+	}
 
 	mbox_reg_base = dev->mbox_plat->mbox_reg_base;
 	mbox_region_base = dev->mbox_plat->mbox_region_base;
@@ -1824,6 +1893,8 @@ mbox_fini:
 	mbox_fini(dev->mbox);
 	mbox_fini(&dev->mbox_up);
 error:
+	plt_free(dev->mbox_plat->ops);
+mbox_plat_free:
 	plt_free(dev->mbox_plat);
 fail:
 	return rc;
@@ -1883,6 +1954,7 @@ dev_fini(struct dev *dev, struct plt_pci_device *pci_dev)
 	mbox_fini(mbox);
 	dev->mbox_active = 0;
 
+	plt_free(dev->mbox_plat->ops);
 	plt_free(dev->mbox_plat);
 	/* Disable MSIX vectors */
 	dev_irqs_disable(intr_handle);

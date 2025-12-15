@@ -218,12 +218,17 @@ plt_thread_is_valid(plt_thread_t thr)
 #define plt_memory_order_acquire  rte_memory_order_acquire
 #define plt_memory_order_relaxed  rte_memory_order_relaxed
 
-#define plt_bit_relaxed_get32   rte_bit_relaxed_get32
-#define plt_bit_relaxed_set32   rte_bit_relaxed_set32
+#define plt_atomic_store_explicit rte_atomic_store_explicit
+#define plt_atomic_load_explicit  rte_atomic_load_explicit
+#define plt_memory_order_release  rte_memory_order_release
+#define plt_memory_order_acquire  rte_memory_order_acquire
+
+#define plt_bit_relaxed_get32	rte_bit_relaxed_get32
+#define plt_bit_relaxed_set32	rte_bit_relaxed_set32
 #define plt_bit_relaxed_clear32 rte_bit_relaxed_clear32
 
-#define plt_bit_relaxed_get64   rte_bit_relaxed_get64
-#define plt_bit_relaxed_set64   rte_bit_relaxed_set64
+#define plt_bit_relaxed_get64	rte_bit_relaxed_get64
+#define plt_bit_relaxed_set64	rte_bit_relaxed_set64
 #define plt_bit_relaxed_clear64 rte_bit_relaxed_clear64
 
 #define plt_popcount32		rte_popcount32

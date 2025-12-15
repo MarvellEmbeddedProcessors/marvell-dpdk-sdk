@@ -106,6 +106,15 @@ struct mbox_sync {
 	pthread_mutex_t mutex;
 };
 
+/* AF PF VF mbox interrupt callbacks */
+typedef void (*af_pf_mbox_irq_t)(void *param);
+typedef void (*pf_vf_mbox_irq_t)(void *param);
+
+struct mbox_ops {
+	af_pf_mbox_irq_t af_pf_mbox_irq;
+	pf_vf_mbox_irq_t pf_vf_mbox_irq;
+};
+
 struct mbox_platform {
 	uint8_t pfaf_vec;
 	uint8_t pfvf_mbox0_vec;
@@ -120,6 +129,8 @@ struct mbox_platform {
 	uint64_t pfvf1_mbox_int_ena_w1c[MAX_VFPF_DWORD_BITS];
 	uintptr_t mbox_reg_base;
 	uintptr_t mbox_region_base;
+	/* Mbox operations */
+	struct mbox_ops *ops;
 };
 
 struct dev {
