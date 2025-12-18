@@ -8,17 +8,18 @@
 
 struct rte_flow *
 cn9k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
-		 const struct rte_flow_item pattern[],
-		 const struct rte_flow_action actions[],
+		 const struct rte_flow_item pattern[], const struct rte_flow_action actions[],
 		 struct rte_flow_error *error)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+	struct rte_eth_dev *repr_eth_dev;
 	struct roc_npc *npc = &dev->npc;
 	struct roc_npc_flow *flow;
 	int vtag_actions = 0;
 	int mark_actions;
 
-	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, false);
+	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, false,
+				       &repr_eth_dev);
 	if (!flow)
 		return NULL;
 
@@ -26,7 +27,10 @@ cn9k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 
 	if (mark_actions) {
 		dev->rx_offload_flags |= NIX_RX_OFFLOAD_MARK_UPDATE_F;
-		cn9k_eth_set_rx_function(eth_dev);
+		if (repr_eth_dev)
+			cn9k_eth_set_rx_function(repr_eth_dev);
+		else
+			cn9k_eth_set_rx_function(eth_dev);
 	}
 
 	vtag_actions = roc_npc_vtag_actions_get(npc);

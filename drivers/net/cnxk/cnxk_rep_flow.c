@@ -543,11 +543,12 @@ cnxk_rep_flow_create_native(struct rte_eth_dev *eth_dev, const struct rte_flow_a
 			    const struct rte_flow_action actions[], struct rte_flow_error *error)
 {
 	struct cnxk_rep_dev *rep_dev = cnxk_rep_pmd_priv(eth_dev);
+	struct rte_eth_dev *repr_eth_dev;
 	struct roc_npc_flow *flow;
 	uint16_t new_entry;
 	int rc;
 
-	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, true);
+	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, true, &repr_eth_dev);
 	if (!flow) {
 		plt_err("Fail to create flow");
 		goto fail;

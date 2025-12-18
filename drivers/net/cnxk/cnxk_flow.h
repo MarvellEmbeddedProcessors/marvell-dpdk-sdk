@@ -29,7 +29,8 @@ struct roc_npc_flow *cnxk_flow_create_common(struct rte_eth_dev *eth_dev,
 					     const struct rte_flow_attr *attr,
 					     const struct rte_flow_item pattern[],
 					     const struct rte_flow_action actions[],
-					     struct rte_flow_error *error, bool is_rep);
+					     struct rte_flow_error *error, bool is_rep,
+					     struct rte_eth_dev **repr_eth_dev);
 int cnxk_flow_validate_common(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 			      const struct rte_flow_item pattern[],
 			      const struct rte_flow_action actions[], struct rte_flow_error *error,

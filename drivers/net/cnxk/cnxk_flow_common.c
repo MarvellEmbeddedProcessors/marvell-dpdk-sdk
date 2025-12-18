@@ -116,7 +116,7 @@ cnxk_rss_action_validate(struct rte_eth_dev *eth_dev, const struct rte_flow_attr
 struct roc_npc_flow *
 cnxk_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 		 const struct rte_flow_item pattern[], const struct rte_flow_action actions[],
-		 struct rte_flow_error *error)
+		 struct rte_eth_dev **repr_eth_dev, struct rte_flow_error *error)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 	const struct rte_flow_action *action_rss = NULL;
@@ -183,7 +183,7 @@ cnxk_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 		return mcs_flow;
 	}
 
-	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, false);
+	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, false, repr_eth_dev);
 	if (!flow) {
 		if (mtr)
 			nix_mtr_chain_reset(eth_dev, mtr->mtr_id);
