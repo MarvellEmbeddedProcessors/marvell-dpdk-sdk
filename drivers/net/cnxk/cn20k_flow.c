@@ -15,20 +15,28 @@ cn20k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 		  struct rte_flow_error *error)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
+	struct rte_eth_dev *repr_eth_dev = 0;
 	struct roc_npc *npc = &dev->npc;
+	struct cnxk_eth_dev *repr_dev;
 	struct roc_npc_flow *flow;
 	int vtag_actions = 0;
 	int mark_actions;
 
-	flow = cnxk_flow_create(eth_dev, attr, pattern, actions, error);
+	flow = cnxk_flow_create(eth_dev, attr, pattern, actions, &repr_eth_dev, error);
 
 	if (!flow)
 		return NULL;
 
 	mark_actions = roc_npc_mark_actions_get(npc);
 	if (mark_actions) {
-		dev->rx_offload_flags |= NIX_RX_OFFLOAD_MARK_UPDATE_F;
-		cn20k_eth_set_rx_function(eth_dev);
+		if (repr_eth_dev) {
+			repr_dev = cnxk_eth_pmd_priv(repr_eth_dev);
+			repr_dev->rx_offload_flags |= NIX_RX_OFFLOAD_MARK_UPDATE_F;
+			cn20k_eth_set_rx_function(repr_eth_dev);
+		} else {
+			dev->rx_offload_flags |= NIX_RX_OFFLOAD_MARK_UPDATE_F;
+			cn20k_eth_set_rx_function(eth_dev);
+		}
 	}
 
 	vtag_actions = roc_npc_vtag_actions_get(npc);
