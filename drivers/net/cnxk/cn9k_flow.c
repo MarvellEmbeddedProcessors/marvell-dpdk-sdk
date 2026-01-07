@@ -19,7 +19,7 @@ cn9k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 	int mark_actions;
 
 	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, false,
-				       &repr_eth_dev);
+				       &repr_eth_dev, 0);
 	if (!flow)
 		return NULL;
 

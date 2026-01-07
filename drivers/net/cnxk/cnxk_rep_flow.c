@@ -548,7 +548,8 @@ cnxk_rep_flow_create_native(struct rte_eth_dev *eth_dev, const struct rte_flow_a
 	uint16_t new_entry;
 	int rc;
 
-	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, true, &repr_eth_dev);
+	flow = cnxk_flow_create_common(eth_dev, attr, pattern, actions, error, true, &repr_eth_dev,
+				       0);
 	if (!flow) {
 		plt_err("Fail to create flow");
 		goto fail;
@@ -633,7 +634,7 @@ cnxk_rep_flow_validate(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *
 	}
 
 	if (rep_dev->native_repte)
-		return cnxk_flow_validate_common(eth_dev, attr, pattern, actions, error, true);
+		return cnxk_flow_validate_common(eth_dev, attr, pattern, actions, error, true, 0);
 
 	rc = process_flow_rule(rep_dev, attr, pattern, actions, &adata, CNXK_REP_MSG_FLOW_VALIDATE);
 	if (!rc || adata.u.sval < 0) {
