@@ -15,7 +15,7 @@ cn10k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 		  struct rte_flow_error *error)
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
-	struct rte_eth_dev *repr_eth_dev = 0;
+	struct rte_eth_dev *repr_eth_dev = NULL;
 	struct roc_npc *npc = &dev->npc;
 	struct cnxk_eth_dev *repr_dev;
 	struct roc_npc_flow *flow;
