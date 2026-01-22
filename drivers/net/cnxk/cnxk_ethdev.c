@@ -247,7 +247,7 @@ cnxk_flow_ipfrag_set(struct roc_npc_flow *flow, struct roc_npc *npc)
 	flow->mcam_data[0] &= mask;
 	flow->mcam_mask[0] &= mask;
 	flow->mcam_data[0] |= (0x02ULL << lc_offset);
-	flow->mcam_mask[0] |= (0x8eULL << lc_offset);
+	flow->mcam_mask[0] |= (0x82ULL << lc_offset);
 }
 
 int
