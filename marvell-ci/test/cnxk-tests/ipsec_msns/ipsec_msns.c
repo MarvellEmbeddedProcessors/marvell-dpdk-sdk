@@ -24,6 +24,8 @@
 #include <rte_event_crypto_adapter.h>
 
 #include "ipsec_msns.h"
+#include "flow.h"
+#include "parser.h"
 
 #define NB_ETHPORTS_USED	 1
 #define MEMPOOL_CACHE_SIZE	 32
@@ -71,6 +73,7 @@ static struct rte_mempool *cryptodev_session_pool;
 static struct rte_ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
 static uint16_t stats_tmo = 5;
 static bool is_plat_cn20k;
+static const char *config_file;
 
 #define VECTOR_SIZE_DEFAULT   64
 #define VECTOR_TMO_NS_DEFAULT 1E6
@@ -181,6 +184,7 @@ static uint32_t ethdev_port_mask = RTE_PORT_ALL;
 static volatile bool force_quit;
 static uint32_t nb_bufs = 0;
 static enum test_mode testmode;
+static bool loopback;
 static bool event_en;
 static bool poll_mode;
 static bool pfc;
@@ -776,6 +780,7 @@ create_ipsec_perf_session(struct ipsec_session_data *sa, uint16_t portid,
 	uint32_t spi = 0;
 	bool inbound;
 	int ret;
+	int dip;
 
 	switch (action_alg) {
 	case RTE_PMD_CNXK_SEC_ACTION_ALG0:
@@ -815,6 +820,9 @@ create_ipsec_perf_session(struct ipsec_session_data *sa, uint16_t portid,
 	sa->spi = sa->ipsec_xform.spi;
 	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
 	sess_conf.crypto_xform->aead.key.data = sa->key.data;
+
+	dip = sa->ipsec_xform.spi;
+	dst_v4 = rte_cpu_to_be_32(RTE_IPV4(192, 18, dip, 1));
 
 	/* Save SA as userdata for the security session. When
 	 * the packet is received, this userdata will be
@@ -1587,7 +1595,9 @@ print_usage(const char *name)
 		"\t[--esn]                Enable ESN on SAs\n"
 		"\t[--verbose]            Enable verbose mode\n"
 		"\t[--plain-reass-ena]     Enable plain reassembly\n"
-		"\t[--algo <aes_128_gcm|aes_256_gcm>] Cipher algorithm to use\n",
+		"\t[--algo <aes_128_gcm|aes_256_gcm>] Cipher algorithm to use\n"
+		"\t[--lpbk]               Enable loopback mode\n"
+		"\t[--config <file>]      Configuration file for flow rules\n",
 		name);
 }
 
@@ -1754,6 +1764,20 @@ parse_args(int argc, char **argv)
 			continue;
 		}
 
+		if (!strcmp(argv[0], "--lpbk")) {
+			loopback = true;
+			argc--;
+			argv++;
+			continue;
+		}
+
+		if (!strcmp(argv[0], "--config") && (argc > 1)) {
+			config_file = argv[1];
+			argc -= 2;
+			argv += 2;
+			continue;
+		}
+
 		/* Unknown args */
 		print_usage(name);
 		return -1;
@@ -1796,6 +1820,9 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 	/* Enable loopback mode for non perf test */
 	port_conf.lpbk_mode = (testmode == IPSEC_MSNS || testmode == IPSEC_RTE_PMD_CNXK_API_TEST) ?
 			       1 : 0;
+
+	if (loopback)
+		port_conf.lpbk_mode = 1;
 
 	if (testmode == POLL_REASSEMBLY_INB_PERF || testmode == EVENT_REASSEMBLY_INB_PERF)
 		port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
@@ -1888,6 +1915,11 @@ ut_setup(int argc, char **argv)
 	ret = parse_args(argc, argv);
 	if (ret < 0)
 		return ret;
+
+	if (config_file && parse_cfg_file(config_file)) {
+		printf("Failed to parse config file %s\n", config_file);
+		return -1;
+	}
 
 	nb_ports = rte_eth_dev_count_avail();
 	if (nb_ports < NB_ETHPORTS_USED || ethdev_port_mask == 0) {
@@ -2010,6 +2042,7 @@ ut_setup(int argc, char **argv)
 	}
 
 	check_all_ports_link_status(ethdev_port_mask);
+	flow_init();
 	return 0;
 }
 
@@ -2901,7 +2934,8 @@ poll_mode_inb_outb_worker(void *args)
 				sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
 				sa_index = sa_data->spi;
 			} else {
-				sa_index = (sa_counter % (num_sas - 1)) + 1;
+				sa_index = num_sas > 1 ?
+					(sa_counter % (num_sas - 1)) + 1 : 1;
 				sa_counter += 1;
 			}
 			sa = outb_sas[sa_index].sa;
@@ -3084,7 +3118,8 @@ handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struc
 		sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
 		sa_index = sa_data->spi;
 	} else {
-		sa_index = (*sa_counter % (num_sas - 1)) + 1;
+		sa_index = num_sas > 1 ?
+			(*sa_counter % (num_sas - 1)) + 1 : 1;
 		*sa_counter += 1;
 	}
 	sa = outb_sas[sa_index].sa;
@@ -3335,7 +3370,8 @@ handle_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rt
 
 	RTE_SET_USED(lcore_id);
 
-	sa_index = (*sa_counter % (num_sas - 1)) + 1;
+	sa_index = num_sas > 1 ?
+		(*sa_counter % (num_sas - 1)) + 1 : 1;
 	*sa_counter += 1;
 	sa = outb_sas[sa_index].sa;
 	rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
@@ -3759,7 +3795,8 @@ poll_mode_outb_worker(void *args)
 		/* Send pkts out */
 		for (j = 0, k = 0; j < nb_rx; j++) {
 			pkt = pkts[j];
-			sa_index = (sa_counter % (num_sas - 1)) + 1;
+			sa_index = num_sas > 1 ?
+				(sa_counter % (num_sas - 1)) + 1 : 1;
 			sa_counter += 1;
 
 			sa = outb_sas[sa_index].sa;

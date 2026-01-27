@@ -32,7 +32,7 @@ run_command(copy_data, test_script)
 # Create the test executable
 ipsec_msns_test=executable(
     test_exec,
-    files('ipsec_msns.c'),
+    files('ipsec_msns.c', 'flow.c', 'parser.c'),
     link_whole: link_libs,
     include_directories: includes,
     dependencies: [cnxk_test_dep_objs, get_variable(def_lib + '_rte_net_cnxk')],
