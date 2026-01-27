@@ -2846,6 +2846,7 @@ poll_mode_inb_outb_worker(void *args)
 	struct rte_security_ctx *sec_ctx;
 	struct rte_security_session *sa;
 	uint32_t nb_rx, nb_tx, j, k;
+	uint16_t sa_counter = 0;
 	struct lcore_cfg *lconf;
 	uint16_t sa_index = 0;
 	uint32_t lcore_id;
@@ -2861,6 +2862,7 @@ poll_mode_inb_outb_worker(void *args)
 	printf("IPSEC: entering main loop on lcore %u\n", lcore_id);
 
 	portid = lconf->portid;
+	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
 
 	while (!force_quit) {
 
@@ -2873,7 +2875,6 @@ poll_mode_inb_outb_worker(void *args)
 
 		lconf->rx_pkts += nb_rx;
 
-		sec_ctx = rte_eth_dev_get_sec_ctx(portid);
 		/* Send pkts out */
 		for (j = 0, k = 0; j < nb_rx; j++) {
 			pkt = pkts[j];
@@ -2900,7 +2901,8 @@ poll_mode_inb_outb_worker(void *args)
 				sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
 				sa_index = sa_data->spi;
 			} else {
-				sa_index = rte_rand_max(num_sas - 1) + 1;
+				sa_index = (sa_counter % (num_sas - 1)) + 1;
+				sa_counter += 1;
 			}
 			sa = outb_sas[sa_index].sa;
 			rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
@@ -3041,15 +3043,13 @@ event_inb_laoutb_worker(void *args)
 }
 
 static __rte_always_inline int
-handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rte_mbuf *pkt)
+handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rte_mbuf *pkt,
+		      uint16_t *sa_counter)
 {
 	struct lcore_cfg *info = &lcore_cfg[lcore_id];
 	uint64_t ol_flags = pkt->ol_flags;
 	struct rte_security_session *sa;
 	uint16_t sa_index = 0;
-
-	if (unlikely(!pkt_type_valid(pkt)))
-		return -1;
 
 	info->rx_ipsec_pkts += !!(ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD);
 #if !defined(MSNS_CN9K)
@@ -3084,7 +3084,8 @@ handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struc
 		sa_data = (struct ipsec_session_data *) *rte_security_dynfield(pkt);
 		sa_index = sa_data->spi;
 	} else {
-		sa_index = rte_rand_max(num_sas - 1) + 1;
+		sa_index = (*sa_counter % (num_sas - 1)) + 1;
+		*sa_counter += 1;
 	}
 	sa = outb_sas[sa_index].sa;
 	rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
@@ -3100,14 +3101,17 @@ event_inb_outb_worker(void *args)
 {
 	uint32_t lcore_id = rte_lcore_id();
 	struct lcore_cfg *info = &lcore_cfg[lcore_id];
-	struct rte_security_ctx *sec_ctx = NULL;
+	struct rte_security_ctx *sec_ctx;
 	struct rte_event_vector *vec;
 	unsigned int nb_rx = 0, nb_tx;
+	uint16_t sa_counter = 0;
 	struct rte_mbuf *pkt;
 	struct rte_event ev;
 	uint16_t i, j;
 
 	(void)args;
+
+	sec_ctx = rte_eth_dev_get_sec_ctx(lcore_cfg[lcore_id].portid);
 
 	printf("Launching event mode worker on lcore=%u, event_port_id=%u\n", lcore_id,
 	       info->event_port_id);
@@ -3133,7 +3137,6 @@ event_inb_outb_worker(void *args)
 			nb_rx = vec->nb_elem;
 			info->rx_pkts += nb_rx;
 			pkt = vec->mbufs[0];
-			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
 			vec->attr_valid = 1;
 			vec->port = pkt->port;
 
@@ -3141,7 +3144,8 @@ event_inb_outb_worker(void *args)
 			j = 0;
 			for (i = 0; i < nb_rx; i++) {
 				pkt = vec->mbufs[i];
-				if (unlikely(handle_inb_outb_event(lcore_id, sec_ctx, pkt)))
+				if (unlikely(handle_inb_outb_event(lcore_id, sec_ctx, pkt,
+								   &sa_counter)))
 					continue;
 				vec->mbufs[j++] = pkt;
 			}
@@ -3156,8 +3160,8 @@ event_inb_outb_worker(void *args)
 			/* Process single event */
 			info->rx_pkts += nb_rx;
 			pkt = ev.mbuf;
-			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
-			if (unlikely(handle_inb_outb_event(lcore_id, sec_ctx, pkt)))
+			if (unlikely(handle_inb_outb_event(lcore_id, sec_ctx, pkt,
+							   &sa_counter)))
 				continue;
 
 			/* Save eth queue for Tx */
@@ -3323,16 +3327,16 @@ event_inb_worker(void *args)
 }
 
 static __rte_always_inline int
-handle_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rte_mbuf *pkt)
+handle_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rte_mbuf *pkt,
+		  uint16_t *sa_counter)
 {
 	struct rte_security_session *sa;
-	uint16_t sa_index = 0;
+	uint16_t sa_index;
 
 	RTE_SET_USED(lcore_id);
-	if (unlikely(!pkt_type_valid(pkt)))
-		return -1;
 
-	sa_index = rte_rand_max(num_sas - 1) + 1;
+	sa_index = (*sa_counter % (num_sas - 1)) + 1;
+	*sa_counter += 1;
 	sa = outb_sas[sa_index].sa;
 	rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
 
@@ -3347,14 +3351,17 @@ event_outb_worker(void *args)
 {
 	uint32_t lcore_id = rte_lcore_id();
 	struct lcore_cfg *info = &lcore_cfg[lcore_id];
-	struct rte_security_ctx *sec_ctx = NULL;
+	struct rte_security_ctx *sec_ctx;
 	unsigned int nb_rx = 0, nb_tx;
 	struct rte_event_vector *vec;
+	uint16_t sa_counter = 0;
 	struct rte_mbuf *pkt;
 	struct rte_event ev;
 	uint16_t i, j;
 
 	(void)args;
+
+	sec_ctx = rte_eth_dev_get_sec_ctx(lcore_cfg[lcore_id].portid);
 
 	printf("Launching event mode worker on lcore=%u, event_port_id=%u\n", lcore_id,
 	       info->event_port_id);
@@ -3380,7 +3387,6 @@ event_outb_worker(void *args)
 			nb_rx = vec->nb_elem;
 			info->rx_pkts += nb_rx;
 			pkt = vec->mbufs[0];
-			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
 			vec->attr_valid = 1;
 			vec->port = pkt->port;
 
@@ -3388,7 +3394,8 @@ event_outb_worker(void *args)
 			j = 0;
 			for (i = 0; i < nb_rx; i++) {
 				pkt = vec->mbufs[i];
-				if (unlikely(handle_outb_event(lcore_id, sec_ctx, pkt)))
+				if (unlikely(handle_outb_event(lcore_id, sec_ctx, pkt,
+							       &sa_counter)))
 					continue;
 				vec->mbufs[j++] = pkt;
 			}
@@ -3403,10 +3410,10 @@ event_outb_worker(void *args)
 			/* Process single event */
 			info->rx_pkts += nb_rx;
 			pkt = ev.mbuf;
-			sec_ctx = rte_eth_dev_get_sec_ctx(pkt->port);
 			rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
 
-			if (unlikely(handle_outb_event(lcore_id, sec_ctx, pkt)))
+			if (unlikely(handle_outb_event(lcore_id, sec_ctx, pkt,
+						       &sa_counter)))
 				continue;
 
 			/* Save eth queue for Tx */
@@ -3721,6 +3728,7 @@ poll_mode_outb_worker(void *args)
 	struct rte_security_ctx *sec_ctx;
 	struct rte_security_session *sa;
 	uint32_t nb_rx, nb_tx, j, k;
+	uint16_t sa_counter = 0;
 	struct lcore_cfg *lconf;
 	uint16_t sa_index = 0;
 	uint32_t lcore_id;
@@ -3735,6 +3743,7 @@ poll_mode_outb_worker(void *args)
 	printf("IPSEC: entering main loop on lcore %u\n", lcore_id);
 
 	portid = lconf->portid;
+	sec_ctx = rte_eth_dev_get_sec_ctx(portid);
 
 	while (!force_quit) {
 
@@ -3747,11 +3756,11 @@ poll_mode_outb_worker(void *args)
 
 		lconf->rx_pkts += nb_rx;
 
-		sec_ctx = rte_eth_dev_get_sec_ctx(portid);
 		/* Send pkts out */
 		for (j = 0, k = 0; j < nb_rx; j++) {
 			pkt = pkts[j];
-			sa_index = rte_rand_max(num_sas - 1) + 1;
+			sa_index = (sa_counter % (num_sas - 1)) + 1;
+			sa_counter += 1;
 
 			sa = outb_sas[sa_index].sa;
 			rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);

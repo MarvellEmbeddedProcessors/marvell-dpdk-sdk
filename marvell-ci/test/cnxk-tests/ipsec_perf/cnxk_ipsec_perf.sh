@@ -97,6 +97,13 @@ CFG=(
 	"ep0_inline_protocol_ob_sp.cfg"
 	"ep0_inline_protocol_ob_sp.cfg"
 	""
+	""
+	""
+	""
+	""
+	""
+	""
+	""
 )
 
 #Inline Protocol inbound specific config files
@@ -111,7 +118,7 @@ IP_IB_CFG=(
 	"ep0_inline_protocol_ib_sp.cfg"
 	"ep0_inline_protocol_ib_sp.cfg"
 	"ep0_inline_protocol_ib_sp.cfg"
-	""
+	"" "" "" "" "" "" "" ""
 )
 
 # Dual Port Inbound configs for Inline protocol
@@ -125,7 +132,7 @@ IP_IB_CFG_DP=(
 	"ep0_inline_protocol_ib_dp.cfg"
 	"ep0_inline_protocol_ib_dp.cfg"
 	"ep0_inline_protocol_ib_dp.cfg"
-	""
+	"" "" "" "" "" "" "" ""
 )
 
 # Dual Port Outbound configs for Inline protocol
@@ -139,7 +146,7 @@ IP_OB_CFG_DP=(
 	"ep0_inline_protocol_ob_dp.cfg"
 	"ep0_inline_protocol_ob_dp.cfg"
 	"ep0_inline_protocol_ob_dp.cfg"
-	""
+	"" "" "" "" "" "" "" ""
 )
 # Specific config files for Perf cases with Inline Protocol Single-SA
 IP_PERF_CFG=(
@@ -159,7 +166,14 @@ TYPE=(
 	"ip_p"
 	"ip_ev_ss"
 	"ip_p_ss"
-	"ip_p_msns"
+	"msns_event_inb"
+	"msns_event_outb"
+	"msns_event_inb_outb"
+	"msns_poll_inb"
+	"msns_poll_outb"
+	"msns_poll_inb_outb"
+	"msns_poll_inb_oop"
+	"msns_event_inb_oop"
 )
 
 TN=(
@@ -172,7 +186,14 @@ TN=(
 	"Inline Protocol: Poll Mode"
 	"Inline Protocol: Event Vector Perf Mode (Single-SA)"
 	"Inline Protocol: Poll Perf Mode (Single-SA)"
-	"Inline Protocol: Poll Perf Mode (Ipsec-Msns)"
+	"MSNS: Event Mode Inbound"
+	"MSNS: Event Mode Outbound"
+	"MSNS: Event Mode Bidirectional"
+	"MSNS: Poll Mode Inbound"
+	"MSNS: Poll Mode Outbound"
+	"MSNS: Poll Mode Bidirectional"
+	"MSNS: Poll Mode Inbound OOP"
+	"MSNS: Event Mode Inbound OOP"
 )
 
 NB_TYPES=${#TYPE[@]}
@@ -281,7 +302,10 @@ fi
 function is_inline_proto_test()
 {
 	local type=${TYPE[$Y]}
-	local ip_tests=(ip ip_ev ip_p ip_ev_ss ip_p_ss ip_p_msns)
+	local ip_tests=(ip ip_ev ip_p ip_ev_ss ip_p_ss \
+		msns_event_inb msns_event_outb msns_event_inb_outb \
+		msns_poll_inb msns_poll_outb msns_poll_inb_outb \
+		msns_poll_inb_oop msns_event_inb_oop)
 
 	[[ " ${ip_tests[*]} " =~ " $type " ]]
 }
@@ -289,7 +313,7 @@ function is_inline_proto_test()
 function is_single_sa_test()
 {
 	local type=${TYPE[$Y]}
-	local sa_tests=(ip_ev_ss ip_p_ss ip_p_msns)
+	local sa_tests=(ip_ev_ss ip_p_ss)
 
 	[[ " ${sa_tests[*]} " =~ " $type " ]]
 }
@@ -297,7 +321,9 @@ function is_single_sa_test()
 function is_ipsec_msns_test()
 {
 	local type=${TYPE[$Y]}
-	local msns_tests=(ip_p_msns)
+	local msns_tests=(msns_event_inb msns_event_outb msns_event_inb_outb \
+		msns_poll_inb msns_poll_outb msns_poll_inb_outb msns_poll_inb_oop \
+		msns_event_inb_oop)
 
 	[[ " ${msns_tests[*]} " =~ " $type " ]]
 }
@@ -317,10 +343,11 @@ function run_test()
 	eval "stdbuf -o0 nohup $1 >> $IPSEC_LOG 2>&1 &"
 	PT1="IPSEC: entering main loop on lcore"
 	PT2="IPSEC: Launching event mode worker"
+	PT3="Launching event mode worker on lcore"
 
 	local itr=0
 	sleep 1
-	while ! (cat $IPSEC_LOG | grep -q -e "$PT1" -e "$PT2")
+	while ! (cat $IPSEC_LOG | grep -q -e "$PT1" -e "$PT2" -e "$PT3")
 	do
 		sleep 1
 		((itr+=1))
@@ -482,29 +509,67 @@ function run_ipsec_secgw_inb()
 
 function run_ipsec_msns()
 {
-	echo "ipsec-msns poll mode performance test"
+	echo "ipsec-msns: ${TYPE[$Y]}"
 
-	# Find the cnxk_ipsec_msns application
+	# Locate cnxk_ipsec_msns binary
 	if [[ -f $CNXKTESTPATH/../ipsec_msns/cnxk_ipsec_msns ]]; then
-		# This is running from build directory
 		MSNS_BIN=$CNXKTESTPATH/../ipsec_msns/cnxk_ipsec_msns
 	elif [[ -f $CNXKTESTPATH/../../cnxk_ipsec_msns ]]; then
-		# This is running from install directory
 		MSNS_BIN=$CNXKTESTPATH/../../cnxk_ipsec_msns
 	else
 		MSNS_BIN=$(which cnxk_ipsec_msns)
-
-		if [[ -z $MSNS_BIN ]]; then
-			echo "cnxk_ipsec_msns not found !!"
-			exit 1
-		fi
+		[[ -z $MSNS_BIN ]] && echo "cnxk_ipsec_msns not found !!" && exit 1
 	fi
 
-	if [[ $IS_CN10K -ne 0 ]]; then
-		local env="$MSNS_BIN -c 0x3 -a $CDEV_VF -a $INLINE_DEV,ipsec_in_max_spi=128 -a $EVENT_VF -a $IF0,ipsec_in_max_spi=128 --file-prefix $IPSEC_PREFIX -- --portmask 0x1"
-		IS_RXPPS_TXTPMD=1
-		run_test '$env --testmode 5 --num-sas 8'
+	if $(cat /proc/device-tree/compatible | grep -q "cn9k"); then
+		echo "ipsec-msns not supported on CN9K"
+		return
 	fi
+
+	# Set devargs with meta_buf_sz for all msns modes
+	local port_devargs="ipsec_in_max_spi=128,meta_buf_sz=2048"
+	local inline_devargs="ipsec_in_max_spi=128,meta_buf_sz=2048"
+	local env="$MSNS_BIN -c 0x3 -a $CDEV_VF \
+		-a $INLINE_DEV,$inline_devargs -a $EVENT_VF \
+		-a $IF0,$port_devargs --file-prefix $IPSEC_PREFIX \
+		-- --portmask 0x1 --num-sas 8"
+	IS_RXPPS_TXTPMD=1
+
+	# Set testmode and OOP flag based on test type
+	case "${TYPE[$Y]}" in
+		msns_event_inb)
+			# Testmode 2: EVENT_IPSEC_INB_PERF
+			run_test "$env --testmode 2 --vector-en --vector-sz 64"
+			;;
+		msns_event_outb)
+			# Testmode 9: EVENT_IPSEC_OUTB_PERF
+			run_test "$env --testmode 9 --vector-en --vector-sz 64"
+			;;
+		msns_event_inb_outb)
+			# Testmode 3: EVENT_IPSEC_INB_OUTB_PERF (bidirectional)
+			run_test "$env --testmode 3 --vector-en --vector-sz 64"
+			;;
+		msns_poll_inb)
+			# Testmode 7: POLL_IPSEC_INB_PERF
+			run_test "$env --testmode 7"
+			;;
+		msns_poll_outb)
+			# Testmode 8: POLL_IPSEC_OUTB_PERF
+			run_test "$env --testmode 8"
+			;;
+		msns_poll_inb_outb)
+			# Testmode 5: POLL_IPSEC_INB_OUTB_PERF (bidirectional poll mode)
+			run_test "$env --testmode 5"
+			;;
+		msns_poll_inb_oop)
+			# Testmode 7 with OOP: POLL_IPSEC_INB_PERF with --inl-inb-oop
+			run_test "$env --testmode 7 --inl-inb-oop"
+			;;
+		msns_event_inb_oop)
+			# Testmode 2 with OOP: EVENT_IPSEC_INB_PERF with --inl-inb-oop
+			run_test "$env --testmode 2 --inl-inb-oop --vector-en --vector-sz 64"
+			;;
+	esac
 	sleep $WS
 }
 
@@ -788,6 +853,20 @@ function outb_perf()
 	rn=0
 	for pktsz in ${PKT_LIST[@]}
 	do
+		# Restart application for new packet size to ensure clean state
+		if [[ $rn -gt 0 ]]; then
+			ipsec_exit
+			if is_ipsec_msns_test; then
+				IPSEC_LOG=ipsec_"${TYPE[$Y]}"_pktsz"$pktsz".log
+				echo "Restart cnxk_ipsec_msns for pktsize $pktsz"
+				run_ipsec_msns
+			else
+				IPSEC_LOG=ipsec_"$X"_outb_"$Y"_pktsz"$pktsz".log
+				echo "Restart ipsec-secgw for pktsize $pktsz"
+				run_ipsec_secgw
+			fi
+		fi
+
 		set_pktsize_testpmd $pktsz
 
 		tcnt=1
@@ -796,11 +875,16 @@ function outb_perf()
 			i=1
 			rx_pps=0
 			if [[ $tcnt -gt 1 ]]; then
-				# Restart ipsec-secgw
 				ipsec_exit
-				echo "Restart ipsec-secgw"
-				IPSEC_LOG=ipsec_"$X"_outb_"$Y"_"$tcnt".log
-				run_ipsec_secgw
+				if is_ipsec_msns_test; then
+					IPSEC_LOG=ipsec_"${TYPE[$Y]}"_"$tcnt".log
+					echo "Restart cnxk_ipsec_msns"
+					run_ipsec_msns
+				else
+					IPSEC_LOG=ipsec_"$X"_outb_"$Y"_"$tcnt".log
+					echo "Restart ipsec-secgw"
+					run_ipsec_secgw
+				fi
 			fi
 			start_testpmd
 			pmd_rx_dry_run
@@ -849,7 +933,22 @@ function inb_perf()
 	rn=0
 	for pktsz in ${PKT_LIST[@]}
 	do
-		sleep $WS
+		# Restart application for new packet size to ensure clean state
+		if [[ $rn -gt 0 ]]; then
+			# Quit old testpmd before restarting
+			quit_testpmd "$TPMD_TX_PREFIX"
+			ipsec_exit
+			if is_ipsec_msns_test; then
+				IPSEC_LOG=ipsec_"${TYPE[$Y]}"_pktsz"$pktsz".log
+				echo "Restart cnxk_ipsec_msns for pktsize $pktsz"
+				run_ipsec_msns
+			else
+				IPSEC_LOG=ipsec_"$X"_inb_"$Y"_pktsz"$pktsz".log
+				echo "Restart ipsec-secgw for pktsize $pktsz"
+				run_ipsec_secgw_inb
+			fi
+			sleep $WS
+		fi
 		pmd_tx_launch_for_inb $1 $pktsz
 
 		tcnt=1
@@ -858,14 +957,13 @@ function inb_perf()
 			i=1
 			rx_pps=0
 			if [[ $tcnt -gt 1 ]]; then
-				# Restart ipsec-secgw
 				ipsec_exit
-				IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
 				if is_ipsec_msns_test; then
+					IPSEC_LOG=ipsec_"${TYPE[$Y]}"_"$tcnt".log
 					echo "Restart cnxk_ipsec_msns"
-					IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
 					run_ipsec_msns
 				else
+					IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
 					echo "Restart ipsec-secgw"
 					run_ipsec_secgw_inb
 				fi
@@ -1022,14 +1120,42 @@ function check_ref_files()
 		if [[ $IS_CN10K -eq 0 ]] && ! supported_by_9k $type; then
 			continue
 		fi
+
+		# MSNS outbound-only tests: only check outb file
+		if [[ $type = "msns_event_outb" ]] || [[ $type = "msns_poll_outb" ]]; then
+			outb="$FPATH.$type.outb"
+			if [[ ! -f $outb ]]; then
+				echo "File $outb not present"
+				exit 1
+			fi
+			continue
+		fi
+
+		# MSNS bidirectional test: only check inb file (measures round-trip perf)
+		if [[ $type = "msns_event_inb_outb" ]] || [[ $type = "msns_poll_inb_outb" ]]; then
+			inb="$FPATH.$type.inb"
+			if [[ ! -f $inb ]]; then
+				echo "File $inb not present"
+				exit 1
+			fi
+			continue
+		fi
+
+		# MSNS inbound-only tests (including OOP variants): only check inb file
+		if [[ $type =~ ^msns_ ]]; then
+			inb="$FPATH.$type.inb"
+			if [[ ! -f $inb ]]; then
+				echo "File $inb not present"
+				exit 1
+			fi
+			continue
+		fi
+
+		# Non-MSNS tests: check both inb and outb files
 		inb="$FPATH.$type.inb"
 		if [[ ! -f $inb ]]; then
 			echo "File $inb not present"
 			exit 1
-		fi
-
-		if [[ $type = "ip_p_msns" ]]; then
-			continue
 		fi
 
 		outb="$FPATH.$type.outb"
@@ -1063,6 +1189,9 @@ function is_skip_test()
 	fi
 }
 
+# X is used to identify the encryption algorithm being tested:
+# X=1: AES-CBC with SHA1-HMAC
+# X=2: AES-GCM
 Y=0
 
 while [[ $Y -lt $NB_TYPES ]]; do
@@ -1080,17 +1209,41 @@ while [[ $Y -lt $NB_TYPES ]]; do
 	echo "----------------------"
 	sleep $WS
 
-	# Ipsec_msns perf
-	if [[ ${TYPE[$Y]} = "ip_p_msns" ]] && [[ $DTC != "CN103XX" ]]; then
-		X=1
-		IPSEC_LOG=ipsec_msns_"$X"_inb_"$Y"_1.log
+	# MSNS tests handling
+	if is_ipsec_msns_test; then
+		IPSEC_LOG=ipsec_"${TYPE[$Y]}".log
 		run_ipsec_msns
-		pmd_rx_launch
-		aes_gcm_inb
-		quit_testpmd "$TPMD_RX_PREFIX"
+
+		case "${TYPE[$Y]}" in
+			msns_event_inb|msns_poll_inb|msns_event_inb_oop|msns_poll_inb_oop)
+				# Inbound-only MSNS tests
+				X=2
+				pmd_rx_launch
+				aes_gcm_inb
+				quit_testpmd "$TPMD_RX_PREFIX"
+				;;
+			msns_event_outb|msns_poll_outb)
+				# Outbound-only MSNS tests
+				# MSNS receives plain packets, encrypts them, and transmits
+				X=2  # AES-GCM algorithm
+				pmd_rx_launch
+				pmd_tx_launch
+				aes_gcm_outb
+				quit_testpmd "$TPMD_TX_PREFIX"
+				quit_testpmd "$TPMD_RX_PREFIX"
+				;;
+			msns_event_inb_outb|msns_poll_inb_outb)
+				# Bidirectional MSNS test - run both outbound and inbound
+				X=2
+				pmd_rx_launch
+				aes_gcm_inb
+				quit_testpmd "$TPMD_RX_PREFIX"
+				;;
+		esac
+
 		ipsec_exit
 		((++Y))
-		continue;
+		continue
 	fi
 
 	# Outbound
