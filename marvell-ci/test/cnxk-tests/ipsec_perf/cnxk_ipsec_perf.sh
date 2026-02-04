@@ -547,35 +547,35 @@ function run_ipsec_msns()
 	case "${TYPE[$Y]}" in
 		msns_event_inb)
 			# Testmode 2: EVENT_IPSEC_INB_PERF
-			run_test "$env --testmode 2 --vector-en --vector-sz 64"
+			run_test "$env --testmode 1 --vector-en --vector-sz 64"
 			;;
 		msns_event_outb)
 			# Testmode 9: EVENT_IPSEC_OUTB_PERF
-			run_test "$env --testmode 9 --vector-en --vector-sz 64"
+			run_test "$env --testmode 7 --vector-en --vector-sz 64"
 			;;
 		msns_event_inb_outb)
 			# Testmode 3: EVENT_IPSEC_INB_OUTB_PERF (bidirectional)
-			run_test "$env --testmode 3 --vector-en --vector-sz 64"
+			run_test "$env --testmode 2 --vector-en --vector-sz 64"
 			;;
 		msns_poll_inb)
 			# Testmode 7: POLL_IPSEC_INB_PERF
-			run_test "$env --testmode 7"
+			run_test "$env --testmode 5"
 			;;
 		msns_poll_outb)
 			# Testmode 8: POLL_IPSEC_OUTB_PERF
-			run_test "$env --testmode 8"
+			run_test "$env --testmode 6"
 			;;
 		msns_poll_inb_outb)
 			# Testmode 5: POLL_IPSEC_INB_OUTB_PERF (bidirectional poll mode)
-			run_test "$env --testmode 5"
+			run_test "$env --testmode 4"
 			;;
 		msns_poll_inb_oop)
 			# Testmode 7 with OOP: POLL_IPSEC_INB_PERF with --inl-inb-oop
-			run_test "$env --testmode 7 --inl-inb-oop"
+			run_test "$env --testmode 5 --inl-inb-oop"
 			;;
 		msns_event_inb_oop)
 			# Testmode 2 with OOP: EVENT_IPSEC_INB_PERF with --inl-inb-oop
-			run_test "$env --testmode 2 --inl-inb-oop --vector-en --vector-sz 64"
+			run_test "$env --testmode 1 --inl-inb-oop --vector-en --vector-sz 64"
 			;;
 	esac
 	sleep $WS
