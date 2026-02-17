@@ -1586,7 +1586,7 @@ sqb_pool_populate(struct roc_nix *roc_nix, struct roc_nix_sq *sq)
 	/* Explicitly set nat_align alone as by default pool is with both
 	 * nat_align and buf_offset = 1 which we don't want for SQB.
 	 */
-	if (roc_model_is_cn20k() && roc_nix->sqb_halo_ena) {
+	if (roc_feature_npa_has_halo() && roc_nix->sqb_halo_ena) {
 		struct npa_cn20k_halo_s halo;
 
 		memset(&halo, 0, sizeof(struct npa_cn20k_halo_s));

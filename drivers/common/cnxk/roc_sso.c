@@ -875,7 +875,7 @@ sso_hwgrp_init_xaq_aura(struct dev *dev, struct roc_sso_xaq_data *xaq,
 		goto free_fc;
 	}
 
-	if (roc_model_is_cn20k() && xaq->halo_ena) {
+	if (roc_feature_npa_has_halo() && xaq->halo_ena) {
 		struct npa_cn20k_halo_s halo;
 
 		memset(&halo, 0, sizeof(struct npa_cn20k_halo_s));

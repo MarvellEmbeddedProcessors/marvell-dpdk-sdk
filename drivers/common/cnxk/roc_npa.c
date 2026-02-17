@@ -897,7 +897,7 @@ roc_npa_pool_create(uint64_t *aura_handle, uint32_t block_size,
 	 * are same in size and the fields that are modified here are 1:1
 	 * mapped in these structures.
 	 */
-	if (roc_model_is_cn20k() && (flags & ROC_NPA_HALO_F)) {
+	if (roc_feature_npa_has_halo() && (flags & ROC_NPA_HALO_F)) {
 		struct npa_cn20k_halo_s *halo = (struct npa_cn20k_halo_s *)pool;
 		rc = npa_halo_alloc(lf, block_size, block_count, halo, aura_handle, flags);
 	} else {
