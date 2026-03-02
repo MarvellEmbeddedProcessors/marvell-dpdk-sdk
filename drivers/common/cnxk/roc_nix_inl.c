@@ -1693,7 +1693,7 @@ skip_sa_alloc:
 
 lf_fini:
 	for (j = i - 1; j >= 0; j--) {
-		struct roc_cpt_lf *lf = &lf_base[j];
+		lf = &lf_base[j];
 		cpt_lf_fini(lf, lf->cpt_cq_ena);
 		if (lf->cpt_cq_ena)
 			cpt_lf_unregister_irqs(lf, cpt_lf_misc_irq, nix_inl_cpt_done_irq);
@@ -1714,6 +1714,7 @@ roc_nix_inl_outb_fini(struct roc_nix *roc_nix)
 	struct idev_cfg *idev = idev_get_cfg();
 	struct dev *dev = &nix->dev;
 	struct nix_inl_dev *inl_dev;
+	struct roc_cpt_lf *lf;
 	uint64_t *ring_base;
 	int i, rc, ret = 0;
 
@@ -1724,7 +1725,7 @@ roc_nix_inl_outb_fini(struct roc_nix *roc_nix)
 
 	/* Cleanup CPT LF instruction queue */
 	for (i = 0; i < nix->nb_cpt_lf; i++) {
-		struct roc_cpt_lf *lf = &lf_base[i];
+		lf = &lf_base[i];
 		cpt_lf_fini(lf, lf->cpt_cq_ena);
 		if (lf->cpt_cq_ena)
 			cpt_lf_unregister_irqs(lf, cpt_lf_misc_irq, nix_inl_cpt_done_irq);

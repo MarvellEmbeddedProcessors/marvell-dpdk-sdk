@@ -748,6 +748,7 @@ nix_inl_cpt_cq_inb_setup(struct nix_inl_dev *inl_dev)
 
 	if (!inl_dev->cpt_cq_ena)
 		return 0;
+
 	for (i = 0; i < inl_dev->nb_inb_cptlfs; i++) {
 		uint8_t slot_id = inl_dev->inb_cpt_lf_id + i;
 		struct roc_cpt_lf *lf = &inl_dev->cpt_lf[slot_id];
@@ -765,8 +766,11 @@ nix_inl_cpt_cq_inb_setup(struct nix_inl_dev *inl_dev)
 			return rc;
 
 		rc = cpt_lf_register_irqs(lf, cpt_lf_misc_irq, nix_inl_cpt_done_irq);
-		if (rc)
+		if (rc) {
+			cpt_lf_cq_fini(lf);
 			return rc;
+		}
+
 		roc_cpt_cq_enable(lf);
 	}
 

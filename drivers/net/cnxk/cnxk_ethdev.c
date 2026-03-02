@@ -316,7 +316,7 @@ cnxk_nix_ip_reass_rule_set(struct rte_eth_dev *eth_dev, uint32_t rq)
 	return 0;
 
 mcam_write_failed:
-	rc = roc_npc_mcam_free(npc, &mcam);
+	rc |= roc_npc_mcam_free(npc, &mcam);
 	if (rc)
 		return rc;
 mcam_alloc_failed:

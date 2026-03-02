@@ -969,6 +969,7 @@ cn20k_nix_inj_pkts(struct rte_security_session **sess, struct cnxk_ethdev_inj_cf
 	ROC_LMT_CPT_BASE_ID_GET(c_lbase, c_lmt_id);
 	c_io_addr = inj_cfg->io_addr;
 
+	sa_base &= ~0xFFFFUL;
 	left = nb_pkts;
 again:
 	burst = left > 32 ? 32 : left;
@@ -1017,7 +1018,6 @@ again:
 		cmd23 = vsetq_lane_u64(w0, cmd23, 0);
 		cmd23 = vsetq_lane_u64(((uint64_t)m + sizeof(struct rte_mbuf)) | 1, cmd23, 1);
 
-		sa_base &= ~0xFFFFUL;
 		sa = (uintptr_t)roc_nix_inl_ow_ipsec_inb_sa(sa_base, sess_priv.sa_idx);
 		ucode_cmd[0] = (ROC_IE_OW_MAJOR_OP_PROCESS_INBOUND_IPSEC << 48 | 1UL << 54 |
 				((uint64_t)sess_priv.chksum) << 32 | (1ULL << 34) | m->pkt_len);
