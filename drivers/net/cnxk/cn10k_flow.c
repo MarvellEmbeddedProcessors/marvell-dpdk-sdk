@@ -8,6 +8,7 @@
 #include "cnxk_flow_common.h"
 #include <cn10k_flow.h>
 #include <cnxk_flow.h>
+#include <cnxk_rep.h>
 
 struct rte_flow *
 cn10k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
@@ -16,6 +17,7 @@ cn10k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 {
 	struct cnxk_eth_dev *dev = cnxk_eth_pmd_priv(eth_dev);
 	struct rte_eth_dev *repr_eth_dev = NULL;
+	char if_name[RTE_ETH_NAME_MAX_LEN];
 	struct roc_npc *npc = &dev->npc;
 	struct cnxk_eth_dev *repr_dev;
 	struct roc_npc_flow *flow;
@@ -29,7 +31,9 @@ cn10k_flow_create(struct rte_eth_dev *eth_dev, const struct rte_flow_attr *attr,
 
 	mark_actions = roc_npc_mark_actions_get(npc);
 	if (mark_actions) {
-		if (repr_eth_dev) {
+		if (repr_eth_dev &&
+		    !rte_eth_dev_get_name_by_port(repr_eth_dev->data->port_id, if_name) &&
+		    !cnxk_ethdev_is_representor(if_name)) {
 			repr_dev = cnxk_eth_pmd_priv(repr_eth_dev);
 			repr_dev->rx_offload_flags |= NIX_RX_OFFLOAD_MARK_UPDATE_F;
 			cn10k_eth_set_rx_function(repr_eth_dev);
