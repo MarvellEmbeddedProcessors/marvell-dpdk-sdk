@@ -108,7 +108,7 @@ part_number_config_arm = {
         ]
     },
     '0xd8e': {
-        'mcpu' : 'neoverse-n3',
+        'mcpu' : 'mcpu_neoverse-n3',
         'flags': [
             ['RTE_MACHINE', '"neoverse-n3"'],
             ['RTE_ARM_FEATURE_ATOMICS', true],
@@ -773,6 +773,9 @@ mcpu_defs = {
     'mcpu_generic_aarch32': {
         'march': 'armv8-a',
         'march_extensions': ['simd'],
+    },
+    'mcpu_neoverse-n3': {
+        'march': 'armv9.2-a',
     },
 }
 
