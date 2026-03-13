@@ -49,12 +49,11 @@ run_cn10k_inline_ipsec_tests() {
 	for test in ${!cn10k_inline_ipsec_test_args[@]}; do
 		DPDK_TEST=$test $unbuffer $DPDK_TEST_BIN ${cn10k_inline_ipsec_test_args[$test]} >$out 2>&1
 		cat $out
-		cat $out | grep "failed" > temp_1.txt
-		awk '!/failed:/' temp_1.txt > temp_2.txt
+		grep -E "\+ TestCase \[.*\] :.*failed" $out > temp_2.txt
 		fail_cnt=`cat $out | grep "Tests Failed :" | awk '{print $5}'`
 
 		if [[ $test == "inline_ipsec_sg_autotest" ]]; then
-			awk '!/Inner L4 checksum test failed/' temp_2.txt > temp_1.txt
+			awk '!/Inner L4 checksum|Transport l4 checksum/' temp_2.txt > temp_1.txt
 			cat temp_1.txt > temp_2.txt
 			# Two failures of L4 checksum are expected
 			fail_cnt=`expr $fail_cnt - 2`
@@ -65,8 +64,8 @@ run_cn10k_inline_ipsec_tests() {
 	done
 	count=`grep -c "failed" $parse`
 	rm $parse
-	if [[ $count -ne 0 && $total_fail_cnt -ne 0 ]]; then
-		echo "FAILURE count $count $total_fail_cnt"
+	if [[ $count -ne 0 || $total_fail_cnt -ne 0 ]]; then
+		echo "FAILURE count $count total_fail_cnt $total_fail_cnt"
 		exit 1;
 	fi
 }
