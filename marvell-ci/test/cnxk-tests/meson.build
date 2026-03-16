@@ -8,6 +8,7 @@ endif
 cnxk_test_deps = [
         'acl',
         'cmdline',
+        'dmadev',
         'eventdev',
         'fib',
         'graph',
@@ -105,6 +106,7 @@ test_subdirs_arm = [
         'l3fwd_non_eal',
         'cpt_raw_test',
         'port_representor',
+        'dma_raw_test',
 ]
 
 test_subdirs_x86 = [
