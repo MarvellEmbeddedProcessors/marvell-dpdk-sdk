@@ -528,10 +528,12 @@ skip_dev_init:
 	if (roc_model_is_cn20k()) {
 		rc = roc_nix_af_rx_flow_vec_ctrl_set(roc_nix);
 		if (rc)
-			goto unregister_irqs;
+			goto tm_conf_fini;
 	}
 
 	return 0;
+tm_conf_fini:
+	nix_tm_conf_fini(roc_nix);
 unregister_irqs:
 	nix_unregister_irqs(nix);
 lf_detach:
