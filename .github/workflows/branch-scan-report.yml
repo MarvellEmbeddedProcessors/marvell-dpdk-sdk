@@ -1,0 +1,120 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Example: Run CodeQL on a target branch and generate a GHAS report for that branch.
+#
+# Code scanning results are branch-specific; secret scanning and Dependabot are
+# repo-level and included as-is.
+#
+# COPY THIS FILE to your repo (e.g. .github/workflows/branch-scan-report.yml)
+# and run it via Actions → Branch GHAS Scan and Report → Run workflow.
+# It calls the reusable workflow in the central repo (runs in your repo's context).
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  BUILD MODE GUIDE                                                      │
+# │                                                                        │
+# │  none      → No build. CodeQL scans source files directly.             │
+# │              Best for: repos that need internal SDK/toolchain to build  │
+# │              (e.g. ATF, firmware, embedded code).                       │
+# │              Broadest coverage but lower precision.                     │
+# │                                                                        │
+# │  autobuild → CodeQL auto-detects and runs the build.                   │
+# │              Best for: Java, Python, JS/TS, Go, C# — or simple C/C++  │
+# │              projects with standard Makefile/CMake/meson.               │
+# │                                                                        │
+# │  custom    → You provide setup_command and build_command.               │
+# │              Best for: C/C++ repos needing cross-compilers or special   │
+# │              toolchains that are available on the runner.               │
+# │                                                                        │
+# │  SETUP COMMAND EXAMPLES (only for "custom" mode):                      │
+# │    • Install cross-compiler:                                           │
+# │      sudo apt-get update && sudo apt-get install -y                    │
+# │        gcc-aarch64-linux-gnu make                                      │
+# │    • Install meson/ninja (for DPDK):                                   │
+# │      sudo apt-get update && sudo apt-get install -y                    │
+# │        meson ninja-build libnuma-dev python3-pyelftools pkg-config     │
+# │                                                                        │
+# │  BUILD COMMAND EXAMPLES (only for "custom" mode):                      │
+# │    • ATF:   make CROSS_COMPILE=aarch64-linux-gnu- PLAT=t96 all         │
+# │    • DPDK:  meson setup build && ninja -C build                        │
+# │    • CMake: cmake -B build && cmake --build build                      │
+# │    • Make:  make -j$(nproc)                                            │
+# └─────────────────────────────────────────────────────────────────────────┘
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Branch GHAS Scan and Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to scan and report on'
+        required: true
+        type: string
+      build_mode:
+        description: |
+          none = scan source directly (no build needed)
+          autobuild = CodeQL auto-detects build (Java/Python/JS/Go/simple C)
+          custom = provide setup_command + build_command below
+        required: false
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - autobuild
+          - custom
+      setup_command:
+        description: |
+          [custom mode only] Setup before build, e.g.:
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu make
+        required: false
+        default: ''
+        type: string
+      build_command:
+        description: |
+          [custom mode only] Build command, e.g.:
+          make CROSS_COMPILE=aarch64-linux-gnu- PLAT=t96 all
+        required: false
+        default: ''
+        type: string
+      include_code_scanning:
+        description: 'Include Code Scanning (runs CodeQL scan + adds to report)'
+        required: false
+        default: true
+        type: boolean
+      include_secret_scanning:
+        description: 'Include Secret Scanning alerts in report (repo-level, not branch-specific)'
+        required: false
+        default: true
+        type: boolean
+      include_dependabot:
+        description: 'Include Dependabot alerts in report (repo-level, not branch-specific)'
+        required: false
+        default: true
+        type: boolean
+      runner_group:
+        description: 'Runner group (self-hosted-ubuntu24 or github-hosted)'
+        required: false
+        default: 'github-hosted'
+        type: choice
+        options:
+          - github-hosted
+          - self-hosted-ubuntu24
+
+permissions:
+  security-events: write
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    uses: Marvell-Central/it-devops-ghas-security-report/.github/workflows/branch-scan-report.yml@v1.2
+    with:
+      target_branch: ${{ inputs.target_branch }}
+      build_mode: ${{ inputs.build_mode }}
+      setup_command: ${{ inputs.setup_command }}
+      build_command: ${{ inputs.build_command }}
+      include_code_scanning: ${{ inputs.include_code_scanning }}
+      include_secret_scanning: ${{ inputs.include_secret_scanning }}
+      include_dependabot: ${{ inputs.include_dependabot }}
+      runner_group: ${{ inputs.runner_group }}
+    secrets:
+      github_pat: ${{ secrets.GHAS_REPORT_PAT }}
