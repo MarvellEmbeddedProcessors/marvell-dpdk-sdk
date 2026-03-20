@@ -1019,10 +1019,10 @@ mrvl_flush_tx_shadow_queues(struct rte_eth_dev *dev)
 			mrvl_free_sent_buffers(txq->priv->ppio,
 				hifs[j], j, sq, txq->queue_id, 1);
 			while (sq->tail != sq->head) {
-				uint64_t addr = cookie_addr_high |
+				u64 addr =
 					sq->ent[sq->tail].buff.cookie;
-				rte_pktmbuf_free(
-					(struct rte_mbuf *)addr);
+				if (addr)
+					rte_pktmbuf_free_seg((struct rte_mbuf *)addr);
 				sq->tail = (sq->tail + 1) &
 					    MRVL_PP2_TX_SHADOWQ_MASK;
 			}
@@ -2794,7 +2794,7 @@ mrvl_free_sent_buffers(struct pp2_ppio *ppio, struct pp2_hif *hif,
 			struct rte_mbuf *mbuf;
 
 			mbuf = (struct rte_mbuf *)entry->buff.cookie;
-			rte_pktmbuf_free(mbuf);
+			rte_pktmbuf_free_seg(mbuf);
 			skip_bufs = 1;
 			goto skip;
 		}
@@ -3000,18 +3000,15 @@ mrvl_tx_sg_pkt_burst(void *txq, struct rte_mbuf **tx_pkts,
 
 		seg = mbuf;
 		for (j = 0; j < nb_segs - 1; j++) {
-			/* For the subsequent segments, set shadow queue
-			 * buffer to NULL
-			 */
-			mrvl_fill_shadowq(sq, NULL);
+			/* Store each segment in shadow queue for per-segment reclaim */
+			mrvl_fill_shadowq(sq, seg);
 			mrvl_fill_desc(&descs[tail], seg);
 
 			tail++;
 			seg = seg->next;
 		}
-		/* Put first mbuf info in last shadow queue entry */
-		mrvl_fill_shadowq(sq, mbuf);
-		/* Update descriptor with last segment */
+		/* Update shadow queue and descriptor with last segment */
+		mrvl_fill_shadowq(sq, seg);
 		mrvl_fill_desc(&descs[tail++], seg);
 
 		bytes_sent += rte_pktmbuf_pkt_len(mbuf);
@@ -3032,6 +3029,8 @@ mrvl_tx_sg_pkt_burst(void *txq, struct rte_mbuf **tx_pkts,
 	num = total_descs;
 	pp2_ppio_send_sg(q->priv->ppio, hif, q->queue_id, descs,
 			 &total_descs, &pkts);
+	/* Return the actual number of packets accepted by send_sg. */
+	nb_pkts = pkts.num;
 	/* number of packets that were not sent */
 	if (unlikely(num > total_descs)) {
 		for (i = total_descs; i < num; i++) {
@@ -3039,13 +3038,12 @@ mrvl_tx_sg_pkt_burst(void *txq, struct rte_mbuf **tx_pkts,
 				MRVL_PP2_TX_SHADOWQ_MASK;
 
 			addr = sq->ent[sq->head].buff.cookie;
-			if (addr)
-				bytes_sent -=
-					rte_pktmbuf_pkt_len((struct rte_mbuf *)
-						(cookie_addr_high | addr));
+			if (addr) {
+				struct rte_mbuf *mbuf = (struct rte_mbuf *)addr;
+				bytes_sent -= rte_pktmbuf_data_len(mbuf);
+			}
 		}
 		sq->size -= num - total_descs;
-		nb_pkts = pkts.num;
 	}
 
 	q->bytes_sent += bytes_sent;
