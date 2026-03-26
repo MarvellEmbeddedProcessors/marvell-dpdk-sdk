@@ -17,3 +17,4 @@ Baseband Device Drivers
     vrb1
     vrb2
     la12xx
+    octeon_ep
