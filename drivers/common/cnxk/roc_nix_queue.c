@@ -77,7 +77,7 @@ static int
 nix_rq_bulk_ena_dis(struct nix *nix, struct roc_nix_rq *rqs, int nb_rx_queues, bool enable)
 {
 	struct mbox *mbox = mbox_get((&nix->dev)->mbox);
-	int rc, i;
+	int rc = 0, i;
 
 	if (roc_model_is_cn9k())
 		NIX_RQ_BULK_ENA_DIS_LOOP(struct nix_aq_enq_req, mbox_alloc_msg_nix_aq_enq);
@@ -90,7 +90,8 @@ nix_rq_bulk_ena_dis(struct nix *nix, struct roc_nix_rq *rqs, int nb_rx_queues, b
 		NIX_RQ_BULK_ENA_DIS_LOOP(struct nix_cn20k_aq_enq_req,
 					 mbox_alloc_msg_nix_cn20k_aq_enq);
 
-	rc = mbox_process(mbox);
+	if (mbox_nonempty_nolock(mbox, 0))
+		rc = mbox_process(mbox);
 exit:
 	mbox_put(mbox);
 	return rc;
