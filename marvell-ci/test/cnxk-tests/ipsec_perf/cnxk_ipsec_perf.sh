@@ -38,6 +38,8 @@ declare -A PASS_PPS_TABLE
 
 ! $(cat /proc/device-tree/compatible | grep -q "cn10k")
 IS_CN10K=$?
+! $(cat /proc/device-tree/compatible | grep -q "cn9")
+IS_CN9K=$?
 DTC=$(tr -d '\0' </proc/device-tree/model | awk '{print $2}')
 CORE_NUM=16
 
@@ -883,6 +885,10 @@ function outb_perf()
 			i=1
 			rx_pps=0
 			if [[ $tcnt -gt 1 ]]; then
+				if [[ $IS_CN9K -ne 0 ]]; then
+					quit_testpmd "$TPMD_TX_PREFIX"
+					quit_testpmd "$TPMD_RX_PREFIX"
+				fi
 				ipsec_exit
 				if is_ipsec_msns_test; then
 					IPSEC_LOG=ipsec_"${TYPE[$Y]}"_"$tcnt".log
@@ -892,6 +898,11 @@ function outb_perf()
 					IPSEC_LOG=ipsec_"$X"_outb_"$Y"_"$tcnt".log
 					echo "Restart ipsec-secgw"
 					run_ipsec_secgw
+				fi
+				if [[ $IS_CN9K -ne 0 ]]; then
+					pmd_rx_launch
+					pmd_tx_launch
+					set_pktsize_testpmd $pktsz
 				fi
 			fi
 			start_testpmd
@@ -965,6 +976,10 @@ function inb_perf()
 			i=1
 			rx_pps=0
 			if [[ $tcnt -gt 1 ]]; then
+				if [[ $IS_CN9K -ne 0 ]]; then
+					quit_testpmd "$TPMD_TX_PREFIX"
+					quit_testpmd "$TPMD_RX_PREFIX"
+				fi
 				ipsec_exit
 				if is_ipsec_msns_test; then
 					IPSEC_LOG=ipsec_"${TYPE[$Y]}"_"$tcnt".log
@@ -974,6 +989,10 @@ function inb_perf()
 					IPSEC_LOG=ipsec_"$X"_inb_"$Y"_"$tcnt".log
 					echo "Restart ipsec-secgw"
 					run_ipsec_secgw_inb
+				fi
+				if [[ $IS_CN9K -ne 0 ]]; then
+					pmd_rx_launch
+					pmd_tx_launch_for_inb $1 $pktsz
 				fi
 			fi
 			start_testpmd
