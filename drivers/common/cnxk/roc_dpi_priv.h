@@ -40,6 +40,8 @@ typedef union dpi_mbox_msg_t {
 		uint64_t wqecsoff : 8;
 		/* Priority */
 		uint64_t pri : 1;
+		/* Secondary stream id */
+		uint64_t sec_strm_id : 8;
 	} s;
 } dpi_mbox_msg_t;
 

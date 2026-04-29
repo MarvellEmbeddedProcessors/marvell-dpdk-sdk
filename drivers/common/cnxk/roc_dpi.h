@@ -9,6 +9,7 @@ struct roc_dpi {
 	struct plt_pci_device *pci_dev;
 	uint8_t *rbase;
 	uint16_t vfid;
+	uint8_t sec_strm_id;
 	uint8_t priority;
 } __plt_cache_aligned;
 

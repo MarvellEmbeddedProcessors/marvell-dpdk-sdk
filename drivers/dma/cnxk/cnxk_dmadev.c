@@ -112,6 +112,7 @@ cnxk_dmadev_configure(struct rte_dma_dev *dev, const struct rte_dma_conf *conf, 
 	 */
 	cnxk_dmadev_vchan_free(dpivf, RTE_DMA_ALL_VCHAN);
 	dpivf->num_vchans = conf->nb_vchans;
+	dpivf->rdpi.sec_strm_id = 0;
 	if (roc_feature_dpi_has_priority())
 		dpivf->rdpi.priority = conf->priority;
 
@@ -133,6 +134,18 @@ dmadev_src_buf_aura_get(struct rte_mempool *sb_mp, const char *mp_ops_name)
 		return -EINVAL;
 
 	return roc_npa_aura_handle_to_aura(sb_mp->pool_id);
+}
+
+static void
+dmadev_setup_sec_strm_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vchan_conf *conf,
+			  uint8_t sec_strm_id)
+{
+	if (!sec_strm_id)
+		return;
+
+	plt_info("Setting secondary stream id as %u", sec_strm_id);
+	header->cn10k.pvfe = 1;
+	header->cn10k.func = conf->src_port.pcie.pfid ? BIT(15) : 0;
 }
 
 static int
@@ -185,8 +198,10 @@ cn9k_dmadev_setup_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vch
 }
 
 static int
-cn10k_dmadev_setup_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vchan_conf *conf)
+cn10k_dmadev_setup_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vchan_conf *conf,
+		       struct cnxk_dpi_vf_s *dpivf)
 {
+	uint8_t sec_strm_id = 0;
 	int aura;
 
 	header->cn10k.pt = DPI_HDR_PT_ZBW_CA;
@@ -221,6 +236,27 @@ cn10k_dmadev_setup_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vc
 		header->cn10k.lport = 0;
 		header->cn10k.fport = 0;
 		header->cn10k.pvfe = 0;
+		if (conf->src_port.pcie.vfen) {
+			/*
+			 *
+			 *   vfen  vfid        pfid       | hdr[pvfe]  hdr[func[15]]
+			 *   ----  ----------  ---------  | ----  --------
+			 *    0    -           -          |  0       -  MEM2MEM, primary stream
+			 *    1    stream_id   0 (READ)   |  1       0  MEM2MEM, sec stream - READ
+			 *    1    stream_id   1 (WRITE)  |  1       1  MEM2MEM, sec stream - WRITE
+			 *
+			 */
+			sec_strm_id = (uint8_t)(conf->src_port.pcie.vfid & 0xFF);
+			dmadev_setup_sec_strm_hdr(header, conf, sec_strm_id);
+			dpivf->rdpi.sec_strm_id = sec_strm_id;
+		}
+		if (conf->auto_free.m2d.pool) {
+			aura = dmadev_src_buf_aura_get(conf->auto_free.m2d.pool,
+						       "cn10k_mempool_ops");
+			if (aura < 0)
+				return aura;
+			header->cn10k.aura = aura;
+		}
 		break;
 	case RTE_DMA_DIR_DEV_TO_DEV:
 		header->cn10k.xtype = DPI_XTYPE_EXTERNAL_ONLY;
@@ -248,7 +284,7 @@ cnxk_dmadev_vchan_setup(struct rte_dma_dev *dev, uint16_t vchan,
 	header = (union cnxk_dpi_instr_cmd *)&dpi_conf->cmd.u;
 
 	if (dpivf->is_cn10k)
-		ret = cn10k_dmadev_setup_hdr(header, conf);
+		ret = cn10k_dmadev_setup_hdr(header, conf, dpivf);
 	else
 		ret = cn9k_dmadev_setup_hdr(header, conf);
 
@@ -602,6 +638,7 @@ cnxk_dmadev_probe(struct rte_pci_driver *pci_drv __rte_unused, struct rte_pci_de
 		plt_err("Failed to initialize platform model, rc=%d", rc);
 		return rc;
 	}
+
 	memset(name, 0, sizeof(name));
 	rte_pci_device_name(&pci_dev->addr, name, sizeof(name));
 
