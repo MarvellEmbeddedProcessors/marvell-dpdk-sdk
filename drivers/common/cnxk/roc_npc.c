@@ -2039,18 +2039,33 @@ roc_npc_mcam_default_rule_action_get(struct roc_npc *roc_npc, uint64_t *action)
 	struct mbox *mbox = mbox_get(npc->mbox);
 	int rc;
 
-	struct npc_mcam_read_base_rule_rsp *base_rule_rsp;
-	struct mcam_entry *base_entry;
+	if (roc_model_is_cn20k()) {
+		struct npc_cn20k_mcam_read_base_rule_rsp *base_rule_rsp;
+		struct cn20k_mcam_entry *base_entry;
 
-	(void)mbox_alloc_msg_npc_read_default_rule(mbox);
-	rc = mbox_process_msg(mbox, (void *)&base_rule_rsp);
-	if (rc) {
-		plt_err("Failed to fetch default MCAM entry");
-		goto exit;
+		(void)mbox_alloc_msg_npc_cn20k_read_base_steer_rule(mbox);
+		rc = mbox_process_msg(mbox, (void *)&base_rule_rsp);
+		if (rc) {
+			mbox_put(mbox);
+			plt_err("Failed to fetch VF's base MCAM entry");
+			return rc;
+		}
+		base_entry = &base_rule_rsp->entry;
+		*action = base_entry->action;
+	} else {
+		struct npc_mcam_read_base_rule_rsp *base_rule_rsp;
+		struct mcam_entry *base_entry;
+
+		(void)mbox_alloc_msg_npc_read_default_rule(mbox);
+		rc = mbox_process_msg(mbox, (void *)&base_rule_rsp);
+		if (rc) {
+			plt_err("Failed to fetch default MCAM entry");
+			goto exit;
+		}
+		base_entry = &base_rule_rsp->entry_data;
+		*action = base_entry->action;
 	}
-	base_entry = &base_rule_rsp->entry_data;
 
-	*action = base_entry->action;
 exit:
 	mbox_put(mbox);
 	return rc;

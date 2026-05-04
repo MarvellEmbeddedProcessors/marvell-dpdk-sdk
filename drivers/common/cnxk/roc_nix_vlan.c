@@ -15,7 +15,10 @@ roc_nix_vlan_mcam_entry_read(struct roc_nix *roc_nix, uint32_t index,
 	struct npc_mcam_read_entry_req *req;
 	int rc = -ENOSPC;
 
-	req = mbox_alloc_msg_npc_mcam_read_entry(mbox);
+	if (roc_model_is_cn20k())
+		req = mbox_alloc_msg_npc_cn20k_mcam_read_entry(mbox);
+	else
+		req = mbox_alloc_msg_npc_mcam_read_entry(mbox);
 	if (req == NULL)
 		goto exit;
 	req->entry = index;
