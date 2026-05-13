@@ -135,37 +135,6 @@ When cross-compiling, more options must be provided to CMake:
    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY
 
-TVMDP
-~~~~~
-
-  Marvell's `TVM Dataplane Library <https://github.com/MarvellEmbeddedProcessors/tvmdp>`_
-  works as an interface between TVM runtime and DPDK drivers.
-  TVMDP library provides a simplified C interface
-  for TVM's runtime based on C++.
-
-.. note::
-
-   TVMDP library is dependent on TVM, dlpack, jansson and dmlc-core libraries.
-
-.. code-block:: console
-
-   git clone https://github.com/MarvellEmbeddedProcessors/tvmdp.git
-   cd tvmdp
-   git checkout main
-   cmake -S ./ -B build \
-      -DCMAKE_INSTALL_PREFIX=<install_prefix> \
-      -DBUILD_SHARED_LIBS=ON
-   make -C build
-   make -C build install
-
-When cross-compiling, more options must be provided to CMake:
-
-.. code-block:: console
-
-   -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-   -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-   -DCMAKE_FIND_ROOT_PATH=<install_prefix>
-
 libarchive
 ~~~~~~~~~~
 
