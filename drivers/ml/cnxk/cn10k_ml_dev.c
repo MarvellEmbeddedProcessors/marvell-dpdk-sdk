@@ -574,16 +574,16 @@ cn10k_ml_fw_load_cn10ka(struct cn10k_ml_fw *fw, void *buffer, uint64_t size)
 	reg_val64 = (ROC_ML_AXI_BRIDGE_CTRL_AXI_RESP_CTRL |
 		     ROC_ML_AXI_BRIDGE_CTRL_BRIDGE_CTRL_MODE | ROC_ML_AXI_BRIDGE_CTRL_NCB_WR_BLK |
 		     ROC_ML_AXI_BRIDGE_CTRL_FORCE_WRESP_OK | ROC_ML_AXI_BRIDGE_CTRL_FORCE_RRESP_OK);
-	roc_ml_reg_write64(&cn10k_mldev->roc, reg_val64, ML_AXI_BRIDGE_CTRL(1));
-	plt_ml_dbg("ML_AXI_BRIDGE_CTRL(1) => 0x%016lx",
-		   roc_ml_reg_read64(&cn10k_mldev->roc, ML_AXI_BRIDGE_CTRL(1)));
+	roc_ml_reg_write64(&cn10k_mldev->roc, reg_val64, ML_AXI_BRIDGE_CTRLX(1));
+	plt_ml_dbg("ML_AXI_BRIDGE_CTRLX(1) => 0x%016lx",
+		   roc_ml_reg_read64(&cn10k_mldev->roc, ML_AXI_BRIDGE_CTRLX(1)));
 
 	/* (4) Set ML(0)_ANB(0..2)_BACKP_DISABLE = 0x3 to remove back-pressure on the AXI to NCB
 	 * bridges.
 	 */
 	for (i = 0; i < ML_ANBX_NR; i++) {
-		reg_val64 = (ROC_ML_ANBX_BACKP_DISABLE_EXTMSTR_B_BACKP_DISABLE |
-			     ROC_ML_ANBX_BACKP_DISABLE_EXTMSTR_R_BACKP_DISABLE);
+		reg_val64 = (ROC_ML_ANBX_BACKP_DISABLE_ANB_EXTMSTR_B_BACKP_DISABLE |
+			     ROC_ML_ANBX_BACKP_DISABLE_ANB_EXTMSTR_R_BACKP_DISABLE);
 		roc_ml_reg_write64(&cn10k_mldev->roc, reg_val64, ML_ANBX_BACKP_DISABLE(i));
 		plt_ml_dbg("ML_ANBX_BACKP_DISABLE(%u) => 0x%016lx", i,
 			   roc_ml_reg_read64(&cn10k_mldev->roc, ML_ANBX_BACKP_DISABLE(i)));

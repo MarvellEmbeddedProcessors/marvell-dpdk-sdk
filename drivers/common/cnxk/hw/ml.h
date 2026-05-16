@@ -7,29 +7,64 @@
 
 #include <stdint.h>
 
+#include "roc_platform.h"
+
 /* Constants */
 #define ML_ANBX_NR 0x3
 
-/* Base offsets */
-#define ML_MLAB_BLK_OFFSET 0x20000000 /* CNF10KB */
-#define ML_AXI_START_ADDR  0x800000000
+/* Alignment size */
+#define ML_ALIGN_SIZE 128
 
-/* MLW register offsets / ML_PF_BAR0 */
+/* MLAB Block offsets */
+#define MLAB_BLK_OFFSET_CNF10KB 0x20000000
+#define MLAB_BLK_OFFSET_CNF20KA 0x230000000
+
+/* MLAB Block address */
+#define MLAB_BLK_ADDR(id, addr) PLT_PTR_ADD(addr, 0x80000000 * (id))
+
+/* AXI start address */
+#define ML_AXI_START_ADDR 0x800000000
+
+/* MLW register offsets / CN10KA */
 #define ML_CFG			 0x10000
 #define ML_MLR_BASE		 0x10008
-#define ML_AXI_BRIDGE_CTRL(a)	 (0x10020 | (uint64_t)(a) << 3)
+#define ML_AXI_BRIDGE_CTRLX(a)	 (0x10020 | (uint64_t)(a) << 3)
 #define ML_JOB_MGR_CTRL		 0x10060
 #define ML_CORE_INT_LO		 0x10140
 #define ML_CORE_INT_HI		 0x10160
-#define ML_JCMDQ_IN(a)		 (0x11000 | (uint64_t)(a) << 3) /* CN10KA */
-#define ML_JCMDQ_STATUS		 0x11010			/* CN10KA */
-#define ML_STGX_STATUS(a)	 (0x11020 | (uint64_t)(a) << 3) /* CNF10KB */
-#define ML_STG_CONTROL		 0x11100			/* CNF10KB */
-#define ML_PNB_CMD_TYPE		 0x113a0			/* CNF10KB */
-#define ML_SCRATCH(a)		 (0x14000 | (uint64_t)(a) << 3)
-#define ML_ANBX_BACKP_DISABLE(a) (0x18000 | (uint64_t)(a) << 12) /* CN10KA */
-#define ML_ANBX_NCBI_P_OVR(a)	 (0x18010 | (uint64_t)(a) << 12) /* CN10KA */
-#define ML_ANBX_NCBI_NP_OVR(a)	 (0x18020 | (uint64_t)(a) << 12) /* CN10KA */
+#define ML_JCMDQ_INX(a)		 (0x11000 | (uint64_t)(a) << 3)
+#define ML_JCMDQ_STATUS		 0x11010
+#define ML_ANBX_BACKP_DISABLE(a) (0x18000 | (uint64_t)(a) << 12)
+#define ML_ANBX_NCBI_P_OVR(a)	 (0x18010 | (uint64_t)(a) << 12)
+#define ML_ANBX_NCBI_NP_OVR(a)	 (0x18020 | (uint64_t)(a) << 12)
+
+/* MLW register offsets / CNF10KB */
+#define MLAB_CFG		 0x10000
+#define MLAB_MLR_BASE		 0x10008
+#define MLAB_AXI_BRIDGE_CTRLX(a) (0x10020 | (uint64_t)(a) << 3)
+#define MLAB_JOB_MGR_CTRL	 0x10060
+#define MLAB_STGX_STATUS(a)	 (0x11020 | (uint64_t)(a) << 3)
+#define MLAB_STG_CONTROL	 0x11100
+#define MLAB_PNB_CMD_TYPE	 0x113a0
+
+/* MLW register offsets / CN20KA */
+#define ML_AF_CFG	      0x10000
+#define ML_AF_MLR_BASE	      0x10008
+#define ML_AF_JOB_MGR_CTRL    0x10060
+#define ML_AF_LFX_MLR_BASE(a) (0x10e00 + 8 * ((a)&0x3f))
+#define ML_AF_LFX_MLR_SIZE(a) (0x11600 + 8 * ((a)&0x3f))
+#define ML_AF_MLR_SIZE	      0x10268
+#define ML_LF_JCMDQ_INX(a)    (0x0 + 8 * (uint64_t)(a))
+#define ML_LF_JCMDQ_STATUS    (0x10)
+
+/* MLW register offsets / CNF20KA */
+#define MLAB_AF_CFG	     0x18000
+#define MLAB_AF_MLR_BASE     0x1b200
+#define MLAB_AF_MLR_SIZE     0x1b240
+#define MLAB_AF_JOB_MGR_CTRL 0x18060
+
+/* ML Scratch register / All SoCs */
+#define ML_SCRATCHX(a) (0x14000 | (uint64_t)(a) << 3)
 
 /* MLIP configuration register offsets / ML_PF_BAR0 */
 #define ML_SW_RST_CTRL		      0x12084000
@@ -37,14 +72,38 @@
 #define ML_A35_1_RST_VECTOR_BASE_W(a) (0x1208401c + (a) * (0x04))
 
 /* MLW scratch register offsets */
-#define ML_SCRATCH_WORK_PTR	      (ML_SCRATCH(0))
-#define ML_SCRATCH_FW_CTRL	      (ML_SCRATCH(1))
-#define ML_SCRATCH_DBG_BUFFER_HEAD_C0 (ML_SCRATCH(2))
-#define ML_SCRATCH_DBG_BUFFER_TAIL_C0 (ML_SCRATCH(3))
-#define ML_SCRATCH_DBG_BUFFER_HEAD_C1 (ML_SCRATCH(4))
-#define ML_SCRATCH_DBG_BUFFER_TAIL_C1 (ML_SCRATCH(5))
-#define ML_SCRATCH_EXCEPTION_SP_C0    (ML_SCRATCH(6))
-#define ML_SCRATCH_EXCEPTION_SP_C1    (ML_SCRATCH(7))
+#define ML_SCRATCH_WORK_PTR	      (ML_SCRATCHX(0))
+#define ML_SCRATCH_FW_CTRL	      (ML_SCRATCHX(1))
+#define ML_SCRATCH_DBG_BUFFER_HEAD_C0 (ML_SCRATCHX(2))
+#define ML_SCRATCH_DBG_BUFFER_TAIL_C0 (ML_SCRATCHX(3))
+#define ML_SCRATCH_DBG_BUFFER_HEAD_C1 (ML_SCRATCHX(4))
+#define ML_SCRATCH_DBG_BUFFER_TAIL_C1 (ML_SCRATCHX(5))
+#define ML_SCRATCH_EXCEPTION_SP_C0    (ML_SCRATCHX(6))
+#define ML_SCRATCH_EXCEPTION_SP_C1    (ML_SCRATCHX(7))
+#define ML_SCRATCH_CHIP_MODEL	      (ML_SCRATCHX(9))
+
+/* ENGINES */
+#define ML_NUM_ENGINES_MAX     2
+#define ML_NUM_ENGINES_CN10K   1
+#define ML_NUM_ENGINES_CN20KA  1
+#define ML_NUM_ENGINES_CNF20KA 2
+
+/* OCM */
+#define ML_OCM_NUM_TILES_MAX	 0x8
+#define ML_OCM_NUM_TILES_CN10K	 0x8
+#define ML_OCM_NUM_TILES_CN20KA	 0x8
+#define ML_OCM_NUM_TILES_CNF20KA 0x4
+#define ML_OCM_TILE_SIZE	 0x100000
+
+/* HW partitions */
+#define ML_CN10K_NUM_PARTITIONS 0x1 /* Dummy value */
+#define ML_CN20K_NUM_PARTITIONS 0x4
+
+/* Instruction buffer size */
+#define ML_CN10K_IBUF_BASE_ADDR 0x0 /* Dummy value */
+#define ML_CN10K_IBUF_SIZE	0x0 /* Dummy value */
+#define ML_CN20K_IBUF_BASE_ADDR 0x40000
+#define ML_CN20K_IBUF_SIZE	0x10000
 
 /* ML job completion structure */
 struct ml_jce_s {
@@ -88,7 +147,9 @@ struct ml_job_cmd_s {
 	/* WORD 0 */
 	union ml_job_cmd_w0 {
 		struct {
-			uint64_t rsvd_0_63;
+			uint64_t pri : 2;
+			uint64_t pid : 2;
+			uint64_t rsvd_4_63 : 60;
 		} s;
 		uint64_t u64;
 	} w0;
@@ -165,6 +226,17 @@ union ml_scratch_fw_ctrl_s {
 		uint64_t rsvd_18_63 : 46;
 	} s;
 	uint64_t u64;
+};
+
+union ml_af_const {
+	uint64_t u64;
+	struct {
+		uint64_t num_lf : 8;
+		uint64_t num_partitions : 8;
+		uint64_t jcmdq_depth : 8;
+		uint64_t jceq_depth : 8;
+		uint64_t reserved_32_63 : 32;
+	};
 };
 
 #endif /* __ML_HW_H__ */

@@ -451,3 +451,23 @@ roc_idev_nix_inl_dev_pffunc_get(void)
 {
 	return nix_inl_dev_pffunc_get();
 }
+
+struct roc_ml *
+roc_idev_ml_get(void)
+{
+	struct idev_cfg *idev = idev_get_cfg();
+
+	if (idev != NULL)
+		return idev->ml;
+
+	return NULL;
+}
+
+void
+roc_idev_ml_set(struct roc_ml *ml)
+{
+	struct idev_cfg *idev = idev_get_cfg();
+
+	if (idev != NULL)
+		__atomic_store_n(&idev->ml, ml, __ATOMIC_RELEASE);
+}

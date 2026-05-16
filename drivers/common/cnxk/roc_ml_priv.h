@@ -10,6 +10,9 @@
 struct ml {
 	struct plt_pci_device *pci_dev;
 	struct dev dev;
+	uint16_t msg_id_start;
+	uint16_t msg_id_end;
+	uint16_t lf_msix_off[ROC_ML_MAX_LFS];
 	uint8_t *ml_reg_addr;
 	uint64_t ml_mlr_base;
 	bool ml_mlr_base_saved;

@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include "hw/cpt.h"
+#include "hw/ml.h"
 
 #include "roc_platform.h"
 
@@ -405,7 +406,18 @@ struct mbox_msghdr {
 	M(MCS_FIPS_KEY_SET, 0xa045, mcs_fips_key_set, mcs_fips_key_req, msg_rsp)                   \
 	M(MCS_FIPS_BLOCK_SET, 0xa046, mcs_fips_block_set, mcs_fips_block_req, msg_rsp)             \
 	M(MCS_FIPS_START, 0xa047, mcs_fips_start, mcs_fips_req, msg_rsp)                           \
-	M(MCS_FIPS_RESULT_GET, 0xa048, mcs_fips_result_get, mcs_fips_req, mcs_fips_result_rsp)
+	M(MCS_FIPS_RESULT_GET, 0xa048, mcs_fips_result_get, mcs_fips_req, mcs_fips_result_rsp)     \
+	/* ML mbox IDs (range 0xB000 - 0xBFFF) */                                                  \
+	M(ML_RD_WR_REGISTER, 0xB000, ml_rd_wr_register, ml_rd_wr_reg_msg, ml_rd_wr_reg_msg)        \
+	M(ML_CAPS_GET, 0xB001, ml_caps_get, msg_req, ml_caps_rsp_msg)                              \
+	M(ML_FREE_RSRC_CNT, 0xB002, ml_free_rsrc_cnt, msg_req, ml_free_rsrcs_rsp)                  \
+	M(ML_ATTACH_RESOURCES, 0xB003, ml_attach_resources, ml_rsrc_attach_req,                    \
+	  ml_rsrc_attach_rsp)                                                                      \
+	M(ML_DETACH_RESOURCES, 0xB004, ml_detach_resources, msg_req, msg_rsp)                      \
+	M(ML_MSIX_OFFSET, 0xB005, ml_msix_offset, msg_req, ml_msix_offset_rsp)                     \
+	M(ML_LF_ALLOC, 0xB006, ml_lf_alloc, ml_lf_alloc_req, msg_rsp)                              \
+	M(ML_LF_FREE, 0xB007, ml_lf_free, msg_req, msg_rsp)                                        \
+	M(ML_PID_LF_MAP, 0xB008, ml_pid_lf_map, ml_pid_lf_map_req, msg_rsp)
 
 /* Messages initiated by AF (range 0xC00 - 0xDFF) */
 #define MBOX_UP_CGX_MESSAGES                                                   \
@@ -3375,6 +3387,54 @@ struct rep_event {
 #define RVU_EVENT_RX_MODE_CHANGE BIT_ULL(3)
 	uint16_t __io event;
 	struct rep_evt_data evt_data;
+};
+
+struct ml_rd_wr_reg_msg {
+	struct mbox_msghdr hdr;
+	uint64_t __io reg_offset;
+	uint64_t __io *ret_val;
+	uint64_t __io val;
+	uint8_t __io is_write;
+};
+
+struct ml_caps_rsp_msg {
+	struct mbox_msghdr hdr;
+	union ml_af_const __io ml_af_const;
+};
+
+struct ml_free_rsrcs_rsp {
+	struct mbox_msghdr hdr;
+	uint8_t __io ml;
+};
+
+struct ml_rsrc_attach_req {
+	struct mbox_msghdr hdr;
+	uint8_t __io modify : 1;
+	uint16_t __io mllfs;
+};
+
+struct ml_rsrc_attach_rsp {
+	struct mbox_msghdr hdr;
+#define ML_NUM_LF_MAPS (MAX_RVU_BLKLF_CNT / sizeof(uint64_t))
+	uint64_t __io lf_map[ML_NUM_LF_MAPS];
+};
+
+struct ml_msix_offset_rsp {
+	struct mbox_msghdr hdr;
+	uint16_t __io mllfs;
+	uint16_t __io mllf_msixoff[MAX_RVU_BLKLF_CNT];
+};
+
+struct ml_lf_alloc_req {
+	struct mbox_msghdr hdr;
+	uint16_t __io sso_pf_func;
+};
+
+struct ml_pid_lf_map_req {
+	struct mbox_msghdr hdr;
+	uint8_t __io enable;
+	uint8_t __io pid;
+	uint16_t __io lf_id;
 };
 
 #endif /* __ROC_MBOX_H__ */

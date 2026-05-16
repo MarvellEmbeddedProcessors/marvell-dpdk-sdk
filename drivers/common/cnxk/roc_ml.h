@@ -7,6 +7,10 @@
 
 #include "roc_api.h"
 
+struct roc_ml;
+
+#define ROC_ML_MAX_LFS 64
+
 #define ROC_ML_MEM_SZ	  (6 * 1024)
 #define ROC_ML_TIMEOUT_MS 10000
 
@@ -30,14 +34,11 @@
 #define ROC_ML_STG_STATUS_JOB_ERR	BIT_ULL(5)
 #define ROC_ML_STG_STATUS_ELAPSED_TICKS GENMASK_ULL(47, 6)
 
-/* ML_STG_CONTROL */
-#define ROC_ML_STG_CONTROL_FETCH_TO_RUN BIT_ULL(0)
-#define ROC_ML_STG_CONTROL_RUN_TO_COMP	BIT_ULL(1)
-
 /* ML_AXI_BRIDGE */
 #define ROC_ML_AXI_BRIDGE_CTRL_AXI_RESP_CTRL	      BIT_ULL(0)
 #define ROC_ML_AXI_BRIDGE_CTRL_BRIDGE_CTRL_MODE	      BIT_ULL(1)
 #define ROC_ML_AXI_BRIDGE_CTRL_FORCE_AXI_ID	      GENMASK_ULL(11, 2)
+#define ROC_ML_AXI_BRIDGE_CTRL_AXI_ID_MODE	      BIT_ULL(12)
 #define ROC_ML_AXI_BRIDGE_CTRL_CSR_WR_BLK	      BIT_ULL(13)
 #define ROC_ML_AXI_BRIDGE_CTRL_NCB_WR_BLK	      BIT_ULL(14)
 #define ROC_ML_AXI_BRIDGE_CTRL_CSR_RD_BLK	      BIT_ULL(15)
@@ -67,8 +68,8 @@
 #define ROC_ML_JCMDQ_STATUS_AVAIL_COUNT GENMASK_ULL(4, 0)
 
 /* ML_ANBX_BACKP_DISABLE */
-#define ROC_ML_ANBX_BACKP_DISABLE_EXTMSTR_B_BACKP_DISABLE BIT_ULL(0)
-#define ROC_ML_ANBX_BACKP_DISABLE_EXTMSTR_R_BACKP_DISABLE BIT_ULL(1)
+#define ROC_ML_ANBX_BACKP_DISABLE_ANB_EXTMSTR_B_BACKP_DISABLE BIT_ULL(0)
+#define ROC_ML_ANBX_BACKP_DISABLE_ANB_EXTMSTR_R_BACKP_DISABLE BIT_ULL(1)
 
 /* ML_ANBX_NCBI_P_OVR */
 #define ML_ANBX_NCBI_P_OVR_ANB_NCBI_P_MSH_DST_OVR_VLD	 BIT_ULL(0)
@@ -82,7 +83,7 @@
 #define ML_ANBX_NCBI_P_OVR_ANB_NCBI_P_MPADID_VAL_OVR_VLD BIT_ULL(18)
 #define ML_ANBX_NCBI_P_OVR_ANB_NCBI_P_MPADID_VAL_OVR	 BIT_ULL(19)
 #define ML_ANBX_NCBI_P_OVR_ANB_NCBI_P_MPAMDID_OVR_VLD	 BIT_ULL(20)
-#define ML_ANBX_NCBI_P_OVR_ANB_NCBI_P_MPAMDID_OVR	 BIT_ULL(21)
+#define ML_ANBX_NCBI_P_OVR_ANB_NCBI_P_MPAMDID_OVR	 GENMASK_ULL(30, 21)
 
 /* ML_ANBX_NCBI_NP_OVR */
 #define ML_ANBX_NCBI_NP_OVR_ANB_NCBI_NP_MSH_DST_OVR_VLD	   BIT_ULL(0)
@@ -96,24 +97,69 @@
 #define ML_ANBX_NCBI_NP_OVR_ANB_NCBI_NP_MPADID_VAL_OVR_VLD BIT_ULL(18)
 #define ML_ANBX_NCBI_NP_OVR_ANB_NCBI_NP_MPADID_VAL_OVR	   BIT_ULL(19)
 #define ML_ANBX_NCBI_NP_OVR_ANB_NCBI_NP_MPAMDID_OVR_VLD	   BIT_ULL(20)
-#define ML_ANBX_NCBI_NP_OVR_ANB_NCBI_NP_MPAMDID_OVR	   BIT_ULL(21)
+#define ML_ANBX_NCBI_NP_OVR_ANB_NCBI_NP_MPAMDID_OVR	   GENMASK_ULL(30, 21)
+
+/* MLAB_STG_CONTROL */
+#define ROC_MLAB_STG_CONTROL_FETCH_TO_RUN BIT_ULL(0)
+#define ROC_MLAB_STG_CONTROL_RUN_TO_COMP  BIT_ULL(1)
+
+/* ML_LF_JCMDQ_STATUS */
+#define ROC_ML_LF_JCMDQ_STATUS_AVAIL_COUNT GENMASK_ULL(2, 0)
 
 /* ML_SW_RST_CTRL */
 #define ROC_ML_SW_RST_CTRL_ACC_RST  BIT_ULL(0)
 #define ROC_ML_SW_RST_CTRL_CMPC_RST BIT_ULL(1)
 
+struct roc_ml_lf {
+	/* Input parameters */
+	uint16_t slot;
+	uint16_t lf_id;
+	/* End of input parameters */
+	struct plt_pci_device *pci_dev;
+	struct dev *dev;
+	struct roc_ml *roc_ml;
+	uintptr_t rbase;
+	uint16_t msixoff;
+	uint16_t pf_func;
+	uint16_t blk_addr;
+};
+
 struct roc_ml {
 	struct plt_pci_device *pci_dev;
+	union ml_af_const ml_af_const;
+	uint16_t nb_lf_avail;
+	uint16_t nb_lf;
+	struct roc_ml_lf *lf;
+	uint64_t lf_map[ML_NUM_LF_MAPS];
 	plt_spinlock_t sp_spinlock;
 	plt_spinlock_t fp_spinlock;
+
+	/* Device specific register read / write */
+	uint64_t (*reg_read64)(struct roc_ml *roc_ml, uint64_t offset);
+	void (*reg_write64)(struct roc_ml *roc_ml, uint64_t val, uint64_t offset);
+
+	/* Architecture specific MLW register offsets */
+	uint64_t cfg;
+	uint64_t mlr_base;
+	uint64_t mlr_size;
+	uint64_t job_mgr_ctrl;
+
 	uint8_t reserved[ROC_ML_MEM_SZ] __plt_cache_aligned;
 } __plt_cache_aligned;
+
+/* Device type check functions */
+uint16_t __roc_api roc_ml_pf_func_get(struct roc_ml *roc_ml);
+bool __roc_api roc_ml_is_pf(struct roc_ml *roc_ml);
+int __roc_api roc_ml_get_pf(struct roc_ml *roc_ml);
+int __roc_api roc_ml_get_vf(struct roc_ml *roc_ml);
 
 /* Register read and write functions */
 uint64_t __roc_api roc_ml_reg_read64(struct roc_ml *roc_ml, uint64_t offset);
 void __roc_api roc_ml_reg_write64(struct roc_ml *roc_ml, uint64_t val, uint64_t offset);
 uint32_t __roc_api roc_ml_reg_read32(struct roc_ml *roc_ml, uint64_t offset);
 void __roc_api roc_ml_reg_write32(struct roc_ml *roc_ml, uint32_t val, uint64_t offset);
+uint64_t __roc_api roc_ml_lf_reg_read64(struct roc_ml_lf *lf, uint64_t offset);
+void __roc_api roc_ml_lf_reg_write64(struct roc_ml_lf *lf, uint64_t val, uint64_t offset);
 void __roc_api roc_ml_reg_save(struct roc_ml *roc_ml, uint64_t offset);
 
 /* Address translation functions */
@@ -129,8 +175,8 @@ bool __roc_api roc_ml_scratch_is_done_bit_set(struct roc_ml *roc_ml);
 bool __roc_api roc_ml_scratch_enqueue(struct roc_ml *roc_ml, void *work_ptr);
 bool __roc_api roc_ml_scratch_dequeue(struct roc_ml *roc_ml, void *work_ptr);
 void __roc_api roc_ml_scratch_queue_reset(struct roc_ml *roc_ml);
-bool __roc_api roc_ml_jcmdq_enqueue_lf(struct roc_ml *roc_ml, struct ml_job_cmd_s *job_cmd);
-bool __roc_api roc_ml_jcmdq_enqueue_sl(struct roc_ml *roc_ml, struct ml_job_cmd_s *job_cmd);
+bool __roc_api roc_ml_jcmdq_enqueue_nolock(struct roc_ml *roc_ml, struct ml_job_cmd_s *job_cmd);
+bool __roc_api roc_ml_jcmdq_enqueue_splock(struct roc_ml *roc_ml, struct ml_job_cmd_s *job_cmd);
 
 /* Device management functions */
 void __roc_api roc_ml_clk_force_on(struct roc_ml *roc_ml);
@@ -141,12 +187,23 @@ bool __roc_api roc_ml_mlip_is_enabled(struct roc_ml *roc_ml);
 int __roc_api roc_ml_mlip_reset(struct roc_ml *roc_ml, bool force);
 
 /* Device / block  functions */
+int __roc_api roc_ml_num_engines_get(uint8_t rvu_idx);
 int __roc_api roc_ml_dev_init(struct roc_ml *roc_ml);
 int __roc_api roc_ml_dev_fini(struct roc_ml *roc_ml);
-int __roc_api roc_ml_blk_init(struct roc_bphy *roc_bphy, struct roc_ml *roc_ml);
-int __roc_api roc_ml_blk_fini(struct roc_bphy *roc_bphy, struct roc_ml *roc_ml);
+int __roc_api roc_ml_blk_init(struct roc_ml *roc_ml, int id);
+int __roc_api roc_ml_blk_fini(struct roc_ml *roc_ml, int id);
+int __roc_api roc_ml_dev_configure(struct roc_ml *roc_ml);
+void __roc_api roc_ml_dev_close(struct roc_ml *roc_ml);
+int __roc_api roc_ml_lf_init(struct roc_ml *roc_ml, struct roc_ml_lf *lf, uint16_t slot,
+			     uint16_t lf_id);
+void __roc_api roc_ml_lf_fini(struct roc_ml_lf *lf);
+int __roc_api roc_ml_pid_lf_map(struct roc_ml *roc_ml, uint16_t lf_id, uint8_t pid, bool enable);
 
 /* Utility functions */
 uint16_t __roc_api roc_ml_sso_pf_func_get(void);
+
+/* LF functions */
+bool __roc_api roc_ml_lf_jcmdq_enqueue_nolock(struct roc_ml_lf *lf, struct ml_job_cmd_s *job_cmd);
+bool __roc_api roc_ml_lf_jcmdq_enqueue_splock(struct roc_ml_lf *lf, struct ml_job_cmd_s *job_cmd);
 
 #endif /*_ROC_ML_H_*/
