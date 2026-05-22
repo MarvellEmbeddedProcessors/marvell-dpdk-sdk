@@ -359,7 +359,8 @@ tvmrt_ml_model_io_set(struct cnxk_ml_io *io, const char *name, json_t *shape, co
 
 static int
 tvmrt_ml_json_graph_get_arrays(json_t *json_parsed, json_t **nodes, json_t **arg_nodes,
-			       json_t **heads, json_t **shape_values, json_t **dtype_values)
+			       json_t **heads, json_t **node_row_ptr, json_t **shape_values,
+			       json_t **dtype_values)
 {
 	json_t *attrs;
 	json_t *shape_attr;
@@ -368,10 +369,14 @@ tvmrt_ml_json_graph_get_arrays(json_t *json_parsed, json_t **nodes, json_t **arg
 	*nodes = json_object_get(json_parsed, "nodes");
 	*arg_nodes = json_object_get(json_parsed, "arg_nodes");
 	*heads = json_object_get(json_parsed, "heads");
+	*node_row_ptr = json_object_get(json_parsed, "node_row_ptr");
 	attrs = json_object_get(json_parsed, "attrs");
 
 	if (!json_is_array(*nodes) || !json_is_array(*arg_nodes) || !json_is_array(*heads) ||
-	    !json_is_object(attrs))
+	    !json_is_array(*node_row_ptr) || !json_is_object(attrs))
+		return -EINVAL;
+
+	if (json_array_size(*node_row_ptr) != json_array_size(*nodes) + 1)
 		return -EINVAL;
 
 	shape_attr = json_object_get(attrs, "shape");
@@ -398,6 +403,7 @@ tvmrt_ml_model_json_parse(struct cnxk_ml_model *model)
 	json_t *json_nodes;
 	json_t *json_arg_nodes;
 	json_t *json_heads;
+	json_t *json_node_row_ptr;
 	json_t *json_shape_values;
 	json_t *json_dtype_values;
 	uint16_t nb_mrvl_layers;
@@ -517,7 +523,8 @@ tvmrt_ml_model_json_parse(struct cnxk_ml_model *model)
 	device.device_id = 0;
 
 	ret = tvmrt_ml_json_graph_get_arrays(json_parsed, &json_nodes, &json_arg_nodes, &json_heads,
-					     &json_shape_values, &json_dtype_values);
+					     &json_node_row_ptr, &json_shape_values,
+					     &json_dtype_values);
 	if (ret == 0) {
 		model->tvmrt.info.nb_inputs = 0;
 		model->tvmrt.info.nb_outputs = 0;
@@ -575,26 +582,61 @@ tvmrt_ml_model_json_parse(struct cnxk_ml_model *model)
 			json_t *dtype;
 			json_t *name;
 			json_t *node_id_json;
+			json_t *output_idx_json;
+			json_t *entry_base_json;
+			json_t *entry_limit_json;
 			json_int_t node_id;
+			json_int_t output_idx;
+			json_int_t entry_base;
+			json_int_t entry_limit;
+			size_t entry_id;
 
-			if (!json_is_array(head) || json_array_size(head) == 0) {
+			if (!json_is_array(head) || json_array_size(head) < 2) {
 				ret = -EINVAL;
 				break;
 			}
 
 			node_id_json = json_array_get(head, 0);
-			if (!json_is_integer(node_id_json)) {
+			output_idx_json = json_array_get(head, 1);
+			if (!json_is_integer(node_id_json) || !json_is_integer(output_idx_json)) {
 				ret = -EINVAL;
 				break;
 			}
 
 			node_id = json_integer_value(node_id_json);
-			node = json_array_get(json_nodes, node_id);
-			shape = json_array_get(json_shape_values, node_id);
-			dtype = json_array_get(json_dtype_values, node_id);
+			output_idx = json_integer_value(output_idx_json);
+			if (node_id < 0 || output_idx < 0) {
+				ret = -EINVAL;
+				break;
+			}
+
+			node = json_array_get(json_nodes, (size_t)node_id);
+			entry_base_json = json_array_get(json_node_row_ptr, (size_t)node_id);
+			entry_limit_json = json_array_get(json_node_row_ptr, (size_t)node_id + 1);
+			if (!json_is_object(node) || !json_is_integer(entry_base_json) ||
+			    !json_is_integer(entry_limit_json)) {
+				ret = -EINVAL;
+				break;
+			}
+
+			entry_base = json_integer_value(entry_base_json);
+			entry_limit = json_integer_value(entry_limit_json);
+			if (entry_base < 0 || entry_limit < entry_base) {
+				ret = -EINVAL;
+				break;
+			}
+
+			if (output_idx >= (entry_limit - entry_base)) {
+				ret = -EINVAL;
+				break;
+			}
+
+			entry_id = (size_t)entry_base + (size_t)output_idx;
+			shape = json_array_get(json_shape_values, entry_id);
+			dtype = json_array_get(json_dtype_values, entry_id);
 			name = json_object_get(node, "name");
-			if (!json_is_object(node) || !json_is_array(shape) ||
-			    !json_is_string(dtype) || !json_is_string(name)) {
+			if (!json_is_array(shape) || !json_is_string(dtype) ||
+			    !json_is_string(name)) {
 				ret = -EINVAL;
 				break;
 			}
