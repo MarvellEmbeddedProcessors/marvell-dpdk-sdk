@@ -2,10 +2,10 @@
 # Copyright(C) 2022 Marvell.
 
 # Test script
-test_script = 'inline_ipsec_autotest.sh'
+test_script = 'inline_ipsec_cnxk_autotest.sh'
 
 # Test name
-test_name = 'inline_ipsec_autotest'
+test_name = 'inline_ipsec_cnxk_autotest'
 
 # Test arguments
 test_args = 'inline_ipsec_tests'
@@ -27,6 +27,6 @@ test(
 
 # Install the sample script
 install_data(
-    'inline_ipsec_autotest.sh',
+    'inline_ipsec_cnxk_autotest.sh',
     install_mode : 'rwxr-xr-x',
-    install_dir : 'bin/cnxk/inline_ipsec_autotest')
+    install_dir : 'bin/cnxk/inline_ipsec_cnxk_autotest')
