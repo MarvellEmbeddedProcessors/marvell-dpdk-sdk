@@ -144,6 +144,9 @@ __dpi_queue_write_single(struct cnxk_dpi_vf_s *dpi, uint64_t *cmd)
 			return -ENOSPC;
 		}
 
+#ifdef RTE_LIBRTE_MEMPOOL_DEBUG
+		RTE_MEMPOOL_CHECK_COOKIES(dpi->chunk_pool, (void **)&dpi->chunk_base, 1, 0);
+#endif
 		/*
 		 * Figure out how many cmd words will fit in the current chunk
 		 * and copy them.
@@ -193,7 +196,9 @@ __dpi_queue_write_sg(struct cnxk_dpi_vf_s *dpi, uint64_t *hdr, const struct rte_
 			plt_dpi_dbg("Failed to alloc next buffer from NPA");
 			return -ENOSPC;
 		}
-
+#ifdef RTE_LIBRTE_MEMPOOL_DEBUG
+		RTE_MEMPOOL_CHECK_COOKIES(dpi->chunk_pool, (void **)&dpi->chunk_base, 1, 0);
+#endif
 		/*
 		 * Figure out how many cmd words will fit in the current chunk
 		 * and copy them, copy the rest to the new buffer.
