@@ -21,6 +21,8 @@ cnxk_dmadev_info_get(const struct rte_dma_dev *dev, struct rte_dma_info *dev_inf
 			     RTE_DMA_CAPA_DEV_TO_MEM | RTE_DMA_CAPA_DEV_TO_DEV |
 			     RTE_DMA_CAPA_OPS_COPY | RTE_DMA_CAPA_OPS_COPY_SG |
 			     RTE_DMA_CAPA_M2D_AUTO_FREE | RTE_DMA_CAPA_OPS_ENQ_DEQ;
+	if (roc_model_is_cn10k())
+		dev_info->dev_capa |= RTE_DMA_CAPA_INTER_PROCESS_DOMAIN;
 	if (roc_feature_dpi_has_priority()) {
 		dev_info->dev_capa |= RTE_DMA_CAPA_PRI_POLICY_SP;
 		dev_info->nb_priorities = CN10K_DPI_MAX_PRI;
@@ -136,16 +138,36 @@ dmadev_src_buf_aura_get(struct rte_mempool *sb_mp, const char *mp_ops_name)
 	return roc_npa_aura_handle_to_aura(sb_mp->pool_id);
 }
 
+/*
+ * domain.dst_handler/ domain.src_handler
+ * bits [7:0] = secondary stream ID
+ *
+ * src/dst_handler	|hdr[pvfe]	|hdr[func[15]]
+ * -----------------	|---------	|-------------
+ * src and dst ==0	|0		|		primary stream
+ * src_handler !=0	|1		|0		sec stream - READ
+ * dst_handler !=0	|1		|1		sec stream - WRITE
+ */
 static void
-dmadev_setup_sec_strm_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vchan_conf *conf,
-			  uint8_t sec_strm_id)
+dmadev_setup_process_domain_hdr(union cnxk_dpi_instr_cmd *header, struct cnxk_dpi_vf_s *dpivf,
+				const struct rte_dma_inter_domain_param *domain)
 {
-	if (!sec_strm_id)
-		return;
+	uint8_t sec_strm_id;
+	bool is_write;
 
+	if (domain->dst_handler) {
+		sec_strm_id = domain->dst_handler & 0xFF;
+		is_write = true;
+	} else if (domain->src_handler) {
+		sec_strm_id = domain->src_handler & 0xFF;
+		is_write = false;
+	} else {
+		return;
+	}
 	plt_info("Setting secondary stream id as %u", sec_strm_id);
 	header->cn10k.pvfe = 1;
-	header->cn10k.func = conf->src_port.pcie.pfid ? BIT(15) : 0;
+	header->cn10k.func = is_write ? BIT(15) : 0;
+	dpivf->rdpi.sec_strm_id = sec_strm_id;
 }
 
 static int
@@ -201,7 +223,6 @@ static int
 cn10k_dmadev_setup_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vchan_conf *conf,
 		       struct cnxk_dpi_vf_s *dpivf)
 {
-	uint8_t sec_strm_id = 0;
 	int aura;
 
 	header->cn10k.pt = DPI_HDR_PT_ZBW_CA;
@@ -236,20 +257,8 @@ cn10k_dmadev_setup_hdr(union cnxk_dpi_instr_cmd *header, const struct rte_dma_vc
 		header->cn10k.lport = 0;
 		header->cn10k.fport = 0;
 		header->cn10k.pvfe = 0;
-		if (conf->src_port.pcie.vfen) {
-			/*
-			 *
-			 *   vfen  vfid        pfid       | hdr[pvfe]  hdr[func[15]]
-			 *   ----  ----------  ---------  | ----  --------
-			 *    0    -           -          |  0       -  MEM2MEM, primary stream
-			 *    1    stream_id   0 (READ)   |  1       0  MEM2MEM, sec stream - READ
-			 *    1    stream_id   1 (WRITE)  |  1       1  MEM2MEM, sec stream - WRITE
-			 *
-			 */
-			sec_strm_id = (uint8_t)(conf->src_port.pcie.vfid & 0xFF);
-			dmadev_setup_sec_strm_hdr(header, conf, sec_strm_id);
-			dpivf->rdpi.sec_strm_id = sec_strm_id;
-		}
+		if (conf->domain.type == RTE_DMA_INTER_PROCESS_DOMAIN)
+			dmadev_setup_process_domain_hdr(header, dpivf, &conf->domain);
 		if (conf->auto_free.m2d.pool) {
 			aura = dmadev_src_buf_aura_get(conf->auto_free.m2d.pool,
 						       "cn10k_mempool_ops");
