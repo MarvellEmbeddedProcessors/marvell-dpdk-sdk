@@ -283,7 +283,7 @@ cnxk_dmadev_vchan_setup(struct rte_dma_dev *dev, uint16_t vchan,
 
 	header = (union cnxk_dpi_instr_cmd *)&dpi_conf->cmd.u;
 
-	if (dpivf->is_cn10k)
+	if (roc_model_is_cn10k())
 		ret = cn10k_dmadev_setup_hdr(header, conf, dpivf);
 	else
 		ret = cn9k_dmadev_setup_hdr(header, conf);
@@ -654,7 +654,6 @@ cnxk_dmadev_probe(struct rte_pci_driver *pci_drv __rte_unused, struct rte_pci_de
 	dmadev->fp_obj->dev_private = dpivf;
 	dmadev->dev_ops = &cnxk_dmadev_ops;
 
-	dpivf->is_cn10k = roc_model_is_cn10k();
 	dpivf->mcs_lock = NULL;
 	rdpi = &dpivf->rdpi;
 

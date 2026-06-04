@@ -119,7 +119,6 @@ struct cnxk_dpi_vf_s {
 	uint32_t aura;
 	uint16_t num_vchans;
 	uint16_t flag;
-	uint8_t is_cn10k;
 } __plt_cache_aligned;
 
 int cnxk_dmadev_copy(void *dev_private, uint16_t vchan, rte_iova_t src, rte_iova_t dst,
