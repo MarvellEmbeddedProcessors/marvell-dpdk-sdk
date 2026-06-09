@@ -438,7 +438,7 @@ cnxk_pktmbuf_free_no_cache(struct rte_mbuf *mbuf)
 	} while (mbuf != NULL);
 }
 
-static void
+static bool
 cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_event_type type,
 			 uint16_t uc_compcode, uint16_t compcode, struct rte_mbuf *mbuf)
 {
@@ -447,6 +447,7 @@ cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_eve
 	struct cn20k_outb_priv_data *outb_priv;
 	struct cn20k_inb_priv_data *inb_priv;
 	static uint64_t warn_cnt;
+	bool free_mbuf = false;
 	uint64_t life_unit;
 
 	memset(&desc, 0, sizeof(desc));
@@ -462,6 +463,7 @@ cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_eve
 		outb_priv = roc_nix_inl_ow_ipsec_outb_sa_sw_rsvd(sa);
 		desc.metadata = (uint64_t)outb_priv->userdata;
 		life_unit = outb_sa->w2.s.life_unit;
+		free_mbuf = true;
 	}
 
 	if (mbuf)
@@ -483,6 +485,7 @@ cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_eve
 			desc.subtype = RTE_ETH_EVENT_IPSEC_SA_PKT_EXPIRY;
 		else
 			desc.subtype = RTE_ETH_EVENT_IPSEC_SA_BYTE_EXPIRY;
+		free_mbuf = false;
 		break;
 	case ROC_IE_OW_UCC_ERR_PKT_IP:
 		warn_cnt++;
@@ -504,6 +507,8 @@ cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_eve
 	}
 
 	rte_eth_dev_callback_process(eth_dev, RTE_ETH_EVENT_IPSEC, &desc);
+
+	return free_mbuf;
 }
 
 static const char *
@@ -532,13 +537,14 @@ cn20k_eth_sec_sso_work_cb(uint64_t *gw, void *args, enum nix_inl_event_type type
 	struct cn20k_sec_sess_priv sess_priv;
 	struct cn20k_outb_priv_data *outb_priv;
 	struct roc_ow_ipsec_outb_sa *outb_sa;
+	struct rte_mbuf *mbuf = NULL;
 	struct cpt_cn20k_res_s *res;
 	struct rte_eth_dev *eth_dev;
 	struct cnxk_eth_dev *dev;
 	uint16_t dlen_adj, rlen;
-	struct rte_mbuf *mbuf;
 	uintptr_t sa_base;
 	uintptr_t nixtx;
+	bool free_mbuf;
 	uint8_t port;
 
 	plt_nix_dbg("Received %s event", get_inl_event_type(type));
@@ -581,9 +587,14 @@ cn20k_eth_sec_sso_work_cb(uint64_t *gw, void *args, enum nix_inl_event_type type
 			}
 
 			if (type < NIX_INL_SSO) {
-				cn20k_eth_sec_post_event(eth_dev, args, type,
-							 (uint16_t)cqs->w0.s.uc_compcode,
-							 (uint16_t)cqs->w0.s.compcode, NULL);
+				mbuf = (struct rte_mbuf *)(uintptr_t)gw[1];
+
+				free_mbuf = cn20k_eth_sec_post_event(eth_dev, args,
+					    type, (uint16_t)cqs->w0.s.uc_compcode,
+					    (uint16_t)cqs->w0.s.compcode, mbuf);
+
+				if (free_mbuf)
+					cnxk_pktmbuf_free_no_cache(mbuf);
 				return;
 			}
 			if (type == NIX_INL_SOFT_EXPIRY_THRD) {
