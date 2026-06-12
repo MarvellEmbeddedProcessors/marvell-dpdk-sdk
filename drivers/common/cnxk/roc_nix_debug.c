@@ -595,7 +595,8 @@ nix_lf_sq_dump(__io struct nix_cn20k_sq_ctx_s *ctx, uint32_t *sqb_aura_p, FILE *
 	sq_cnt_ptr = (int64_t *)(uintptr_t)(ctx->sq_count_iova << 3);
 	if (sq_cnt_ptr && ctx->update_sq_count)
 		nix_dump(file, "sq_count value \t\t0x%" PRIx64 "",
-			 plt_atomic_load_explicit(sq_cnt_ptr, plt_memory_order_relaxed));
+			 plt_atomic_load_explicit((uint64_t __plt_atomic *)sq_cnt_ptr,
+						  plt_memory_order_relaxed));
 	nix_dump(file, "W10: scm_lso_rem \t\t0x%" PRIx64 "", (uint64_t)ctx->scm_lso_rem);
 	nix_dump(file, "W11: octs \t\t\t0x%" PRIx64 "", (uint64_t)ctx->octs);
 	nix_dump(file, "W12: pkts \t\t\t0x%" PRIx64 "", (uint64_t)ctx->pkts);

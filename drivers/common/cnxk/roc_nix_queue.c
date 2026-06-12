@@ -185,8 +185,12 @@ roc_nix_rq_multi_ena_dis(struct roc_nix *roc_nix, struct roc_nix_rq *rqs, int nb
 	int rc, i;
 
 	rc = nix_rq_bulk_ena_dis(nix, rqs, nb_rx_queues, enable);
-	if (rc)
+	if (rc) {
+		plt_err("Failed to %s Rx queues rc=%d pf=%d vf=%d nb_rx_queues=%d",
+			enable ? "enable" : "disable", rc, nix->dev.pf, nix->dev.vf,
+			nb_rx_queues);
 		return rc;
+	}
 
 	for (i = 0; i < nb_rx_queues; i++) {
 		rq = &rqs[i];
@@ -199,8 +203,11 @@ roc_nix_rq_multi_ena_dis(struct roc_nix *roc_nix, struct roc_nix_rq *rqs, int nb
 		/* Check for meta aura if RQ is enabled */
 		if (enable && nix->need_meta_aura) {
 			rc = roc_nix_inl_meta_aura_check(rq->roc_nix, rq);
-			if (rc)
+			if (rc) {
+				plt_err("Failed meta aura check for rq=%u rc=%d pf=%d vf=%d",
+					rq->qid, rc, nix->dev.pf, nix->dev.vf);
 				return rc;
+			}
 		}
 	}
 	return 0;
