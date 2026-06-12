@@ -663,6 +663,16 @@ cnxk_dmadev_probe(struct rte_pci_driver *pci_drv __rte_unused, struct rte_pci_de
 	dmadev->fp_obj->dev_private = dpivf;
 	dmadev->dev_ops = &cnxk_dmadev_ops;
 
+	/*
+	 * dev_private (and the roc_dpi it holds) lives in shared memory. Only
+	 * the primary owns the HW and the per-process pci_dev pointer; a
+	 * secondary must not run roc_dpi_dev_init nor overwrite rdpi->pci_dev,
+	 * otherwise the primary later dereferences the secondary's stale
+	 * pointer during rte_eal_cleanup() and crashes.
+	 */
+	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
+		return 0;
+
 	dpivf->mcs_lock = NULL;
 	rdpi = &dpivf->rdpi;
 
