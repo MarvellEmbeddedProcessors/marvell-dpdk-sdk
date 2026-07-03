@@ -1147,7 +1147,7 @@ nix_find_mac_addr(struct rte_eth_dev *eth_dev, struct rte_ether_addr *addr)
 	memset(&null_mac_addr, 0, sizeof(null_mac_addr));
 	addr = addr ? addr : &null_mac_addr;
 	for (i = 0; i < dev->max_mac_entries; i++) {
-		if (!memcmp(&eth_dev->data->mac_addrs[i], addr, sizeof(*addr)))
+		if (rte_memeq_timingsafe(&eth_dev->data->mac_addrs[i], addr, sizeof(*addr)))
 			return i;
 	}
 
