@@ -684,7 +684,7 @@ softreq_copy_salt(struct nitrox_softreq *sr)
 	}
 
 	addr = rte_crypto_op_ctod_offset(sr->op, uint8_t *, ctx->iv.offset);
-	if (!memcmp(ctx->salt, addr, AES_GCM_SALT_SIZE))
+	if (rte_memeq_timingsafe(ctx->salt, addr, AES_GCM_SALT_SIZE))
 		return 0;
 
 	memcpy(ctx->salt, addr, AES_GCM_SALT_SIZE);
