@@ -56,6 +56,8 @@
 
 #define CPERF_ASYM_OP		("asym-op")
 
+#define CPERF_MLDSA_SIGN_ITER	("mldsa-sign-iter")
+
 #ifdef RTE_LIB_SECURITY
 #define CPERF_PDCP_SN_SZ	("pdcp-sn-sz")
 #define CPERF_PDCP_DOMAIN	("pdcp-domain")
@@ -196,6 +198,7 @@ struct cperf_options {
 	struct cperf_rsa_test_data *rsa_data;
 	uint16_t rsa_modlen;
 	uint8_t rsa_keytype;
+	uint8_t mldsa_sign_iter;
 };
 
 void

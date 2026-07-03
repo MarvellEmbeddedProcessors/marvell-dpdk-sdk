@@ -68,6 +68,7 @@ usage(char *progname)
 		" --modex-len N: modex length, supported lengths are "
 		"60, 128, 255, 448. Default: 128\n"
 		" --asym-op encrypt / decrypt / sign / verify : set asym operation type\n"
+		" --mldsa-sign-iter N: ML-DSA sign iteration counts are 1, 5, 10, Default: 1\n"
 		" --rsa-priv-keytype exp / qt : set RSA private key type\n"
 		" --rsa-modlen N: RSA modulus length, supported lengths are "
 		"1024, 2048, 4096, 8192. Default: 1024\n"
@@ -1041,6 +1042,26 @@ struct long_opt_parser {
 
 };
 
+static int
+parse_mldsa_sign_iter(struct cperf_options *opts, const char *arg)
+{
+	uint32_t iter = 0;
+	int ret = parse_uint32_t(&iter, arg);
+
+	if (ret < 0) {
+		RTE_LOG(ERR, USER1, "failed to parse ML-DSA iteration count\n");
+		return ret;
+	}
+
+	if (iter != 1 && iter != 5 && iter != 10) {
+		RTE_LOG(ERR, USER1, "invalid --mldsa-sign-iter value %u\n", iter);
+		return -EINVAL;
+	}
+
+	opts->mldsa_sign_iter = (uint8_t)iter;
+	return 0;
+}
+
 static struct option lgopts[] = {
 
 	{ CPERF_PTEST_TYPE, required_argument, 0, 0 },
@@ -1090,6 +1111,8 @@ static struct option lgopts[] = {
 	{ CPERF_DIGEST_SZ, required_argument, 0, 0 },
 
 	{ CPERF_ASYM_OP, required_argument, 0, 0 },
+
+	{ CPERF_MLDSA_SIGN_ITER, required_argument, 0, 0 },
 
 #ifdef RTE_LIB_SECURITY
 	{ CPERF_PDCP_SN_SZ, required_argument, 0, 0 },
@@ -1186,6 +1209,7 @@ cperf_options_default(struct cperf_options *opts)
 	opts->mlkem_data = &mlkem_encap_perf_data[0];
 	opts->mldsa_data = &mldsa_sign_perf_data[0];
 	opts->asym_op_type = RTE_CRYPTO_ASYM_OP_ENCRYPT;
+	opts->mldsa_sign_iter = 1;
 }
 
 static int
@@ -1227,6 +1251,7 @@ cperf_opts_parse_long(int opt_idx, struct cperf_options *opts)
 		{ CPERF_AEAD_AAD_SZ,	parse_aead_aad_sz },
 		{ CPERF_DIGEST_SZ,	parse_digest_sz },
 		{ CPERF_ASYM_OP,	parse_asym_op },
+		{ CPERF_MLDSA_SIGN_ITER,	parse_mldsa_sign_iter },
 #ifdef RTE_LIB_SECURITY
 		{ CPERF_PDCP_SN_SZ,	parse_pdcp_sn_sz },
 		{ CPERF_PDCP_DOMAIN,	parse_pdcp_domain },
@@ -1715,8 +1740,21 @@ cperf_options_check(struct cperf_options *options)
 #endif
 
 	if (options->op_type == CPERF_ASYM_MLDSA44) {
-		if (options->asym_op_type == RTE_CRYPTO_ASYM_OP_SIGN)
-			options->mldsa_data = &mldsa_sign_perf_data[0];
+		if (options->asym_op_type == RTE_CRYPTO_ASYM_OP_SIGN) {
+			switch (options->mldsa_sign_iter) {
+			case 1:
+				options->mldsa_data = &mldsa_sign_perf_data_1_iter[0];
+				break;
+			case 5:
+				options->mldsa_data = &mldsa_sign_perf_data_5_iter[0];
+				break;
+			case 10:
+				options->mldsa_data = &mldsa_sign_perf_data_10_iter[0];
+				break;
+			default:
+				options->mldsa_data = &mldsa_sign_perf_data[0];
+			}
+		}
 		else if (options->asym_op_type == RTE_CRYPTO_ASYM_OP_VERIFY)
 			options->mldsa_data = &mldsa_verify_perf_data[0];
 		else {
@@ -1775,8 +1813,11 @@ cperf_options_dump(struct cperf_options *opts)
 				   rte_crypto_asym_op_strings[opts->asym_op_type]);
 		if (opts->op_type == CPERF_ASYM_RSA)
 			printf("# rsa test name: %s\n", opts->rsa_data->name);
-		if (opts->op_type == CPERF_ASYM_MLDSA44)
+		if (opts->op_type == CPERF_ASYM_MLDSA44) {
 			printf("# mldsa test name: %s\n", opts->mldsa_data->name);
+			if (opts->asym_op_type == RTE_CRYPTO_ASYM_OP_SIGN)
+				printf("# mldsa sign iterations: %u\n", opts->mldsa_sign_iter);
+		}
 		if (opts->op_type == CPERF_ASYM_MLKEM512)
 			printf("# mlkem test name: %s\n", opts->mlkem_data->name);
 	}

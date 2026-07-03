@@ -365,6 +365,13 @@ The following are the application command-line options:
         Not applicable for modex op type.
         Default is ``encrypt``.
 
+* ``--mldsa-sign-iter <1/5/10>``
+
+        Set ML-DSA sign iteration count for mldsa_44 sign operation.
+        Default is ``1``.
+        Only applicable when:
+        ``--optype mldsa_44`` and ``--asym-op sign``.
+
 * ``--rsa-priv-keytype <exp/qt>``
 
         Set RSA private key type.

@@ -252,5 +252,8 @@ extern struct cperf_mlkem_test_data mlkem_encap_perf_data[];
 extern struct cperf_mlkem_test_data mlkem_decap_perf_data[];
 extern struct cperf_mldsa_test_data mldsa_sign_perf_data[];
 extern struct cperf_mldsa_test_data mldsa_verify_perf_data[];
+extern struct cperf_mldsa_test_data mldsa_sign_perf_data_1_iter[];
+extern struct cperf_mldsa_test_data mldsa_sign_perf_data_5_iter[];
+extern struct cperf_mldsa_test_data mldsa_sign_perf_data_10_iter[];
 
 #endif
