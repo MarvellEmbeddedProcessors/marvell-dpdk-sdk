@@ -306,6 +306,34 @@ mrvl_crypto_set_auth_session_parameters(struct mrvl_crypto_session *sess,
 	sess->sam_sess_params.u.basic.auth_icv_len =
 		auth_xform->auth.digest_length;
 
+	/*
+	 * AES-GMAC requires cipher_alg=AES and cipher_mode=GMAC in SABuilder.
+	 * SABuilder derives the GHASH subkey from cipher_key, so auth_key is
+	 * unused for GMAC. cipher_key must be a separate allocation because
+	 * the ops callback free()s cipher_key and auth_key independently.
+	 */
+	if (auth_xform->auth.algo == RTE_CRYPTO_AUTH_AES_GMAC) {
+		uint8_t *gmac_cipher_key;
+
+		gmac_cipher_key = malloc(auth_xform->auth.key.length);
+		if (gmac_cipher_key == NULL) {
+			MRVL_LOG(ERR, "Not enough memory!");
+			return -ENOMEM;
+		}
+		memcpy(gmac_cipher_key, auth_xform->auth.key.data,
+				auth_xform->auth.key.length);
+
+		sess->sam_sess_params.cipher_alg = SAM_CIPHER_AES;
+		sess->sam_sess_params.cipher_mode = SAM_CIPHER_GMAC;
+		sess->sam_sess_params.cipher_iv = NULL;
+		sess->sam_sess_params.cipher_key = gmac_cipher_key;
+		sess->sam_sess_params.cipher_key_len = auth_xform->auth.key.length;
+		sess->cipher_iv_offset = auth_xform->auth.iv.offset;
+		sess->sam_sess_params.auth_key = NULL;
+		sess->sam_sess_params.auth_key_len = 0;
+		return 0;
+	}
+
 	if (auth_xform->auth.key.length > 0) {
 		auth_key = malloc(auth_xform->auth.key.length);
 		if (auth_key == NULL) {
@@ -580,7 +608,8 @@ static inline int
 mrvl_request_prepare_crp(struct sam_cio_op_params *request,
 		struct sam_buf_info *src_bd,
 		struct sam_buf_info *dst_bd,
-		struct rte_crypto_op *op)
+		struct rte_crypto_op *op,
+		uint8_t gmac_j0[16])
 {
 	struct mrvl_crypto_session *sess;
 	struct rte_mbuf *src_mbuf, *dst_mbuf;
@@ -666,6 +695,29 @@ mrvl_request_prepare_crp(struct sam_cio_op_params *request,
 		request->auth_aad = op->sym->aead.aad.data;
 		request->auth_offset = request->cipher_offset;
 		request->auth_len = request->cipher_len;
+	} else if (sess->sam_sess_params.cipher_mode == SAM_CIPHER_GMAC) {
+		/*
+		 * AES-GMAC auth-only: build J0 = IV || 0x00000001 in
+		 * PMD-owned memory. SAM's TokenBuilder reads a 16-byte
+		 * IV block for CryptoMode GMAC under SAB_PROTO_NONE,
+		 * but DPDK delivers only a 12-byte nonce. Also mirror
+		 * auth_offset/len into cipher_offset/len so SAB routes
+		 * the data through the GHASH engine.
+		 */
+		const uint8_t *src_iv = rte_crypto_op_ctod_offset(op,
+				uint8_t *, sess->cipher_iv_offset);
+
+		memcpy(gmac_j0, src_iv, 12);
+		gmac_j0[12] = 0x00;
+		gmac_j0[13] = 0x00;
+		gmac_j0[14] = 0x00;
+		gmac_j0[15] = 0x01;
+
+		request->cipher_iv     = gmac_j0;
+		request->cipher_len    = op->sym->auth.data.length;
+		request->cipher_offset = op->sym->auth.data.offset;
+		request->auth_offset   = op->sym->auth.data.offset;
+		request->auth_len      = op->sym->auth.data.length;
 	} else {
 		request->cipher_len = op->sym->cipher.data.length;
 		request->cipher_offset = op->sym->cipher.data.offset;
@@ -684,6 +736,24 @@ mrvl_request_prepare_crp(struct sam_cio_op_params *request,
 	}
 
 	request->auth_icv_offset = request->auth_offset + request->auth_len;
+
+	/* AES-GMAC: EIP requires ICV at auth_offset+auth_len, but callers
+	 * may place digest at a 16-byte-aligned offset (e.g. plaintext=65
+	 * bytes, digest at offset 80). Bridge the gap:
+	 * - VERIFY: pre-copy expected tag to hw position before enqueue
+	 * - GENERATE: copy computed tag to caller's digest pointer after dequeue
+	 */
+	if (sess->sam_sess_params.cipher_mode == SAM_CIPHER_GMAC) {
+		if (sess->sam_sess_params.dir == SAM_DIR_DECRYPT) {
+			uint8_t *hw_icv = rte_pktmbuf_mtod_offset(op->sym->m_src,
+						uint8_t *,
+						request->auth_icv_offset);
+			if (hw_icv != digest)
+				memmove(hw_icv, digest,
+					sess->sam_sess_params.u.basic.auth_icv_len);
+		}
+		return 0;
+	}
 
 	/*
 	 * EIP supports only scenarios where ICV(digest buffer) is placed at
@@ -872,6 +942,14 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair, struct rte_crypto_op **ops,
 	 */
 	struct mrvl_crypto_src_table src_bd[nb_ops];
 	struct sam_buf_info          dst_bd[nb_ops];
+
+	/* Per-request 16-byte J0 (IV || 0x00000001) for AES-GMAC.
+	 * Lifetime matches requests_crp[] -- valid until sam_cio_enq()
+	 * returns below, which is exactly the lifetime SAM needs
+	 * for request->cipher_iv.
+	 */
+	uint8_t gmac_j0[nb_ops][16];
+
 	struct mrvl_crypto_qp *qp = (struct mrvl_crypto_qp *)queue_pair;
 
 	if (nb_ops == 0)
@@ -892,7 +970,8 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair, struct rte_crypto_op **ops,
 			if (mrvl_request_prepare_crp(&requests_crp[to_enq_crp],
 						src_bd[iter_ops].src_bd,
 						&dst_bd[iter_ops],
-						ops[iter_ops]) < 0) {
+						ops[iter_ops],
+						gmac_j0[to_enq_crp]) < 0) {
 				MRVL_LOG(ERR,
 					"Error while preparing parameters!");
 				qp->stats.enqueue_err_count++;
@@ -1020,6 +1099,34 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair,
 					dst = ops[i]->sym->m_src;
 				dst->pkt_len = results[i].out_len;
 				dst->data_len = results[i].out_len;
+			} else {
+				/*
+				 * AES-GMAC GENERATE: EIP writes ICV at
+				 * auth_offset+auth_len. If caller's digest
+				 * pointer is at a padded offset (e.g. plaintext
+				 * 65 bytes, digest at 80), copy ICV to it.
+				 */
+				struct mrvl_crypto_session *sess =
+					CRYPTODEV_GET_SYM_SESS_PRIV(
+						ops[i]->sym->session);
+				if (sess && sess->sam_sess_params.cipher_mode
+						== SAM_CIPHER_GMAC &&
+				    sess->sam_sess_params.dir
+						== SAM_DIR_ENCRYPT) {
+					struct rte_crypto_sym_op *sym =
+						ops[i]->sym;
+					struct rte_mbuf *dst_mbuf =
+						sym->m_dst ? sym->m_dst : sym->m_src;
+					uint32_t icv_off = sym->auth.data.offset +
+						sym->auth.data.length;
+					uint8_t *hw_icv = rte_pktmbuf_mtod_offset(
+						dst_mbuf, uint8_t *, icv_off);
+					if (hw_icv != sym->auth.digest.data)
+						memmove(sym->auth.digest.data,
+							hw_icv,
+							sess->sam_sess_params
+							.u.basic.auth_icv_len);
+				}
 			}
 			break;
 		case SAM_CIO_ERR_ICV:
