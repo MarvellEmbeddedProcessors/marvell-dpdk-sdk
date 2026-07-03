@@ -367,9 +367,9 @@ static const struct rte_cryptodev_capabilities
 					.increment = 0
 				},
 				.iv_size = {
-					.min = 8,
-					.max = 65532,
-					.increment = 4
+					.min = 12,
+					.max = 12,
+					.increment = 0
 				}
 			}, }
 		}, }
@@ -898,8 +898,8 @@ mrvl_crypto_pmd_security_session_destroy(void *dev __rte_unused,
 			MRVL_LOG(ERR, "Error while destroying session!");
 		}
 
-		rte_free(mrvl_sess->sam_sess_params.cipher_key);
-		rte_free(mrvl_sess->sam_sess_params.auth_key);
+		free(mrvl_sess->sam_sess_params.cipher_key);
+		free(mrvl_sess->sam_sess_params.auth_key);
 		rte_free(mrvl_sess->sam_sess_params.cipher_iv);
 		memset(sess, 0, sizeof(struct rte_security_session));
 	}
