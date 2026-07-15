@@ -3950,5 +3950,7 @@ main(int argc, char **argv)
 		break;
 	}
 	ut_teardown();
+
+	rte_eal_cleanup();
 	return rc;
 }
