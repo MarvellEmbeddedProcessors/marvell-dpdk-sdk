@@ -10,6 +10,7 @@
 #include <rte_atomic.h>
 #include <rte_byteorder.h>
 #include <rte_cycles.h>
+#include <rte_devargs.h>
 #include <rte_ethdev.h>
 #include <rte_hexdump.h>
 #include <rte_bitmap.h>
@@ -25,6 +26,10 @@
 #include "ipsec_msns_api.h"
 #include "flow.h"
 #include "parser.h"
+
+#ifndef RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ
+#define RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ 1024
+#endif
 
 #define NB_ETHPORTS_USED	 1
 #define MEMPOOL_CACHE_SIZE	 32
@@ -43,8 +48,13 @@
 
 #define NB_MBUF 10240U
 
+#define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
+#define app_err(...)  RTE_LOG(ERR, APP, __VA_ARGS__)
+#define app_info(...) RTE_LOG(INFO, APP, __VA_ARGS__)
+
 static int create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg,
-			      uint16_t profile_id);
+			      uint16_t profile_id, uint32_t spi, uint16_t sa_hi, uint16_t sa_lo,
+			      bool sa_xor);
 static void destroy_custom_flow(uint16_t port_id);
 enum test_mode {
 	IPSEC_MSNS,
@@ -52,6 +62,8 @@ enum test_mode {
 	IPSEC_RTE_PMD_CNXK_API_TEST,
 	/* Custom profile API test */
 	CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST,
+	/* Custom profile with MSNS 1KB SA layout */
+	CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST,
 };
 
 static struct rte_mempool *mbufpool[RTE_MAX_ETHPORTS];
@@ -134,7 +146,6 @@ static uint32_t ethdev_port_mask = RTE_PORT_ALL;
 static volatile bool force_quit;
 static uint32_t nb_bufs;
 static enum test_mode testmode;
-static bool loopback;
 static bool event_en;
 static int eventdev_id;
 static int rx_adapter_id;
@@ -149,7 +160,7 @@ static void
 signal_handler(int signum)
 {
 	if (signum == SIGINT || signum == SIGTERM) {
-		printf("\n\nSignal %d received, preparing to exit...\n",
+		app_info("\n\nSignal %d received, preparing to exit...\n",
 				signum);
 		force_quit = true;
 	}
@@ -165,6 +176,8 @@ ipsec_test_mode_to_string(enum test_mode testmode)
 		return "IPSEC_RTE_PMD_CNXK_API_TEST";
 	case CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST:
 		return "CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST";
+	case CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST:
+		return "CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST";
 
 	}
 	return NULL;
@@ -182,7 +195,7 @@ check_all_ports_link_status(uint32_t port_mask)
 	uint16_t portid;
 	int ret;
 
-	printf("Checking link statuses...\n");
+	app_info("Checking link statuses...\n");
 	fflush(stdout);
 	for (count = 0; count <= MAX_CHECK_TIME; count++) {
 		all_ports_up = 1;
@@ -194,7 +207,7 @@ check_all_ports_link_status(uint32_t port_mask)
 			if (ret < 0) {
 				all_ports_up = 0;
 				if (print_flag == 1)
-					printf("Port %u link get failed: %s\n", portid,
+					app_err("Port %u link get failed: %s\n", portid,
 					       rte_strerror(-ret));
 				continue;
 			}
@@ -202,7 +215,7 @@ check_all_ports_link_status(uint32_t port_mask)
 			/* print link status if flag set */
 			if (print_flag == 1) {
 				rte_eth_link_to_str(link_status, sizeof(link_status), &link);
-				printf("Port %d %s\n", portid, link_status);
+				app_info("Port %d %s\n", portid, link_status);
 				continue;
 			}
 			/* clear all_ports_up flag if any link down */
@@ -232,7 +245,7 @@ print_ethaddr(const char *name, const struct rte_ether_addr *eth_addr)
 	char buf[RTE_ETHER_ADDR_FMT_SIZE];
 
 	rte_ether_format_addr(buf, RTE_ETHER_ADDR_FMT_SIZE, eth_addr);
-	printf("%s%s", name, buf);
+	app_info("%s%s", name, buf);
 }
 
 static void
@@ -328,10 +341,10 @@ init_sess_mempool(void)
 		sess_pool = rte_mempool_create(s, nb_sess, sess_sz, MEMPOOL_CACHE_SIZE, 0,
 					       NULL, NULL, NULL, NULL, socketid, 0);
 		if (sess_pool == NULL) {
-			printf("Cannot init sess pool on socket %d\n", socketid);
+			app_err("Cannot init sess pool on socket %d\n", socketid);
 			return -1;
 		}
-		printf("Allocated sess pool on socket %d\n", socketid);
+		app_info("Allocated sess pool on socket %d\n", socketid);
 	}
 	return 0;
 }
@@ -348,10 +361,10 @@ init_pktmbuf_pool(uint32_t portid, unsigned int nb_mbuf)
 							   MEMPOOL_PRV_AREA_SIZE,
 							   RTE_MBUF_DEFAULT_BUF_SIZE, socketid);
 		if (mbufpool[portid] == NULL) {
-			printf("Cannot init mbuf pool on socket %d\n", socketid);
+			app_err("Cannot init mbuf pool on socket %d\n", socketid);
 			return -1;
 		}
-		printf("Allocated mbuf pool for port %d\n", portid);
+		app_info("Allocated mbuf pool for port %d\n", portid);
 	}
 	return 0;
 }
@@ -400,7 +413,7 @@ ut_eventdev_setup(void)
 	/* Get default conf of eventdev */
 	ret = rte_event_dev_info_get(eventdev_id, &evdev_default_conf);
 	if (ret < 0) {
-		printf("Error in getting event device info[devID:%d]\n",
+		app_err("Error in getting event device info[devID:%d]\n",
 		       eventdev_id);
 		return ret;
 	}
@@ -410,7 +423,7 @@ ut_eventdev_setup(void)
 	/* Get Tx adapter capabilities */
 	ret = rte_event_eth_tx_adapter_caps_get(eventdev_id, tx_adapter_id, &caps);
 	if (ret < 0) {
-		printf("Failed to get event device %d eth tx adapter"
+		app_err("Failed to get event device %d eth tx adapter"
 		       " capabilities\n",
 		       eventdev_id);
 		return ret;
@@ -432,7 +445,7 @@ ut_eventdev_setup(void)
 
 	ret = rte_event_dev_configure(eventdev_id, &eventdev_conf);
 	if (ret < 0) {
-		printf("Error in configuring event device\n");
+		app_err("Error in configuring event device\n");
 		return ret;
 	}
 
@@ -445,7 +458,7 @@ ut_eventdev_setup(void)
 	for (ev_queue_id = 0; ev_queue_id < nb_event_queues; ev_queue_id++) {
 		ret = rte_event_queue_setup(eventdev_id, ev_queue_id, &eventq_conf);
 		if (ret < 0) {
-			printf("Failed to setup event queue %d, rc=%d\n", ev_queue_id, ret);
+			app_err("Failed to setup event queue %d, rc=%d\n", ev_queue_id, ret);
 			return ret;
 		}
 	}
@@ -454,14 +467,14 @@ ut_eventdev_setup(void)
 	for (ev_port_id = 0; ev_port_id < nb_event_ports; ev_port_id++) {
 		ret = rte_event_port_setup(eventdev_id, ev_port_id, NULL);
 		if (ret < 0) {
-			printf("Failed to setup event port %d\n", ret);
+			app_err("Failed to setup event port %d\n", ret);
 			return ret;
 		}
 
 		/* Make event queue - event port link */
 		ret = rte_event_port_link(eventdev_id, ev_port_id, NULL, NULL, 1);
 		if (ret < 0) {
-			printf("Failed to link event port %d\n", ret);
+			app_err("Failed to link event port %d\n", ret);
 			return ret;
 		}
 	}
@@ -477,7 +490,7 @@ ut_eventdev_setup(void)
 	ret = rte_event_eth_rx_adapter_create(rx_adapter_id, eventdev_id,
 					      &ev_port_conf);
 	if (ret < 0) {
-		printf("Failed to create rx adapter %d\n", ret);
+		app_err("Failed to create rx adapter %d\n", ret);
 		return ret;
 	}
 
@@ -485,7 +498,7 @@ ut_eventdev_setup(void)
 	ret = rte_event_eth_tx_adapter_create(tx_adapter_id, eventdev_id,
 					      &ev_port_conf);
 	if (ret < 0) {
-		printf("Failed to create tx adapter %d\n", ret);
+		app_err("Failed to create tx adapter %d\n", ret);
 		return ret;
 	}
 
@@ -510,7 +523,7 @@ ut_eventdev_setup(void)
 		ret = rte_event_eth_rx_adapter_queue_add(rx_adapter_id, portid,
 							 all_queues, &queue_conf);
 		if (ret < 0) {
-			printf("Failed to add eth queue to rx adapter %d\n", ret);
+			app_err("Failed to add eth queue to rx adapter %d\n", ret);
 			return ret;
 		}
 
@@ -518,7 +531,7 @@ ut_eventdev_setup(void)
 		ret = rte_event_eth_tx_adapter_queue_add(tx_adapter_id, portid,
 							 all_queues);
 		if (ret < 0) {
-			printf("Failed to add eth queue to tx adapter %d\n", ret);
+			app_err("Failed to add eth queue to tx adapter %d\n", ret);
 			return ret;
 		}
 
@@ -526,21 +539,21 @@ ut_eventdev_setup(void)
 	/* Start rx adapter */
 	ret = rte_event_eth_rx_adapter_start(rx_adapter_id);
 	if (ret < 0) {
-		printf("Failed to start rx adapter %d\n", ret);
+		app_err("Failed to start rx adapter %d\n", ret);
 		return ret;
 	}
 
 	/* Start tx adapter */
 	ret = rte_event_eth_tx_adapter_start(tx_adapter_id);
 	if (ret < 0) {
-		printf("Failed to start tx adapter %d\n", ret);
+		app_err("Failed to start tx adapter %d\n", ret);
 		return ret;
 	}
 
 	/* Start eventdev */
 	ret = rte_event_dev_start(eventdev_id);
 	if (ret < 0) {
-		printf("Failed to start event device %d\n", ret);
+		app_err("Failed to start event device %d\n", ret);
 		return ret;
 	}
 
@@ -559,50 +572,51 @@ ut_eventdev_teardown(void)
 	/* Stop rx adapter */
 	ret = rte_event_eth_rx_adapter_stop(rx_adapter_id);
 	if (ret < 0)
-		printf("Failed to stop rx adapter %d\n", ret);
+		app_err("Failed to stop rx adapter %d\n", ret);
 
 	/* Stop tx adapter */
 	ret = rte_event_eth_tx_adapter_stop(tx_adapter_id);
 	if (ret < 0)
-		printf("Failed to stop tx adapter %d\n", ret);
+		app_err("Failed to stop tx adapter %d\n", ret);
 
 	RTE_ETH_FOREACH_DEV(portid) {
 		if ((ethdev_port_mask & RTE_BIT64(portid)) == 0)
 			continue;
 		ret = rte_event_eth_rx_adapter_queue_del(rx_adapter_id, portid, -1);
 		if (ret < 0)
-			printf("Failed to remove rx adapter queues %d\n", ret);
+			app_err("Failed to remove rx adapter queues %d\n", ret);
 		ret = rte_event_eth_tx_adapter_queue_del(tx_adapter_id, portid, -1);
 		if (ret < 0)
-			printf("Failed to remove tx adapter queues %d\n", ret);
+			app_err("Failed to remove tx adapter queues %d\n", ret);
 	}
 
 	/* Release rx adapter */
 	ret = rte_event_eth_rx_adapter_free(rx_adapter_id);
 	if (ret < 0)
-		printf("Failed to free rx adapter %d\n", ret);
+		app_err("Failed to free rx adapter %d\n", ret);
 
 	/* Release tx adapter */
 	ret = rte_event_eth_tx_adapter_free(tx_adapter_id);
 	if (ret < 0)
-		printf("Failed to free tx adapter %d\n", ret);
+		app_err("Failed to free tx adapter %d\n", ret);
 
 	/* Stop and release event devices */
 	rte_event_dev_stop(eventdev_id);
 	ret = rte_event_dev_close(eventdev_id);
 	if (ret < 0)
-		printf("Failed to close event dev %d, %d\n", eventdev_id, ret);
+		app_err("Failed to close event dev %d, %d\n", eventdev_id, ret);
 }
 
 static void
 print_usage(const char *name)
 {
-	printf("Invalid arguments\n");
+	app_err("Invalid arguments\n");
 	fprintf(stderr, "Usage: %s [arguments]\n"
 		"\t[--testmode <N>]\n"
 		"\t\t\t0: IPSEC_MSNS\n"
 		"\t\t\t1: IPSEC_RTE_PMD_CNXK_API_TEST\n"
 		"\t\t\t2: CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST\n"
+		"\t\t\t3: CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST\n"
 		"\t[--portmask]	          Port mask to enable\n"
 		"\t[--nb-mbufs <count >]  MBUFs per packet pool\n"
 		"\t[--num-sas <count>]    Number of SA's to create\n"
@@ -648,17 +662,6 @@ parse_args(int argc, char **argv)
 			continue;
 		}
 
-		if (!strcmp(argv[0], "--num-sas") && (argc > 1)) {
-			num_sas = atoi(argv[1]);
-			if (num_sas > MAX_SA_SIZE) {
-				printf("Number of SAs given is greater than MAX SAs\n");
-				return -1;
-			}
-			argc -= 2;
-			argv += 2;
-			continue;
-		}
-
 		if (!strcmp(argv[0], "--inl-inb-oop")) {
 			inl_inb_oop = true;
 			argc--;
@@ -678,7 +681,7 @@ parse_args(int argc, char **argv)
 				sess_conf = &conf_aes_256_gcm;
 				continue;
 			} else {
-				printf("Invalid algo %s\n", alg);
+				app_err("Invalid algo %s\n", alg);
 			}
 		}
 
@@ -692,13 +695,6 @@ parse_args(int argc, char **argv)
 			vector_sz = strtoul(argv[1], NULL, 0);
 			argc -= 2;
 			argv += 2;
-			continue;
-		}
-
-		if (!strcmp(argv[0], "--lpbk")) {
-			loopback = true;
-			argc--;
-			argv++;
 			continue;
 		}
 
@@ -725,7 +721,7 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 
 	ret = init_pktmbuf_pool(portid, nb_mbufs);
 	if (ret) {
-		printf("Failed to setup pktmbuf pool for port=%d, ret=%d", portid, ret);
+		app_err("Failed to setup pktmbuf pool for port=%d, ret=%d", portid, ret);
 		return ret;
 	}
 
@@ -740,20 +736,14 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 		vector_pool[portid] = rte_event_vector_pool_create(s, nb_vec, 32, vector_sz,
 								   socketid);
 		if (vector_pool[portid] == NULL) {
-			printf("Failed to create vector pool for port %d\n", portid);
+			app_err("Failed to create vector pool for port %d\n", portid);
 			return -ENOMEM;
 		}
-		printf("Allocated vector pool for port %d\n", portid);
+		app_info("Allocated vector pool for port %d\n", portid);
 	}
 
 	/* Enable loopback mode for non perf test */
-	port_conf.lpbk_mode = (testmode == IPSEC_MSNS ||
-			       testmode == IPSEC_RTE_PMD_CNXK_API_TEST ||
-			       testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST) ?
-			       1 : 0;
-
-	if (loopback)
-		port_conf.lpbk_mode = 1;
+	port_conf.lpbk_mode = 1;
 
 	if (testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST)
 		port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
@@ -761,17 +751,17 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 	/* port configure */
 	ret = rte_eth_dev_configure(portid, nb_rx_queue, nb_tx_queue, &port_conf);
 	if (ret < 0) {
-		printf("Cannot configure device: err=%d, port=%d\n", ret, portid);
+		app_err("Cannot configure device: err=%d, port=%d\n", ret, portid);
 		return ret;
 	}
 	ret = rte_eth_macaddr_get(portid, &ports_eth_addr[portid]);
 	if (ret < 0) {
-		printf("Cannot get mac address: err=%d, port=%d\n", ret, portid);
+		app_err("Cannot get mac address: err=%d, port=%d\n", ret, portid);
 		return ret;
 	}
-	printf("Port %u ", portid);
+	app_info("Port %u ", portid);
 	print_ethaddr("Address:", &ports_eth_addr[portid]);
-	printf("\n");
+	app_info("\n");
 
 	queueid = 0;
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
@@ -786,19 +776,19 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 			break;
 
 		/* init TX queue */
-		printf("Setup txq=%u,%d,%d\n", lcore_id, queueid, socketid);
+		app_info("Setup txq=%u,%d,%d\n", lcore_id, queueid, socketid);
 
 		ret = rte_eth_tx_queue_setup(portid, queueid, nb_txd, socketid, &tx_conf);
 		if (ret < 0) {
-			printf("rte_eth_tx_queue_setup: err=%d, port=%d\n", ret, portid);
+			app_err("rte_eth_tx_queue_setup: err=%d, port=%d\n", ret, portid);
 			return ret;
 		}
 
-		printf("Setup rxq=%u,%d,%d\n", lcore_id, queueid, socketid);
+		app_info("Setup rxq=%u,%d,%d\n", lcore_id, queueid, socketid);
 		ret = rte_eth_rx_queue_setup(portid, queueid, nb_rxd, socketid, &rx_conf,
 					     mbufpool[portid]);
 		if (ret < 0) {
-			printf("rte_eth_rx_queue_setup: err=%d, port=%d\n", ret, portid);
+			app_err("rte_eth_rx_queue_setup: err=%d, port=%d\n", ret, portid);
 			return ret;
 		}
 
@@ -833,6 +823,138 @@ cnxk_sa_index_init(int port_id, enum rte_security_ipsec_sa_direction dir, uint32
 	return 0;
 }
 
+/*
+ * Custom profile tests require the ethdev to be probed with the cnxk devargs
+ * "custom_inb_sa=1" and "custom_sa_act=1". Verify both are present in the
+ * port's devargs before running those tests.
+ */
+static bool
+ethdev_has_custom_sa_devargs(uint16_t portid)
+{
+	struct rte_eth_dev_info dev_info;
+	const struct rte_devargs *devargs;
+	const char *args;
+	int ret;
+
+	ret = rte_eth_dev_info_get(portid, &dev_info);
+	if (ret != 0 || dev_info.device == NULL)
+		return false;
+
+	devargs = rte_dev_devargs(dev_info.device);
+	if (devargs == NULL)
+		return false;
+
+	args = devargs->args;
+	if (args == NULL)
+		return false;
+
+	return strstr(args, "custom_inb_sa=1") != NULL &&
+	       strstr(args, "custom_sa_act=1") != NULL;
+}
+
+static int
+custom_generic_profile_setup(uint16_t portid)
+{
+	struct rte_pmd_cnxk_profile_cfg_params profile_cfg = {0};
+	uint16_t profile_id = 0;
+	int ret;
+
+	/* Configure opcode prot field */
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
+		.offset = 40;
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
+		.sizem1 = 1; /* 2 nibbles */
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
+		.logmult = 0;
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
+		.valid = 1;
+
+	/* Configure sa_index prot field */
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
+		.offset = 50;
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
+		.sizem1 = 1; /* 2 nibbles */
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
+		.logmult = 0;
+	profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
+		.valid = 1;
+
+	/* Set SA size (power-of-2) and max SA count */
+	profile_cfg.max_sa = 10;
+	profile_cfg.sa_size = rte_align32pow2(
+					      sizeof(struct rte_pmd_cnxk_ipsec_inb_sa));
+
+	/* Configure default inline config to match IPv4 and use LD layer */
+	profile_cfg.def_cfg.lid = 2;           /* LD layer, lptr=14 */
+	profile_cfg.def_cfg.ltype_mask = 0xF;
+	profile_cfg.def_cfg.ltype_match = 6;
+	profile_cfg.def_cfg.match_oipv4 = 1;
+	profile_cfg.def_cfg.match_oipv6 = 1;
+	profile_cfg.def_cfg.oiplen_ena = 1;
+
+	profile_cfg.gen_cfg.ctx_val = 1;
+	profile_cfg.gen_cfg.egrp = 0;
+
+	/* Setup custom profile */
+	ret = rte_pmd_cnxk_nix_inl_custom_profile_setup(portid, &profile_cfg,
+							&profile_id);
+	if (ret < 0) {
+		app_err("rte_pmd_cnxk_nix_inl_custom_profile_setup: err=%d, port=%d\n",
+			ret, portid);
+		return ret;
+	}
+	custom_profile_id = profile_id;
+	app_info("Custom profile created with profile_id=%u on port=%d\n",
+		 profile_id, portid);
+	return 0;
+}
+
+static int
+custom_msns_profile_setup(uint16_t portid)
+{
+	struct rte_pmd_cnxk_profile_cfg_params profile_cfg = {0};
+	uint16_t profile_id = 0;
+	int ret;
+
+	profile_cfg.max_sa = 256;
+	profile_cfg.sa_size = RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ;
+
+	/* Match IPv4 ESP on LD layer; inline_shift=2 for 4 MSNS sub-spaces */
+	profile_cfg.def_cfg.lid = 4;
+	profile_cfg.def_cfg.ltype_mask = 0xF;
+	profile_cfg.def_cfg.ltype_match = 3;
+	profile_cfg.def_cfg.match_oipv4 = 1;
+	profile_cfg.def_cfg.match_oipv6 = 1;
+	profile_cfg.def_cfg.oiplen_ena = 1;
+	profile_cfg.def_cfg.inline_shift = 2;
+
+	/* Add gen config with opcode, param1, param2, ctx_val, egrp */
+	profile_cfg.gen_cfg.opcode =
+		CPT_IE_OT_MAJOR_OP_PROCESS_INBOUND_IPSEC | (1ULL << 6);
+	profile_cfg.gen_cfg.param1 = 1ULL << 2;
+	profile_cfg.gen_cfg.ctx_val = 1;
+	profile_cfg.gen_cfg.egrp = 0;
+
+	/* Extract config to extract 32 bits of SPI */
+	profile_cfg.extract_cfg.len_l = 32;
+	profile_cfg.extract_cfg.bitpos_l = 32;
+
+	ret = rte_pmd_cnxk_nix_inl_custom_profile_setup(portid, &profile_cfg,
+							&profile_id);
+	if (ret < 0) {
+		app_err("rte_pmd_cnxk_nix_inl_custom_profile_setup: err=%d, port=%d\n",
+			ret, portid);
+		return ret;
+	}
+	custom_profile_id = profile_id;
+	app_info("MSNS custom profile created with profile_id=%u inline_shift=%lu "
+		 "opcode=0x%lx max_sa=%u sa_size=%u on port=%d\n",
+		 profile_id, profile_cfg.def_cfg.inline_shift,
+		 profile_cfg.gen_cfg.opcode,
+		 profile_cfg.max_sa, profile_cfg.sa_size, portid);
+	return ret;
+}
+
 static int
 ut_setup(int argc, char **argv)
 {
@@ -846,7 +968,7 @@ ut_setup(int argc, char **argv)
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0) {
-		printf("Invalid EAL arguments\n");
+		app_err("Invalid EAL arguments\n");
 		return -1;
 	}
 	argc -= ret;
@@ -857,19 +979,19 @@ ut_setup(int argc, char **argv)
 		return ret;
 
 	if (config_file && parse_cfg_file(config_file)) {
-		printf("Failed to parse config file %s\n", config_file);
+		app_err("Failed to parse config file %s\n", config_file);
 		return -1;
 	}
 
 	nb_ports = rte_eth_dev_count_avail();
 	if (nb_ports < NB_ETHPORTS_USED || ethdev_port_mask == 0) {
-		printf("At least %u port(s) used for test\n", NB_ETHPORTS_USED);
+		app_err("At least %u port(s) used for test\n", NB_ETHPORTS_USED);
 		return -1;
 	}
 
 	ret = init_sess_mempool();
 	if (ret) {
-		printf("Unable to initialize session mempool: ret = %d\n", ret);
+		app_err("Unable to initialize session mempool: ret = %d\n", ret);
 		return -1;
 	}
 
@@ -887,22 +1009,18 @@ ut_setup(int argc, char **argv)
 		if ((ethdev_port_mask & RTE_BIT64(portid)) == 0)
 			continue;
 
-		if (testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST)
-			ret = port_init(portid, nb_mbufs, nb_lcores - 1, nb_lcores - 1,
-					nb_rxd, nb_txd);
-		else
-			ret = port_init(portid, nb_mbufs, 1, 1, nb_rxd, nb_txd);
+		ret = port_init(portid, nb_mbufs, 1, 1, nb_rxd, nb_txd);
 
 		/* Init sa_index map with 4K size*/
 		ret = cnxk_sa_index_init(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, MAX_SA_SIZE);
 		if (ret) {
-			printf("egress sa index init failed: err=%d, port=%d\n", ret, portid);
+			app_err("egress sa index init failed: err=%d, port=%d\n", ret, portid);
 			return ret;
 		}
 
 		ret = cnxk_sa_index_init(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, MAX_SA_SIZE);
 		if (ret) {
-			printf("ingress sa index init failed: err=%d, port=%d\n", ret, portid);
+			app_err("ingress sa index init failed: err=%d, port=%d\n", ret, portid);
 			return ret;
 		}
 	}
@@ -913,7 +1031,7 @@ ut_setup(int argc, char **argv)
 		/* Setup event device */
 		ret = ut_eventdev_setup();
 		if (ret < 0) {
-			printf("Failed to setup eventdev, err=%d\n", ret);
+			app_err("Failed to setup eventdev, err=%d\n", ret);
 			return ret;
 		}
 	}
@@ -924,69 +1042,33 @@ ut_setup(int argc, char **argv)
 		if ((ethdev_port_mask & RTE_BIT64(portid)) == 0)
 			continue;
 
+		if ((testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST ||
+		     testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST) &&
+		    !ethdev_has_custom_sa_devargs(portid)) {
+			app_err("Skipping %s: port %u devargs missing "
+				"\"custom_inb_sa=1\" and \"custom_sa_act=1\"\n",
+				ipsec_test_mode_to_string(testmode), portid);
+			return -ENOTSUP;
+		}
+
 		if (testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST) {
-			struct rte_pmd_cnxk_profile_cfg_params profile_cfg = {0};
-			uint16_t profile_id = 0;
-
-			/* Configure opcode prot field */
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
-				.offset = 40;
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
-				.sizem1 = 1; /* 2 nibbles */
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
-				.logmult = 0;
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_OPCODE]
-				.valid = 1;
-
-			/* Configure sa_index prot field */
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
-				.offset = 50;
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
-				.sizem1 = 1; /* 2 nibbles */
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
-				.logmult = 0;
-			profile_cfg.prot_field_cfg[RTE_PMD_CNXK_RX_PROT_SA_INDEX]
-				.valid = 1;
-
-			/* Set SA size (power-of-2) and max SA count */
-			profile_cfg.max_sa = 10;
-			profile_cfg.sa_size = rte_align32pow2(
-				sizeof(struct rte_pmd_cnxk_ipsec_inb_sa));
-
-			/* Configure default inline config to match IPv4 and use LD layer */
-			profile_cfg.def_cfg.lid = 2;           /* LD layer, lptr=14 */
-			profile_cfg.def_cfg.ltype_mask = 0xF;
-			profile_cfg.def_cfg.ltype_match = 6;
-			profile_cfg.def_cfg.match_oipv4 = 1;
-			profile_cfg.def_cfg.match_oipv6 = 1;
-			profile_cfg.def_cfg.oiplen_ena = 1;
-
-			profile_cfg.gen_cfg.ctx_val = 1;
-			profile_cfg.gen_cfg.egrp = 0;
-
-			/* Setup custom profile */
-			ret = rte_pmd_cnxk_nix_inl_custom_profile_setup(portid, &profile_cfg,
-								       &profile_id);
-			if (ret < 0) {
-				printf("rte_pmd_cnxk_nix_inl_custom_profile_setup: err=%d, port=%d\n",
-				       ret, portid);
-				return ret;
-			}
-			custom_profile_id = profile_id;
-			printf("Custom profile created with profile_id=%u on port=%d\n",
-			       profile_id, portid);
+			if (custom_generic_profile_setup(portid) < 0)
+				return -1;
+		} else if (testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST) {
+			if (custom_msns_profile_setup(portid) < 0)
+				return -1;
 		}
 
 		/* Start device */
 		ret = rte_eth_dev_start(portid);
 		if (ret < 0) {
-			printf("rte_eth_dev_start: err=%d, port=%d\n", ret, portid);
+			app_err("rte_eth_dev_start: err=%d, port=%d\n", ret, portid);
 			return ret;
 		}
 		/* always enable promiscuous */
 		ret = rte_eth_promiscuous_enable(portid);
 		if (ret != 0) {
-			printf("rte_eth_promiscuous_enable: err=%s, port=%d\n", rte_strerror(-ret),
+			app_err("rte_eth_promiscuous_enable: err=%s, port=%d\n", rte_strerror(-ret),
 			       portid);
 			return ret;
 		}
@@ -1008,7 +1090,7 @@ ut_teardown(void)
 			continue;
 		ret = rte_eth_dev_stop(portid);
 		if (ret != 0)
-			printf("rte_eth_dev_stop: err=%s, port=%u\n", rte_strerror(-ret), portid);
+			app_err("rte_eth_dev_stop: err=%s, port=%u\n", rte_strerror(-ret), portid);
 	}
 
 	/* Event device cleanup */
@@ -1016,14 +1098,15 @@ ut_teardown(void)
 		ut_eventdev_teardown();
 
 	/* Release custom profile if it was created */
-	if (testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST) {
+	if (testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST ||
+	    testmode == CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST) {
 		RTE_ETH_FOREACH_DEV(portid) {
 			if ((ethdev_port_mask & RTE_BIT64(portid)) == 0)
 				continue;
 			ret = rte_pmd_cnxk_nix_inl_custom_profile_release(portid,
 									 custom_profile_id);
 			if (ret != 0)
-				printf("rte_pmd_cnxk_nix_inl_custom_profile_release: "
+				app_err("rte_pmd_cnxk_nix_inl_custom_profile_release: "
 				       "err=%d, port=%u\n", ret, portid);
 		}
 	}
@@ -1034,7 +1117,7 @@ ut_teardown(void)
 			continue;
 		ret = rte_eth_dev_reset(portid);
 		if (ret != 0)
-			printf("rte_eth_dev_reset: err=%s, port=%u\n", rte_strerror(-ret), portid);
+			app_err("rte_eth_dev_reset: err=%s, port=%u\n", rte_strerror(-ret), portid);
 
 	}
 }
@@ -1083,6 +1166,83 @@ custom_prof_inb_sa_init(struct rte_pmd_cnxk_ipsec_inb_sa *sa)
 	sa->w0.s.aop_valid = 1;
 }
 
+#define MSNS_SA_AR_WIN_1024 5
+/* HW ctx_size field: (ctx_size+1) * 128B = total CPT context (1KB MSNS slot) */
+#define MSNS_INB_SA_CTX_SIZE ((RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ / 128) - 1)
+
+static void
+msns_inb_sa_init(struct rte_pmd_cnxk_ipsec_inb_msns_sa *sa)
+{
+	size_t offset = offsetof(struct rte_pmd_cnxk_ipsec_inb_msns_sa, ctx);
+
+	memset(sa, 0, sizeof(*sa));
+
+	sa->w0.s.pkt_output = CPT_IE_OT_SA_PKT_OUTPUT_NO_FRAG;
+	sa->w0.s.pkt_format = CPT_IE_OT_SA_PKT_FMT_META;
+	sa->w0.s.pkind = CPT_IE_OT_CPT_PKIND;
+	sa->w0.s.et_ovrwr = 1;
+	sa->w2.s.l3hdr_on_err = 1;
+	sa->w2.s.dir = CPT_IE_SA_DIR_INBOUND;
+	sa->w0.s.ar_win = MSNS_SA_AR_WIN_1024;
+
+	sa->w0.s.hw_ctx_off = offset / 8;
+	sa->w0.s.ctx_push_size =
+		RTE_PMD_CNXK_IPSEC_INB_MSNS_CTX_PUSH_SZ(sa->w0.s.hw_ctx_off);
+	sa->w0.s.ctx_size = MSNS_INB_SA_CTX_SIZE;
+	sa->w0.s.ctx_hdr_size = 1;
+	sa->w0.s.aop_valid = 1;
+}
+
+static void
+msns_inb_sa_ar_fill(struct rte_pmd_cnxk_ipsec_inb_msns_sa *sa)
+{
+	unsigned int sp;
+
+	for (sp = 0; sp < RTE_PMD_CNXK_IPSEC_INB_MSNS_SPACES; sp++) {
+		sa->ctx.ar[sp].ar_base = 0;
+		sa->ctx.ar[sp].ar_valid = 0;
+		memset(sa->ctx.ar_winbits[sp], 0, sizeof(sa->ctx.ar_winbits[sp]));
+	}
+}
+
+static void
+pmd_cnxk_api_inb_msns_session_fill(struct rte_pmd_cnxk_ipsec_inb_msns_sa *sa,
+				   uint32_t spi, uint32_t cookie,
+				   struct ipsec_session_data *sa_data)
+{
+	uint8_t *salt_key = sa->w8.s.salt;
+	uint32_t *tmp_salt;
+	uint64_t *tmp_key;
+	int i;
+
+	msns_inb_sa_init(sa);
+
+	sa->w0.s.count_glb_octets = 1;
+	sa->w0.s.count_glb_pkts = 1;
+	sa->w2.s.dir = CPT_IE_SA_DIR_INBOUND;
+	sa->w2.s.ipsec_protocol = CPT_IE_SA_PROTOCOL_ESP;
+	sa->w2.s.ipsec_mode = CPT_IE_SA_MODE_TUNNEL;
+	sa->w2.s.enc_type = CPT_IE_OT_SA_ENC_AES_GCM;
+	sa->w2.s.auth_type = CPT_IE_OT_SA_AUTH_NULL;
+	sa->w2.s.spi = spi;
+
+	memcpy(salt_key, &sa_data->ipsec_xform.salt, 4);
+	tmp_salt = (uint32_t *)salt_key;
+	*tmp_salt = rte_be_to_cpu_32(*tmp_salt);
+
+	memcpy(sa->cipher_key, sa_data->key.data, 16);
+	tmp_key = (uint64_t *)sa->cipher_key;
+	for (i = 0; i < (int)(CPT_CTX_MAX_CKEY_LEN / sizeof(uint64_t)); i++)
+		tmp_key[i] = rte_be_to_cpu_64(tmp_key[i]);
+
+	if (sa_data->xform.aead.aead.key.length == 16)
+		sa->w2.s.aes_key_len = CPT_IE_SA_AES_KEY_LEN_128;
+	else if (sa_data->xform.aead.aead.key.length == 32)
+		sa->w2.s.aes_key_len = CPT_IE_SA_AES_KEY_LEN_256;
+	sa->w1.s.cookie = cookie;
+	msns_inb_sa_ar_fill(sa);
+}
+
 static void
 create_default_ipsec_flow(uint16_t port_id)
 {
@@ -1117,12 +1277,13 @@ create_default_ipsec_flow(uint16_t port_id)
 		return;
 
 	default_flow_no_msns[port_id] = flow;
-	printf("Created default flow enabling SECURITY for all ESP traffic on port %d\n",
+	app_info("Created default flow enabling SECURITY for all ESP traffic on port %d\n",
 		port_id);
 }
 
 static int
-create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint16_t profile_id)
+create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg,
+		   uint16_t profile_id, uint32_t spi, uint16_t sa_hi, uint16_t sa_lo, bool sa_xor)
 {
 	struct rte_pmd_cnxk_sec_action sec = {0};
 	struct rte_flow_action action[3];
@@ -1133,6 +1294,8 @@ create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint1
 	struct rte_flow_action_count count = {0};
 	int ret;
 
+	RTE_SET_USED(spi);
+
 	/* Match all IPv4 packets */
 	pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
 	pattern[0].spec = NULL;
@@ -1141,19 +1304,35 @@ create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint1
 
 	pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
 
-	/* Action: Count action to track flow hits */
 	count.id = 0;
 	action[0].type = RTE_FLOW_ACTION_TYPE_COUNT;
 	action[0].conf = &count;
 
-	/* Action: Security action with custom profile */
 	sec.alg = alg;
 	sec.profile_id = profile_id;
 	sec.use_custom_profile = true;
-	sec.sa_xor = 0;
-	sec.sa_hi = 0;
-	sec.sa_lo = 0;
-	sec.sa_index = 0;
+	if (inl_inb_oop)
+		sec.is_non_inp = 1;
+
+	switch (alg) {
+	case RTE_PMD_CNXK_SEC_ACTION_ALG0:
+		sec.use_custom_profile = false;
+		sec.profile_id = 0;
+		/* Fall through */
+	case RTE_PMD_CNXK_SEC_ACTION_ALG1:
+	case RTE_PMD_CNXK_SEC_ACTION_ALG2:
+	case RTE_PMD_CNXK_SEC_ACTION_ALG3:
+		sec.sa_xor = sa_xor;
+		sec.sa_hi = sa_hi;
+		sec.sa_lo = sa_lo;
+		break;
+	default:
+		sec.sa_xor = 0;
+		sec.sa_hi = sa_hi;
+		sec.sa_lo = sa_lo;
+		sec.sa_index = 0;
+		break;
+	}
 
 	action[1].type = RTE_FLOW_ACTION_TYPE_SECURITY;
 	action[1].conf = &sec;
@@ -1162,24 +1341,25 @@ create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint1
 
 	attr.ingress = 1;
 
-	printf("Creating custom flow for port %u with profile_id %u\n", port_id, profile_id);
+	app_info("Creating custom flow for port %u with profile_id %u\n", port_id, profile_id);
 
 	ret = rte_flow_validate(port_id, &attr, pattern, action, &err);
 	if (ret) {
-		printf("Custom flow validation failed: %s\n",
+		app_err("Custom flow validation failed: %s\n",
 		       err.message ? err.message : "unknown error");
 		return ret;
 	}
 
 	flow = rte_flow_create(port_id, &attr, pattern, action, &err);
 	if (flow == NULL) {
-		printf("Custom flow rule create failed: %s\n",
+		app_err("Custom flow rule create failed: %s\n",
 		       err.message ? err.message : "unknown error");
 		return -1;
 	}
 
 	custom_flow[port_id] = flow;
-	printf("Custom flow created for port %u with profile_id %u\n", port_id, profile_id);
+	app_info("Custom flow created for port %u profile_id=%u alg=%d spi=0x%x\n",
+	       port_id, profile_id, alg, spi);
 	return 0;
 }
 
@@ -1194,12 +1374,12 @@ destroy_custom_flow(uint16_t port_id)
 
 	ret = rte_flow_destroy(port_id, custom_flow[port_id], &err);
 	if (ret) {
-		printf("Custom flow rule destroy failed for port=%u, rc=%d\n",
+		app_err("Custom flow rule destroy failed for port=%u, rc=%d\n",
 		       port_id, ret);
 		return;
 	}
 	custom_flow[port_id] = NULL;
-	printf("Custom flow destroyed for port %u\n", port_id);
+	app_info("Custom flow destroyed for port %u\n", port_id);
 }
 
 static void
@@ -1212,7 +1392,7 @@ destroy_default_ipsec_flow(uint16_t portid)
 		return;
 	ret = rte_flow_destroy(portid, default_flow_no_msns[portid], &err);
 	if (ret) {
-		printf("\nDefault flow rule destroy failed\n");
+		app_err("\nDefault flow rule destroy failed\n");
 		return;
 	}
 	default_flow_no_msns[portid] = NULL;
@@ -1276,12 +1456,12 @@ pmd_cnxk_api_custom_inb_sa_verify(void)
 
 	nb_sent = rte_eth_tx_burst(portid, 0, &tx_pkts, nb_tx);
 	if (nb_sent != nb_tx) {
-		printf("\nFailed to tx %u pkts", nb_tx);
+		app_err("\nFailed to tx %u pkts", nb_tx);
 		rc = -1;
 		goto exit;
 	}
 
-	printf("Sent %u pkts\n", nb_sent);
+	app_info("Sent %u pkts\n", nb_sent);
 	rte_delay_ms(100);
 
 	/* Retry few times before giving up */
@@ -1298,7 +1478,7 @@ pmd_cnxk_api_custom_inb_sa_verify(void)
 		case RTE_EVENT_TYPE_ETHDEV:
 			break;
 		default:
-			printf("Invalid event type %u", ev.event_type);
+			app_err("Invalid event type %u", ev.event_type);
 			rc = -1;
 			goto exit;
 		}
@@ -1306,10 +1486,10 @@ pmd_cnxk_api_custom_inb_sa_verify(void)
 		break;
 	}
 
-	printf("Recv %u pkts\n", nb_rx);
+	app_info("Recv %u pkts\n", nb_rx);
 	/* Check for minimum number of Rx packets expected */
 	if (nb_rx != nb_tx) {
-		printf("\nReceived less Rx pkts(%u) pkts\n", nb_rx);
+		app_err("\nReceived less Rx pkts(%u) pkts\n", nb_rx);
 		rc = -1;
 		goto exit;
 	}
@@ -1317,7 +1497,7 @@ pmd_cnxk_api_custom_inb_sa_verify(void)
 	data = (uint32_t *)(*(uint64_t *)RTE_PTR_ADD(pkt, 128 + 72));
 	data += is_plat_cn20k ? 0 : 1;
 	if (data[0] != SA_COOKIE) {
-		printf("SA cookie is not matched in the meta packet\n");
+		app_err("SA cookie is not matched in the meta packet\n");
 		rte_hexdump(stdout, NULL, data, pkt->pkt_len);
 		rc = -1;
 	}
@@ -1348,7 +1528,7 @@ pmd_cnxk_api_inl_dev_inst_submit(void *cptr)
 
 	inst_mem = rte_malloc(NULL, NB_INST * sizeof(struct cpt_inst_s), 0);
 	if (inst_mem == NULL) {
-		printf("Could not allocate instruction memory\n");
+		app_err("Could not allocate instruction memory\n");
 		return -ENOMEM;
 	}
 	rte_pmd_cnxk_cpt_q_stats_get(0, RTE_PMD_CNXK_CPT_Q_STATS_INL_DEV, &prev_stats, 0);
@@ -1358,7 +1538,7 @@ pmd_cnxk_api_inl_dev_inst_submit(void *cptr)
 		memset(inst, 0, sizeof(struct cpt_inst_s));
 		data_ptrs[i] = rte_zmalloc(NULL, MAX_PKT_LEN + CPT_RES_ALIGN, 0);
 		if (data_ptrs[i] == NULL) {
-			printf("Could not allocate memory for dptr\n");
+			app_err("Could not allocate memory for dptr\n");
 			rc = -ENOMEM;
 			goto exit;
 		}
@@ -1396,7 +1576,7 @@ pmd_cnxk_api_inl_dev_inst_submit(void *cptr)
 
 	qptr = rte_pmd_cnxk_inl_dev_qptr_get();
 	if (rte_pmd_cnxk_inl_dev_submit(qptr, inst_mem, NB_INST) != NB_INST) {
-		printf("Couldn't submit CPT instructions to inline device\n");
+		app_err("Couldn't submit CPT instructions to inline device\n");
 		rc = -1;
 		goto exit;
 	}
@@ -1406,13 +1586,13 @@ pmd_cnxk_api_inl_dev_inst_submit(void *cptr)
 	} while ((res.cn10k.compcode == CPT_COMP_NOT_DONE) && (rte_rdtsc() < timeout));
 
 	if (res.cn10k.compcode != CPT_COMP_GOOD  && res.cn10k.compcode != CPT_COMP_WARN) {
-		printf("res.compcode: %d\n", res.cn10k.compcode);
+		app_err("res.compcode: %d\n", res.cn10k.compcode);
 		rc = -1;
 	} else {
 		rte_pmd_cnxk_cpt_q_stats_get(0, RTE_PMD_CNXK_CPT_Q_STATS_INL_DEV, &stats, 0);
 		pkts = stats.dec_pkts - prev_stats.dec_pkts;
 		if (pkts != NB_INST) {
-			printf("Inbound packet count: %u is not matched with queue counter: %lu\n",
+			app_err("Inbound packet count: %u is not matched with queue counter: %lu\n",
 			       NB_INST, pkts);
 			rc = -1;
 		}
@@ -1449,7 +1629,7 @@ pmd_cnxk_api_test(void)
 
 	rc = rte_pmd_cnxk_hw_sa_write(portid, sa, &sa_dptr, CUSTOM_SA_SZ, true);
 	if (rc) {
-		printf("Couldn't create the SA\n");
+		app_err("Couldn't create the SA\n");
 		return rc;
 	}
 	/* Verify the inline device instruction submit API */
@@ -1466,7 +1646,7 @@ exit:
 	/* Destroy the SA */
 	ipsec_inb_sa_init(&sa_dptr.inb);
 	if (rte_pmd_cnxk_hw_sa_write(portid, sa, &sa_dptr, CUSTOM_SA_SZ, true))
-		printf("Couldn't destroy the SA\n");
+		app_err("Couldn't destroy the SA\n");
 
 	return rc;
 }
@@ -1508,7 +1688,7 @@ pmd_cnxk_custom_profile_test(void)
 	/* Get SA base for the custom profile from inline device */
 	sa_base = rte_pmd_cnxk_inl_inb_prof_sa_base_get(portid, custom_profile_id);
 	if (!sa_base) {
-		printf("Failed to get SA base for profile_id=%u on port=%d\n",
+		app_err("Failed to get SA base for profile_id=%u on port=%d\n",
 		       custom_profile_id, portid);
 		return -EINVAL;
 	}
@@ -1526,11 +1706,11 @@ pmd_cnxk_custom_profile_test(void)
 	/* Write SA to hardware at 8th slot */
 	rc = rte_pmd_cnxk_hw_sa_write(portid, sa_ptr, &sa_dptr, 256, true);
 	if (rc) {
-		printf("Couldn't write reassembly SA to hardware at index %u\n", sa_index);
+		app_err("Couldn't write reassembly SA to hardware at index %u\n", sa_index);
 		return rc;
 	}
 
-	printf("Custom profile test: SA written successfully at index %u for profile_id=%u\n",
+	app_info("Custom profile test: SA written successfully at index %u for profile_id=%u\n",
 	       sa_index, custom_profile_id);
 
 	/* Initialize traffic buffers for three fragment packets */
@@ -1539,23 +1719,24 @@ pmd_cnxk_custom_profile_test(void)
 		rc = init_traffic(mbufpool[portid], &tx_pkts[i],
 				 (struct ipsec_test_packet *)fragments[i]);
 		if (rc) {
-			printf("Failed to initialize traffic buffer %d\n", i);
+			app_err("Failed to initialize traffic buffer %d\n", i);
 			goto free_pkts;
 		}
 	}
-	printf("Initialized 3 fragment packet buffers\n");
+	app_info("Initialized 3 fragment packet buffers\n");
 
 	/* Create custom flow with ALG4 and custom_profile_id */
-	rc = create_custom_flow(portid, RTE_PMD_CNXK_SEC_ACTION_ALG4, custom_profile_id);
+	rc = create_custom_flow(portid, RTE_PMD_CNXK_SEC_ACTION_ALG4, custom_profile_id, 0, 0, 0,
+				false);
 	if (rc) {
-		printf("Failed to create custom flow for port %u\n", portid);
+		app_err("Failed to create custom flow for port %u\n", portid);
 		goto free_pkts;
 	}
 
 	/* Start event dev */
 	rc = ut_eventdev_start();
 	if (rc) {
-		printf("Failed to start event device, rc=%d\n", rc);
+		app_err("Failed to start event device, rc=%d\n", rc);
 		goto free_pkts_cleanup;
 	}
 
@@ -1564,14 +1745,14 @@ pmd_cnxk_custom_profile_test(void)
 	/* Transmit the three fragment packets */
 	nb_sent = rte_eth_tx_burst(portid, 0, tx_pkts, 3);
 	if (nb_sent != 3) {
-		printf("Failed to transmit all packets: sent %u out of 3\n", nb_sent);
+		app_err("Failed to transmit all packets: sent %u out of 3\n", nb_sent);
 		/* Free any packets that weren't sent */
 		for (uint16_t i = nb_sent; i < 3; i++) {
 			if (tx_pkts[i])
 				rte_pktmbuf_free(tx_pkts[i]);
 		}
 		rc = -1;
-		goto cleanup;
+		goto free_pkts_cleanup;
 	}
 	rte_delay_ms(10000);
 	/* Receive packet in event mode and verify cookie */
@@ -1588,9 +1769,9 @@ pmd_cnxk_custom_profile_test(void)
 		case RTE_EVENT_TYPE_ETHDEV:
 			break;
 		default:
-			printf("Invalid event type %u", ev.event_type);
+			app_err("Invalid event type %u", ev.event_type);
 			rc = -1;
-			goto cleanup;
+			goto free_pkts_cleanup;
 		}
 		/* Get packet from event */
 		pkt = ev.mbuf;
@@ -1602,7 +1783,7 @@ pmd_cnxk_custom_profile_test(void)
 		wqe = (uint64_t *)RTE_PTR_ADD(pkt, 128);
 		compcode = (uint8_t)(wqe[10] & 0xFF);
 		uc_compcode = (uint8_t)((wqe[10] >> 8) & 0xFF);
-		printf("  CPT comp:  0x%02x, uc_comp: 0x%02x\n", compcode, uc_compcode);
+		app_info("  CPT comp:  0x%02x, uc_comp: 0x%02x\n", compcode, uc_compcode);
 
 		cpth = rte_pktmbuf_mtod(pkt, uint8_t *);  /* buf_addr + data_off */
 		parse_hdr = (uint64_t *)cpth;
@@ -1613,28 +1794,28 @@ pmd_cnxk_custom_profile_test(void)
 		rlen = (uint16_t)((w3 >> 48) & 0xFFFF);      /* w3[63:48] = rlen */
 		cookie = (uint32_t)(w0 & 0xFFFFFFFF);        /* w0[31:0] = cookie (sa_idx) */
 
-		printf("CPT_PARSE_HDR @ %p (data_off=%u): cookie=%u, reas_sts=%u, rlen=%u\n",
+		app_info("CPT_PARSE_HDR @ %p (data_off=%u): cookie=%u, reas_sts=%u, rlen=%u\n",
 		       (void *)cpth, pkt->data_off, cookie, reas_sts, rlen);
 
 		rc = 0;
 
 		/* Verify cookie matches sa_index (8) */
 		if (cookie != sa_index) {
-			printf("Cookie mismatch! Expected 0x%x, got 0x%x\n",
+			app_err("Cookie mismatch! Expected 0x%x, got 0x%x\n",
 			       sa_index, cookie);
 			rc = -1;
 		}
 
 		/* Verify reas_sts is 0 (success) */
 		if (reas_sts != 0) {
-			printf("Reassembly status error! reas_sts=%u (expected 0)\n",
+			app_err("Reassembly status error! reas_sts=%u (expected 0)\n",
 			       reas_sts);
 			rc = -1;
 		}
 
 		/* Verify rlen is non-zero (reassembled length) */
 		if (rlen == 0) {
-			printf("Reassembled length is zero!\n");
+			app_err("Reassembled length is zero!\n");
 			rc = -1;
 		}
 
@@ -1648,15 +1829,18 @@ pmd_cnxk_custom_profile_test(void)
 	}
 
 	if (nb_rx == 0) {
-		printf("FAILED: No packet received after %d retries\n", max_retries);
+		app_err("FAILED: No packet received after %d retries\n", max_retries);
 		rc = -1;
 	} else if (rc == 0) {
-		printf("PASSED: Packet received with correct cookie\n");
+		app_info("PASSED: Packet received with correct cookie\n");
 	} else {
-		printf("FAILED: Cookie mismatch\n");
+		app_err("FAILED: Cookie mismatch\n");
 	}
 
-	goto cleanup;
+	/* Destroy custom flow */
+	destroy_custom_flow(portid);
+
+	return rc;
 
 free_pkts_cleanup:
 	/* Destroy custom flow before freeing packets */
@@ -1667,12 +1851,6 @@ free_pkts:
 		if (tx_pkts[i])
 			rte_pktmbuf_free(tx_pkts[i]);
 	}
-	return rc;
-
-cleanup:
-	/* Destroy custom flow */
-	destroy_custom_flow(portid);
-
 	return rc;
 }
 
@@ -1754,7 +1932,7 @@ compare_pkt_data(struct rte_mbuf *m, uint8_t *ref, unsigned int tot_len)
 			len = m->data_len;
 		if (len != 0) {
 			if (memcmp(rte_pktmbuf_mtod(m, char *), ref + matched, len)) {
-				printf("\n====Test case failed: Data Mismatch");
+				app_err("\n====Test case failed: Data Mismatch");
 				rte_hexdump(stdout, "Data", rte_pktmbuf_mtod(m, char *), len);
 				rte_hexdump(stdout, "Reference", ref + matched, len);
 				return -1;
@@ -1767,8 +1945,8 @@ compare_pkt_data(struct rte_mbuf *m, uint8_t *ref, unsigned int tot_len)
 	}
 
 	if (tot_len) {
-		printf("\n====Test case failed: Data Missing %u", tot_len);
-		printf("\n====nb_segs %u, tot_len %u", nb_segs, tot_len);
+		app_err("\n====Test case failed: Data Missing %u", tot_len);
+		app_err("\n====nb_segs %u, tot_len %u", nb_segs, tot_len);
 		rte_pktmbuf_dump(stderr, save, -1);
 		return -1;
 	}
@@ -1800,13 +1978,13 @@ create_inline_ipsec_session(struct ipsec_session_data *sa, uint16_t portid,
 	sec_ctx = (struct rte_security_ctx *)rte_eth_dev_get_sec_ctx(portid);
 
 	if (sec_ctx == NULL) {
-		printf("Ethernet device doesn't support security features.\n");
+		app_err("Ethernet device doesn't support security features.\n");
 		return -1;
 	}
 
 	sec_cap = rte_security_capabilities_get(sec_ctx);
 	if (sec_cap == NULL) {
-		printf("No capabilities registered\n");
+		app_err("No capabilities registered\n");
 		return -1;
 	}
 
@@ -1820,7 +1998,7 @@ create_inline_ipsec_session(struct ipsec_session_data *sa, uint16_t portid,
 	}
 
 	if (sec_cap->action == RTE_SECURITY_ACTION_TYPE_NONE) {
-		printf("No suitable security capability found\n");
+		app_err("No suitable security capability found\n");
 		return -1;
 	}
 
@@ -1849,7 +2027,7 @@ create_inline_ipsec_session(struct ipsec_session_data *sa, uint16_t portid,
 
 	*ses = rte_security_session_create(sec_ctx, &sess_conf, sess_pool);
 	if (*ses == NULL) {
-		printf("SEC Session init failed\n");
+		app_err("SEC Session init failed\n");
 		return -1;
 	}
 
@@ -1928,7 +2106,7 @@ create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint
 		break;
 	}
 
-	printf("Creating default flow for port=%d alg=%d spi=0x%x sa_lo=0x%x sa_hi=0x%x sa_index=%u sa_xor=%u\n",
+	app_info("Creating default flow for port=%d alg=%d spi=0x%x sa_lo=0x%x sa_hi=0x%x sa_index=%u sa_xor=%u\n",
 	       port_id, alg, spi, sa_lo, sa_hi, sa_index, sa_xor);
 
 	action[act_count].type = RTE_FLOW_ACTION_TYPE_END;
@@ -1941,7 +2119,7 @@ create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint
 
 	flow = rte_flow_create(port_id, &attr, pattern, action, &err);
 	if (flow == NULL) {
-		printf("\nDefault flow rule create failed\n");
+		app_err("\nDefault flow rule create failed\n");
 		return -1;
 	}
 
@@ -1961,7 +2139,7 @@ destroy_default_flow(uint16_t port_id)
 			continue;
 		ret = rte_flow_destroy(port_id, default_flow[port_id][alg], &err);
 		if (ret) {
-			printf("\nDefault flow rule destroy failed for port=%d alg=%d, rc=%d\n",
+			app_err("\nDefault flow rule destroy failed for port=%d alg=%d, rc=%d\n",
 			       port_id, alg, ret);
 			return;
 		}
@@ -2076,7 +2254,7 @@ ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
 					  RTE_SECURITY_IPSEC_SA_DIR_EGRESS, tun_type);
 	if (ret)
 		goto out;
-	printf("Created Outbound session with sa_index = 0x%x\n", sa_data.ipsec_xform.spi);
+	app_info("Created Outbound session with sa_index = 0x%x\n", sa_data.ipsec_xform.spi);
 
 	/* Update the real spi value */
 	sa_data.ipsec_xform.spi = spi;
@@ -2087,10 +2265,10 @@ ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
 	conf.crypto_xform = &sa_data.xform.aead;
 	ret = rte_security_session_update(sec_ctx, out_ses, &conf);
 	if (ret) {
-		printf("Security session update failed outbound\n");
+		app_err("Security session update failed outbound\n");
 		goto out;
 	}
-	printf("Updated Outbound session with SPI = 0x%x\n", sa_data.ipsec_xform.spi);
+	app_info("Updated Outbound session with SPI = 0x%x\n", sa_data.ipsec_xform.spi);
 
 	rte_security_set_pkt_metadata(sec_ctx, out_ses, tx_pkts, NULL);
 	tx_pkts->ol_flags |= RTE_MBUF_F_TX_SEC_OFFLOAD;
@@ -2103,7 +2281,7 @@ ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
 					  RTE_SECURITY_IPSEC_SA_DIR_INGRESS, tun_type);
 	if (ret)
 		goto out;
-	printf("Created Inbound session with sa_index = 0x%x\n", sa_data.ipsec_xform.spi);
+	app_info("Created Inbound session with sa_index = 0x%x\n", sa_data.ipsec_xform.spi);
 
 	sa_data.ipsec_xform.spi = spi;
 	sa_data.ipsec_xform.direction = RTE_SECURITY_IPSEC_SA_DIR_INGRESS;
@@ -2114,25 +2292,25 @@ ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
 	conf.userdata = (void *)(uint64_t)(alg);
 	ret = rte_security_session_update(sec_ctx, in_ses, &conf);
 	if (ret) {
-		printf("Security session update failed inbound\n");
+		app_err("Security session update failed inbound\n");
 		goto out;
 	}
-	printf("Updated Inbound session with SPI = 0x%x\n", sa_data.ipsec_xform.spi);
+	app_info("Updated Inbound session with SPI = 0x%x\n", sa_data.ipsec_xform.spi);
 
 	ret = create_default_flow(portid, alg, spi, sa_lo, sa_hi, sa_index, sa_xor);
 	if (ret) {
-		printf("Flow creation failed\n");
+		app_err("Flow creation failed\n");
 		goto out;
 	}
 
 	nb_sent = rte_eth_tx_burst(portid, 0, &tx_pkts, nb_tx);
 	if (nb_sent != nb_tx) {
 		ret = -1;
-		printf("\nFailed to tx %u pkts", nb_tx);
+		app_err("\nFailed to tx %u pkts", nb_tx);
 		goto out;
 	}
 
-	printf("Sent %u pkts\n", nb_sent);
+	app_info("Sent %u pkts\n", nb_sent);
 	rte_delay_ms(100);
 
 	/* Retry few times before giving up */
@@ -2146,25 +2324,25 @@ ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
 		rte_delay_ms(100);
 	} while (j < 10);
 
-	printf("Recv %u pkts\n", nb_rx);
+	app_info("Recv %u pkts\n", nb_rx);
 	/* Check for minimum number of Rx packets expected */
 	if (nb_rx != nb_tx) {
-		printf("\nReceived less Rx pkts(%u) pkts\n", nb_rx);
+		app_err("\nReceived less Rx pkts(%u) pkts\n", nb_rx);
 		ret = -1;
 		goto out;
 	}
 
 	if (rx_pkts->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED ||
 	    !(rx_pkts->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
-		printf("\nSecurity offload failed\n");
+		app_err("\nSecurity offload failed\n");
 		union rte_pmd_cnxk_cpt_res_s *res_s = rte_pmd_cnxk_inl_ipsec_res(rx_pkts);
 		rte_pktmbuf_dump(stdout, rx_pkts, -1);
 
 		if (res_s)
-			printf("CPT res_s: 0x%016" PRIx64 " 0x%016" PRIx64 "\n", res_s->u64[0],
+			app_err("CPT res_s: 0x%016" PRIx64 " 0x%016" PRIx64 "\n", res_s->u64[0],
 			       res_s->u64[1]);
 		else
-			printf("CPT res_s is NULL\n");
+			app_err("CPT res_s is NULL\n");
 		ret = -1;
 		goto out;
 	}
@@ -2172,14 +2350,14 @@ ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
 	/* Check for userdata match */
 	userdata = *rte_security_dynfield(rx_pkts);
 	if (userdata != alg) {
-		printf("\nDecrypted packet userdata mismatch %lx != %x\n",
+		app_err("Failed due to userdata mismatch %lx != %x\n",
 		       userdata, alg);
 		ret = -1;
 		goto out;
 	}
 
 	if (vector->full_pkt->len != rx_pkts->pkt_len) {
-		printf("\nDecrypted packet length mismatch\n");
+		app_err("Failed to match decrypted packet length\n");
 		ret = -1;
 		goto out;
 	}
@@ -2216,23 +2394,389 @@ ipsec_msns_test(void)
 
 	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG0);
-	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG0: %s\n", rc ? "FAILED" : "PASS");
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG0: %s\n", rc ? "FAILED" : "PASS");
 
 	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG1);
-	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG1: %s\n", rc ? "FAILED" : "PASS");
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG1: %s\n", rc ? "FAILED" : "PASS");
 
 	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG2);
-	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG2: %s\n", rc ? "FAILED" : "PASS");
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG2: %s\n", rc ? "FAILED" : "PASS");
 
 	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG3);
-	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG3: %s\n", rc ? "FAILED" : "PASS");
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG3: %s\n", rc ? "FAILED" : "PASS");
 
 	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG4);
-	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG4: %s\n", rc ? "FAILED" : "PASS");
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG4: %s\n", rc ? "FAILED" : "PASS");
+	if (rc)
+		return rc;
+	return 0;
+}
+
+static int
+msns_read_sa_ar_window(uint16_t portid, uint32_t sa_idx)
+{
+	union rte_pmd_cnxk_ipsec_hw_sa *sa_base, *sa_ptr, sa_read;
+	unsigned int sp, i, updated_sp = 0xFF;
+	bool updated = false;
+	int rc;
+
+	sa_base = rte_pmd_cnxk_inl_inb_prof_sa_base_get(portid, custom_profile_id);
+	if (!sa_base) {
+		app_err("MSNS AR read: SA base not found\n");
+		return -EINVAL;
+	}
+
+	sa_ptr = (union rte_pmd_cnxk_ipsec_hw_sa *)
+		((uint8_t *)sa_base + sa_idx * RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ);
+
+	memset(&sa_read, 0, sizeof(sa_read));
+	rc = rte_pmd_cnxk_hw_sa_read(portid, sa_ptr, &sa_read,
+				     RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ, true);
+	if (rc) {
+		app_err("MSNS SA[%u] AR read failed rc=%d\n", sa_idx, rc);
+		return rc;
+	}
+
+	app_info("MSNS SA[%u] AR window (HW, after decrypt):\n", sa_idx);
+	for (sp = 0; sp < RTE_PMD_CNXK_IPSEC_INB_MSNS_SPACES; sp++) {
+		app_info("  space %u: ar_base=0x%lx ar_valid=0x%lx winbits[0]=0x%lx\n",
+		       sp,
+		       (unsigned long)sa_read.inb_msns.ctx.ar[sp].ar_base,
+		       (unsigned long)sa_read.inb_msns.ctx.ar[sp].ar_valid,
+		       (unsigned long)sa_read.inb_msns.ctx.ar_winbits[sp][0]);
+
+		if (sa_read.inb_msns.ctx.ar[sp].ar_valid ||
+		    sa_read.inb_msns.ctx.ar_winbits[sp][0]) {
+			app_info("    ar_winbits non-zero:\n");
+			for (i = 0; i < RTE_PMD_CNXK_IPSEC_INB_MSNS_AR_WIN_U64; i++) {
+				if (sa_read.inb_msns.ctx.ar_winbits[sp][i])
+					app_info(" [%u]=0x%lx\n", i,
+					       (uint64_t)sa_read.inb_msns.ctx.ar_winbits[sp][i]);
+			}
+			if (updated) {
+				app_err("Err: MSNS AR window updated by microcode for multiple spaces\n");
+				return -1;
+			}
+			updated = true;
+			updated_sp = sp;
+		}
+	}
+
+	if (!updated) {
+		app_err("Err: MSNS AR window not updated by microcode\n");
+		return -1;
+	} else {
+		app_info("MSNS AR window updated by microcode for space %u\n", updated_sp);
+	}
+
+	return updated_sp;
+}
+
+static int
+ipsec_custom_msns_encap_decap(struct test_ipsec_vector *vector,
+			      enum rte_security_ipsec_tunnel_type tun_type,
+			      uint8_t alg)
+{
+	struct rte_security_session *out_ses = NULL;
+	union rte_pmd_cnxk_ipsec_hw_sa *sa_base, *sa_ptr, sa_dptr;
+	uint32_t in_sa_index = 0, out_sa_index = 0, spi = 0;
+	uint32_t cookie, expected_cookie = UINT32_MAX;
+	struct rte_security_session_conf conf = {0};
+	struct rte_security_ctx *sec_ctx = NULL;
+	uint32_t index_count = 0, sa_index = 0, idx;
+	struct rte_mbuf *rx_pkts = NULL, *pkt = NULL;
+	uint8_t compcode, uc_compcode;
+	uint16_t lcore_id = rte_lcore_id();
+	struct ipsec_session_data sa_data;
+	unsigned int portid, nb_rx = 0, j;
+	unsigned int nb_sent = 0, nb_tx;
+	struct rte_mbuf *tx_pkts = NULL;
+	uint16_t sa_hi = 0, sa_lo = 0;
+	uint16_t sub_index = 0;
+	uint64_t w0, w3;
+	bool sa_xor = getenv("SA_XOR_EN") ? true : false;
+	uint8_t *cpth;
+	void *wqe;
+	int rc = 0;
+
+	/* Get SA base for the custom profile from inline device */
+	portid = lcore_cfg[lcore_id].portid;
+	sa_base = rte_pmd_cnxk_inl_inb_prof_sa_base_get(portid,
+							alg == RTE_PMD_CNXK_SEC_ACTION_ALG0 ?
+							UINT16_MAX : custom_profile_id);
+	if (!sa_base) {
+		app_err("Failed to get SA base for profile_id=%u on port=%d\n",
+		       custom_profile_id, portid);
+		return -EINVAL;
+	}
+
+	nb_tx = 1;
+	rc = init_traffic(mbufpool[portid], &tx_pkts, vector->frags);
+	if (rc != 0) {
+		rc = -1;
+		goto out;
+	}
+
+	switch (alg) {
+	case RTE_PMD_CNXK_SEC_ACTION_ALG0:
+		out_sa_index = cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, 1);
+		/* Allocate 1 index and use it */
+		index_count = 16;
+		in_sa_index =
+			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
+		sa_index = in_sa_index + 7;
+		spi = (0x1 << 28);
+		spi |= sa_xor ? 3 : sa_index;
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = sa_xor ? 3 ^ sa_index : 0;
+		break;
+	case RTE_PMD_CNXK_SEC_ACTION_ALG1:
+		out_sa_index = cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, 1);
+		/* Allocate 4 SA's with 4 subspaces each i.e 16 subspaces */
+		index_count = 4;
+		in_sa_index =
+			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
+		sa_index = in_sa_index + 2;
+		sub_index = 1;
+		spi = ((sa_index << 2) + sub_index) << 28;
+		spi |= sa_xor ? 3 : 0;
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = sa_xor ? 3 : 0x0;
+		break;
+	case RTE_PMD_CNXK_SEC_ACTION_ALG2:
+		out_sa_index = cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, 1);
+		/* Allocate 2 SA's with 4 subspaces each i.e 8 subspaces */
+		index_count = 2;
+		in_sa_index =
+			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
+		sa_index = in_sa_index + 1;
+		sub_index = 3;
+		spi = ((sa_index << 2) + sub_index) << 25;
+		spi |= sa_xor ? 5 : 0;
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = sa_xor ? 5 : 0x0;
+		break;
+	case RTE_PMD_CNXK_SEC_ACTION_ALG3:
+		out_sa_index = cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, 1);
+		/* Allocate 4 SA's with 4 subspaces each i.e 16 subspaces */
+		index_count = 4;
+		in_sa_index =
+			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
+		sa_index = in_sa_index + 3;
+		sub_index = 2;
+		spi = ((sa_index << 2) + sub_index) << 25;
+		spi |= sa_xor ? 9 : 0;
+		sa_hi = (spi >> 16) & 0xffff;
+		sa_lo = sa_xor ? 9 : 0x0;
+		break;
+	default:
+		rc = -1;
+		goto out;
+	}
+
+	sec_ctx = (struct rte_security_ctx *)rte_eth_dev_get_sec_ctx(portid);
+
+	memcpy(&sa_data, vector->sa_data, sizeof(sa_data));
+	sa_data.ipsec_xform.spi = out_sa_index;
+	/* Create Inline IPsec outbound session. */
+	rc = create_inline_ipsec_session(&sa_data, portid, &out_ses,
+					  RTE_SECURITY_IPSEC_SA_DIR_EGRESS, tun_type);
+	if (rc)
+		goto out;
+	app_info("Created Outbound session with sa_index = 0x%x\n", sa_data.ipsec_xform.spi);
+
+	/* Update the real spi value */
+	sa_data.ipsec_xform.spi = spi;
+	sa_data.ipsec_xform.direction = RTE_SECURITY_IPSEC_SA_DIR_EGRESS;
+	conf.action_type = RTE_SECURITY_ACTION_TYPE_INLINE_PROTOCOL;
+	conf.protocol = RTE_SECURITY_PROTOCOL_IPSEC;
+	memcpy(&conf.ipsec, &sa_data.ipsec_xform, sizeof(struct rte_security_ipsec_xform));
+	conf.crypto_xform = &sa_data.xform.aead;
+	rc = rte_security_session_update(sec_ctx, out_ses, &conf);
+	if (rc) {
+		app_err("Security session update failed outbound\n");
+		goto out;
+	}
+	app_info("Updated Outbound session with SPI = 0x%x\n", sa_data.ipsec_xform.spi);
+
+	rte_security_set_pkt_metadata(sec_ctx, out_ses, tx_pkts, NULL);
+	tx_pkts->ol_flags |= RTE_MBUF_F_TX_SEC_OFFLOAD;
+	tx_pkts->l2_len = RTE_ETHER_HDR_LEN;
+
+	for (idx = 0; idx < index_count; idx++) {
+		/* Use the real spi in only chosen sa index */
+		uint32_t sa_spi = (in_sa_index + idx == sa_index) ? spi : 0xdead0000 | idx;
+		sa_ptr = (union rte_pmd_cnxk_ipsec_hw_sa *)
+			((uint8_t *)sa_base +
+			 (in_sa_index + idx) * RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_SZ);
+
+		cookie = 0x33550000UL | alg << 4 | idx;
+		memset(&sa_dptr, 0, sizeof(sa_dptr));
+		pmd_cnxk_api_inb_msns_session_fill(&sa_dptr.inb_msns, sa_spi, cookie,
+						   vector->sa_data);
+		sa_dptr.inb_msns.w2.s.valid = 1;
+
+		/* Capture expected user data */
+		if (in_sa_index + idx == sa_index)
+			expected_cookie = cookie;
+
+		memcpy(sa_ptr, &sa_dptr.inb_msns, RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_WR_SZ);
+		rte_wmb();
+		rc = rte_pmd_cnxk_hw_sa_write(portid, sa_ptr, &sa_dptr,
+					      RTE_PMD_CNXK_IPSEC_INB_SA_MSNS_WR_SZ, true);
+		if (rc) {
+			app_err("Couldn't write MSNS SA at index %u, rc=%d\n", idx, rc);
+			return rc;
+		}
+
+		app_info("Created MSNS Inbound SA[%u] written with spi=0x%x(cookie %x) @%p\n",
+			 idx, sa_spi, cookie, sa_ptr);
+	}
+
+	/* Create a flow for the MSNS SA */
+	rc = create_custom_flow(portid, alg, custom_profile_id,
+				spi, sa_hi, sa_lo, sa_xor);
+	if (rc) {
+		app_err("Flow creation failed\n");
+		goto out;
+	}
+
+	app_info("Created custom flow for port=%d alg=%d spi=0x%x sa_lo=0x%x sa_hi=0x%x sa_index=%u"
+	       " sa_xor=%u sub_index=%u\n",
+	       portid, alg, spi, sa_lo, sa_hi, sa_index, sa_xor, sub_index);
+
+	nb_sent = rte_eth_tx_burst(portid, 0, &tx_pkts, nb_tx);
+	if (nb_sent != nb_tx) {
+		rc = -1;
+		app_err("\nFailed to tx %u pkts", nb_tx);
+		goto out;
+	}
+
+	app_info("Sent %u pkts\n", nb_sent);
+	rte_delay_ms(100);
+
+	/* Retry few times before giving up */
+	nb_rx = 0;
+	j = 0;
+	do {
+		nb_rx += rte_eth_rx_burst(portid, 0, &rx_pkts, nb_tx - nb_rx);
+		j++;
+		if (nb_rx >= nb_tx)
+			break;
+		rte_delay_ms(100);
+	} while (j < 10);
+
+	app_info("Recv %u pkts\n", nb_rx);
+	/* Check for minimum number of Rx packets expected */
+	if (nb_rx != nb_tx) {
+		app_err("\nReceived less Rx pkts(%u) pkts\n", nb_rx);
+		rc = -1;
+		goto out;
+	}
+
+
+	cpth = rte_pktmbuf_mtod(rx_pkts, uint8_t *);
+	w0 = *(uint64_t *)cpth;
+	wqe = *(void **)(cpth + 8);
+	w3 = *(uint64_t *)(cpth + 24);
+	app_info("cpt_parse_hdr: w0=0x%016" PRIx64 " w3=0x%016" PRIx64 "\n", w0, w3);
+	app_info("cpt_parse_hdr: wqe=0x%p\n", wqe);
+
+	compcode = w3 & 0xff;
+	uc_compcode = (w3 >> 8) & 0xff;
+	cookie = w0 & 0xFFFFFFFFUL;
+
+	/* Get mbuf and update lens */
+	pkt = (struct rte_mbuf *)wqe;
+	pkt = pkt - 1;
+	pkt->data_len = (w3 >> 48) + 14;
+	pkt->pkt_len = pkt->data_len;
+
+	if (compcode != 1 || (uc_compcode < 0xEE && uc_compcode > 0)) {
+		app_err("Decryption failed\n");
+		app_err("CPT compcode=0x%x uc_compcode=0x%x cookie=0x%x\n",
+		       compcode, uc_compcode, cookie);
+		rte_pktmbuf_dump(stdout, rx_pkts, -1);
+		rte_pktmbuf_dump(stdout, pkt, -1);
+		rte_hexdump(stdout, "WQE", wqe, 128);
+		rc = -1;
+		goto out;
+	}
+
+	/* Check for cookie match */
+	if (cookie != expected_cookie) {
+		app_err("Decrypted packet cookie mismatch 0x%x != 0x%x\n",
+		       cookie, expected_cookie);
+		rte_pktmbuf_dump(stdout, rx_pkts, -1);
+		rte_pktmbuf_dump(stdout, pkt, -1);
+		rte_hexdump(stdout, "WQE", wqe, 128);
+		rc = -1;
+		goto out;
+	}
+
+	if (vector->full_pkt->len != pkt->pkt_len)
+		app_err("Failed to match Decrypted packet length %x != %x\n",
+		       vector->full_pkt->len, pkt->pkt_len);
+
+	rc = compare_pkt_data(pkt, vector->full_pkt->data, vector->full_pkt->len);
+	if (rc != 0) {
+		app_err("Decrypted packet data mismatch\n");
+		rc = -1;
+		goto out;
+	}
+
+	if (alg && msns_read_sa_ar_window(portid, sa_index) != sub_index) {
+		app_err("MSNS AR window not updated for SA[%u] subspace %u\n", sa_index, sub_index);
+		rc = -1;
+		goto out;
+	}
+out:
+	destroy_custom_flow(portid);
+
+	cnxk_sa_index_free(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, out_sa_index, 1);
+	cnxk_sa_index_free(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, in_sa_index, index_count);
+
+	/* Clear session data. */
+	if (out_ses)
+		rte_security_session_destroy(sec_ctx, out_ses);
+
+	rte_pktmbuf_free(tx_pkts);
+	rte_pktmbuf_free(rx_pkts);
+	if (pkt)
+		rte_pktmbuf_free(pkt);
+	return rc;
+}
+
+static int
+pmd_cnxk_custom_msns_test(void)
+{
+	struct test_ipsec_vector ipv4_nofrag_case = {
+		.sa_data = sess_conf,
+		.full_pkt = &pkt_ipv4_plain,
+		.frags = &pkt_ipv4_plain,
+	};
+	int rc;
+
+	rc = ipsec_custom_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+				  RTE_PMD_CNXK_SEC_ACTION_ALG0);
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG0: %s\n", rc ? "FAILED" : "PASS");
+
+	rc = ipsec_custom_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+				  RTE_PMD_CNXK_SEC_ACTION_ALG1);
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG1: %s\n", rc ? "FAILED" : "PASS");
+
+	rc = ipsec_custom_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+				  RTE_PMD_CNXK_SEC_ACTION_ALG2);
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG2: %s\n", rc ? "FAILED" : "PASS");
+
+	rc = ipsec_custom_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+				  RTE_PMD_CNXK_SEC_ACTION_ALG3);
+	app_info("Test RTE_PMD_CNXK_SEC_ACTION_ALG3: %s\n", rc ? "FAILED" : "PASS");
+
 	if (rc)
 		return rc;
 	return 0;
@@ -2249,34 +2793,40 @@ main(int argc, char **argv)
 
 	rc = ut_setup(argc, argv);
 	if (rc == -ENOTSUP) {
-		printf("Custom inline profile not supported on this platform, skipping test\n");
+		app_info("Custom inline profile not supported on this platform, skipping test\n");
 		return 0;
 	}
 	if (rc) {
-		printf("TEST FAILED: ut_setup\n");
+		app_err("TEST FAILED: ut_setup\n");
 		return rc;
 	}
 
 	is_plat_cn20k = strstr(rte_pmd_cnxk_model_str_get(), pattern) ? true : false;
 
-	printf("\n");
+	app_info("\n");
 	switch (testmode) {
 	case IPSEC_MSNS:
 		rc = ipsec_msns_test();
 		if (rc)
-			printf("TEST FAILED: ipsec_msns\n");
+			app_err("TEST FAILED: ipsec_msns\n");
 		break;
 	case IPSEC_RTE_PMD_CNXK_API_TEST:
-		printf("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
+		app_info("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
 		       ipsec_test_mode_to_string(testmode));
 		rc = pmd_cnxk_api_test();
-		printf("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
+		app_info("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
 		break;
 	case CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST:
-		printf("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
+		app_info("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
 		       ipsec_test_mode_to_string(testmode));
 		rc = pmd_cnxk_custom_profile_test();
-		printf("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
+		app_info("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
+		break;
+	case CUSTOM_PROFILE_RTE_PMD_CNXK_MSNS_TEST:
+		app_info("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
+		       ipsec_test_mode_to_string(testmode));
+		rc = pmd_cnxk_custom_msns_test();
+		app_info("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
 		break;
 	}
 	ut_teardown();

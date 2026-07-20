@@ -31,9 +31,9 @@ echo "================================"
 sleep 3
 cat $LOG
 
-TEST0=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG0" $LOG | awk '{print $3}')
-TEST1=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG1" $LOG | awk '{print $3}')
-TEST2=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG2" $LOG | awk '{print $3}')
+TEST0=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG0" $LOG | awk '{print $4}')
+TEST1=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG1" $LOG | awk '{print $4}')
+TEST2=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG2" $LOG | awk '{print $4}')
 
 if [[ $TEST0 != "PASS" ]]; then
 	echo "Test RTE_PMD_CNXK_SEC_ACTION_ALG0 FAILED"
@@ -56,8 +56,8 @@ fi
 PART_106B0=$(cat /proc/device-tree/soc\@0/chiprevision)
 
 if [[ $PART_106B0 == "B0" ]]; then
-	TEST3=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG3" $LOG | awk '{print $3}')
-	TEST4=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG4" $LOG | awk '{print $3}')
+	TEST3=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG3" $LOG | awk '{print $4}')
+	TEST4=$(grep "Test RTE_PMD_CNXK_SEC_ACTION_ALG4" $LOG | awk '{print $4}')
 
 	if [[ $TEST3 != "PASS" ]]; then
 		echo "Test RTE_PMD_CNXK_SEC_ACTION_ALG3 FAILED"
@@ -89,7 +89,7 @@ done
 echo "================================"
 sleep 3
 cat $LOG
-TEST0=$(grep "Test IPSEC_RTE_PMD_CNXK_API_TEST" $LOG | awk '{print $3}')
+TEST0=$(grep "Test IPSEC_RTE_PMD_CNXK_API_TEST" $LOG | awk '{print $4}')
 if [[ $TEST0 != "PASS" ]]; then
 	echo "Test IPSEC_RTE_PMD_CNXK_API_TEST FAILED"
 	exit 1
