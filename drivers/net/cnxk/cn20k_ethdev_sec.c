@@ -455,9 +455,9 @@ cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_eve
 
 	if (type == NIX_INL_INB_CPT_CQ) {
 		struct roc_ow_ipsec_inb_sa *inb_sa = (struct roc_ow_ipsec_inb_sa *)sa;
-		inb_priv = roc_nix_inl_ow_ipsec_inb_sa_sw_rsvd(sa);
-		desc.metadata = (uint64_t)inb_priv->userdata;
-		life_unit = inb_sa->w2.s.life_unit;
+		inb_priv = sa ? roc_nix_inl_ow_ipsec_inb_sa_sw_rsvd(sa) : NULL;
+		desc.metadata = inb_priv ? (uint64_t)inb_priv->userdata : 0;
+		life_unit = inb_sa ? inb_sa->w2.s.life_unit : 0;
 	} else {
 		struct roc_ow_ipsec_outb_sa *outb_sa = (struct roc_ow_ipsec_outb_sa *)sa;
 		outb_priv = roc_nix_inl_ow_ipsec_outb_sa_sw_rsvd(sa);
@@ -506,7 +506,8 @@ cn20k_eth_sec_post_event(struct rte_eth_dev *eth_dev, void *sa, enum nix_inl_eve
 		break;
 	}
 
-	rte_eth_dev_callback_process(eth_dev, RTE_ETH_EVENT_IPSEC, &desc);
+	if (eth_dev)
+		rte_eth_dev_callback_process(eth_dev, RTE_ETH_EVENT_IPSEC, &desc);
 
 	return free_mbuf;
 }
@@ -537,9 +538,9 @@ cn20k_eth_sec_sso_work_cb(uint64_t *gw, void *args, enum nix_inl_event_type type
 	struct cn20k_sec_sess_priv sess_priv;
 	struct cn20k_outb_priv_data *outb_priv;
 	struct roc_ow_ipsec_outb_sa *outb_sa;
+	struct rte_eth_dev *eth_dev = NULL;
 	struct rte_mbuf *mbuf = NULL;
 	struct cpt_cn20k_res_s *res;
-	struct rte_eth_dev *eth_dev;
 	struct cnxk_eth_dev *dev;
 	uint16_t dlen_adj, rlen;
 	uintptr_t sa_base;
@@ -568,17 +569,17 @@ cn20k_eth_sec_sso_work_cb(uint64_t *gw, void *args, enum nix_inl_event_type type
 		if (type) {
 			struct cpt_cq_s *cqs = (struct cpt_cq_s *)cq_s;
 
-			if (type == NIX_INL_INB_CPT_CQ) {
+			if (type == NIX_INL_INB_CPT_CQ && cqs->w2.s.fmt != WQE_PTR_ANTI_REPLAY) {
 				struct cn20k_inb_priv_data *inb_priv;
 
-				inb_priv = roc_nix_inl_ow_ipsec_inb_sa_sw_rsvd(args);
-				if (inb_priv->eth_sec && inb_priv->eth_sec->eth_dev) {
+				inb_priv = args ? roc_nix_inl_ow_ipsec_inb_sa_sw_rsvd(args) : NULL;
+				if (inb_priv && inb_priv->eth_sec && inb_priv->eth_sec->eth_dev) {
 					eth_dev = inb_priv->eth_sec->eth_dev;
 				} else {
 					plt_err("Inbound CPT CQ event: no eth_dev in SA priv");
 					return;
 				}
-			} else {
+			} else if (type != NIX_INL_INB_CPT_CQ) {
 				if (port_id >= RTE_MAX_ETHPORTS) {
 					plt_err("CPT CQ event: invalid port_id %u", port_id);
 					return;
