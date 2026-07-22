@@ -1162,6 +1162,8 @@ create_custom_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint1
 
 	attr.ingress = 1;
 
+	printf("Creating custom flow for port %u with profile_id %u\n", port_id, profile_id);
+
 	ret = rte_flow_validate(port_id, &attr, pattern, action, &err);
 	if (ret) {
 		printf("Custom flow validation failed: %s\n",
@@ -1426,7 +1428,7 @@ exit:
 
 #define CUSTOM_SA_SZ  512
 static int
-rte_pmd_cnxk_api_test(void)
+pmd_cnxk_api_test(void)
 {
 	union rte_pmd_cnxk_ipsec_hw_sa *sa, sa_dptr;
 	uint16_t lcore_id = rte_lcore_id();
@@ -1470,7 +1472,7 @@ exit:
 }
 
 static int
-rte_pmd_cnxk_custom_profile_test(void)
+pmd_cnxk_custom_profile_test(void)
 {
 	union rte_pmd_cnxk_ipsec_hw_sa *sa_base, *sa_ptr, sa_dptr;
 	uint16_t lcore_id = rte_lcore_id();
@@ -1856,7 +1858,7 @@ create_inline_ipsec_session(struct ipsec_session_data *sa, uint16_t portid,
 
 static int
 create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint32_t spi,
-		    uint16_t sa_lo, uint16_t sa_hi, uint32_t sa_index)
+		    uint16_t sa_lo, uint16_t sa_hi, uint32_t sa_index, bool sa_xor)
 {
 	struct rte_pmd_cnxk_sec_action sec = {0};
 	struct rte_flow_action_mark mark = {0};
@@ -1889,25 +1891,25 @@ create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint
 	switch (alg) {
 	case RTE_PMD_CNXK_SEC_ACTION_ALG0:
 		sec.alg = RTE_PMD_CNXK_SEC_ACTION_ALG0;
-		sec.sa_xor = 1;
+		sec.sa_xor = sa_xor;
 		sec.sa_hi = sa_hi;
 		sec.sa_lo = sa_lo;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG1:
 		sec.alg = RTE_PMD_CNXK_SEC_ACTION_ALG1;
-		sec.sa_xor = 1;
+		sec.sa_xor = sa_xor;
 		sec.sa_hi = sa_hi;
 		sec.sa_lo = sa_lo;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG2:
 		sec.alg = RTE_PMD_CNXK_SEC_ACTION_ALG2;
-		sec.sa_xor = 1;
+		sec.sa_xor = sa_xor;
 		sec.sa_hi = sa_hi;
 		sec.sa_lo = sa_lo;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG3:
 		sec.alg = RTE_PMD_CNXK_SEC_ACTION_ALG3;
-		sec.sa_xor = 1;
+		sec.sa_xor = sa_xor;
 		sec.sa_hi = sa_hi;
 		sec.sa_lo = sa_lo;
 		break;
@@ -1925,6 +1927,9 @@ create_default_flow(uint16_t port_id, enum rte_pmd_cnxk_sec_action_alg alg, uint
 		act_count++;
 		break;
 	}
+
+	printf("Creating default flow for port=%d alg=%d spi=0x%x sa_lo=0x%x sa_hi=0x%x sa_index=%u sa_xor=%u\n",
+	       port_id, alg, spi, sa_lo, sa_hi, sa_index, sa_xor);
 
 	action[act_count].type = RTE_FLOW_ACTION_TYPE_END;
 	action[act_count].conf = NULL;
@@ -1965,8 +1970,8 @@ destroy_default_flow(uint16_t port_id)
 }
 
 static int
-ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_tunnel_type tun_type,
-		     uint8_t alg)
+ipsec_msns_encap_decap(struct test_ipsec_vector *vector,
+		       enum rte_security_ipsec_tunnel_type tun_type, uint8_t alg)
 {
 	struct rte_security_session *out_ses = NULL, *in_ses = NULL;
 	uint32_t in_sa_index = 0, out_sa_index = 0, spi = 0;
@@ -1981,6 +1986,7 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	struct rte_mbuf *rx_pkts = NULL;
 	uint16_t sa_hi = 0, sa_lo = 0;
 	uint64_t userdata;
+	bool sa_xor = true;
 	int ret = 0;
 
 	nb_tx = 1;
@@ -1994,15 +2000,16 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	switch (alg) {
 	case RTE_PMD_CNXK_SEC_ACTION_ALG0:
 		/* Allocate 1 index and use it */
-		index_count = 1;
+		index_count = 16;
 		out_sa_index =
 			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_EGRESS, index_count);
 		in_sa_index =
 			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
-		sa_index = in_sa_index;
-		spi = (0x1 << 28 | in_sa_index);
+		sa_index = in_sa_index + 7;
+		spi = (0x1 << 28);
+		spi |= sa_xor ? 3 : sa_index;
 		sa_hi = (spi >> 16) & 0xffff;
-		sa_lo = 0x0;
+		sa_lo = sa_xor ? 3 ^ sa_index : 0;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG1:
 		/* Allocate 2 index and use higher index */
@@ -2012,9 +2019,10 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 		in_sa_index =
 			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
 		sa_index = in_sa_index + 1;
-		spi = (sa_index << 28) | 0x0000001;
+		spi = (sa_index << 28);
+		spi |= sa_xor ? 3 : 0;
 		sa_hi = (spi >> 16) & 0xffff;
-		sa_lo = 0x0001;
+		sa_lo = sa_xor ? 3 : 0x0;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG2:
 		/* Allocate 3 index and use higher index */
@@ -2024,9 +2032,10 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 		in_sa_index =
 			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
 		sa_index = in_sa_index + 2;
-		spi = (sa_index << 25) | 0x00000001;
+		spi = (sa_index << 25);
+		spi |= sa_xor ? 5 : 0;
 		sa_hi = (spi >> 16) & 0xffff;
-		sa_lo = 0x0001;
+		sa_lo = sa_xor ? 5 : 0x0;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG3:
 		/* Allocate 3 index and use higher index */
@@ -2036,9 +2045,10 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 		in_sa_index =
 			cnxk_sa_index_alloc(portid, RTE_SECURITY_IPSEC_SA_DIR_INGRESS, index_count);
 		sa_index = in_sa_index + 2;
-		spi = (sa_index << 25) | 0x00000001;
+		spi = (sa_index << 25);
+		spi |= sa_xor ? 9 : 0;
 		sa_hi = (spi >> 16) & 0xffff;
-		sa_lo = 0x0001;
+		sa_lo = sa_xor ? 9 : 0x0;
 		break;
 	case RTE_PMD_CNXK_SEC_ACTION_ALG4:
 		/* Allocate 4 index and use higher index */
@@ -2109,7 +2119,7 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	}
 	printf("Updated Inbound session with SPI = 0x%x\n", sa_data.ipsec_xform.spi);
 
-	ret = create_default_flow(portid, alg, spi, sa_lo, sa_hi, sa_index);
+	ret = create_default_flow(portid, alg, spi, sa_lo, sa_hi, sa_index, sa_xor);
 	if (ret) {
 		printf("Flow creation failed\n");
 		goto out;
@@ -2147,6 +2157,14 @@ ut_ipsec_encap_decap(struct test_ipsec_vector *vector, enum rte_security_ipsec_t
 	if (rx_pkts->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD_FAILED ||
 	    !(rx_pkts->ol_flags & RTE_MBUF_F_RX_SEC_OFFLOAD)) {
 		printf("\nSecurity offload failed\n");
+		union rte_pmd_cnxk_cpt_res_s *res_s = rte_pmd_cnxk_inl_ipsec_res(rx_pkts);
+		rte_pktmbuf_dump(stdout, rx_pkts, -1);
+
+		if (res_s)
+			printf("CPT res_s: 0x%016" PRIx64 " 0x%016" PRIx64 "\n", res_s->u64[0],
+			       res_s->u64[1]);
+		else
+			printf("CPT res_s is NULL\n");
 		ret = -1;
 		goto out;
 	}
@@ -2184,7 +2202,7 @@ out:
 }
 
 static int
-ut_ipsec_ipv4_burst_encap_decap(void)
+ipsec_msns_test(void)
 {
 	struct test_ipsec_vector ipv4_nofrag_case = {
 		.sa_data = sess_conf,
@@ -2196,27 +2214,23 @@ ut_ipsec_ipv4_burst_encap_decap(void)
 	/* Start event dev */
 	ut_eventdev_start();
 
-	rc = ut_ipsec_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG0);
 	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG0: %s\n", rc ? "FAILED" : "PASS");
-	if (rc)
-		return rc;
-	rc = ut_ipsec_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+
+	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG1);
 	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG1: %s\n", rc ? "FAILED" : "PASS");
-	if (rc)
-		return rc;
-	rc = ut_ipsec_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+
+	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG2);
 	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG2: %s\n", rc ? "FAILED" : "PASS");
-	if (rc)
-		return rc;
-	rc = ut_ipsec_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+
+	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG3);
 	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG3: %s\n", rc ? "FAILED" : "PASS");
-	if (rc)
-		return rc;
-	rc = ut_ipsec_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
+
+	rc = ipsec_msns_encap_decap(&ipv4_nofrag_case, RTE_SECURITY_IPSEC_TUNNEL_IPV4,
 				  RTE_PMD_CNXK_SEC_ACTION_ALG4);
 	printf("Test RTE_PMD_CNXK_SEC_ACTION_ALG4: %s\n", rc ? "FAILED" : "PASS");
 	if (rc)
@@ -2248,20 +2262,20 @@ main(int argc, char **argv)
 	printf("\n");
 	switch (testmode) {
 	case IPSEC_MSNS:
-		rc = ut_ipsec_ipv4_burst_encap_decap();
+		rc = ipsec_msns_test();
 		if (rc)
-			printf("TEST FAILED: ut_ipsec_ipv4_burst_encap_decap\n");
+			printf("TEST FAILED: ipsec_msns\n");
 		break;
 	case IPSEC_RTE_PMD_CNXK_API_TEST:
 		printf("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
 		       ipsec_test_mode_to_string(testmode));
-		rc = rte_pmd_cnxk_api_test();
+		rc = pmd_cnxk_api_test();
 		printf("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
 		break;
 	case CUSTOM_PROFILE_RTE_PMD_CNXK_API_TEST:
 		printf("Model: %s Test Mode: %s\n", rte_pmd_cnxk_model_str_get(),
 		       ipsec_test_mode_to_string(testmode));
-		rc = rte_pmd_cnxk_custom_profile_test();
+		rc = pmd_cnxk_custom_profile_test();
 		printf("Test %s: %s\n", ipsec_test_mode_to_string(testmode), rc ? "FAILED" : "PASS");
 		break;
 	}
