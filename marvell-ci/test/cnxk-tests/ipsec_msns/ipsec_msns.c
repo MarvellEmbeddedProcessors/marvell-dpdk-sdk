@@ -1738,6 +1738,14 @@ port_init(uint16_t portid, uint32_t nb_mbufs, uint16_t nb_rx_queue, uint16_t nb_
 	if (testmode == POLL_REASSEMBLY_INB_PERF || testmode == EVENT_REASSEMBLY_INB_PERF)
 		port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MULTI_SEGS;
 
+	if (nb_rx_queue > 1) {
+		port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
+		port_conf.rx_adv_conf.rss_conf.rss_hf = RTE_ETH_RSS_IP;
+	} else {
+		port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_NONE;
+		port_conf.rx_adv_conf.rss_conf.rss_hf = 0;
+	}
+
 	/* port configure */
 	ret = rte_eth_dev_configure(portid, nb_rx_queue, nb_tx_queue, &port_conf);
 	if (ret < 0) {
@@ -2316,7 +2324,7 @@ poll_mode_inb_outb_worker(void *args)
 				sa_index = sa_data->spi;
 			} else {
 				sa_index = num_sas > 1 ?
-					(sa_counter % (num_sas - 1)) + 1 : 1;
+					(sa_counter % num_sas) + 1 : 1;
 				sa_counter += 1;
 			}
 			sa = outb_sas[sa_index].sa;
@@ -2500,7 +2508,7 @@ handle_inb_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struc
 		sa_index = sa_data->spi;
 	} else {
 		sa_index = num_sas > 1 ?
-			(*sa_counter % (num_sas - 1)) + 1 : 1;
+			(*sa_counter % num_sas) + 1 : 1;
 		*sa_counter += 1;
 	}
 	sa = outb_sas[sa_index].sa;
@@ -2752,7 +2760,7 @@ handle_outb_event(uint32_t lcore_id, struct rte_security_ctx *sec_ctx, struct rt
 	RTE_SET_USED(lcore_id);
 
 	sa_index = num_sas > 1 ?
-		(*sa_counter % (num_sas - 1)) + 1 : 1;
+		(*sa_counter % num_sas) + 1 : 1;
 	*sa_counter += 1;
 	sa = outb_sas[sa_index].sa;
 	rte_security_set_pkt_metadata(sec_ctx, sa, pkt, NULL);
@@ -3174,7 +3182,7 @@ poll_mode_outb_worker(void *args)
 		for (j = 0, k = 0; j < nb_rx; j++) {
 			pkt = pkts[j];
 			sa_index = num_sas > 1 ?
-				(sa_counter % (num_sas - 1)) + 1 : 1;
+				(sa_counter % num_sas) + 1 : 1;
 			sa_counter += 1;
 
 			sa = outb_sas[sa_index].sa;
